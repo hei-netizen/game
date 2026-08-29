@@ -63,6 +63,7 @@
   <div>pos <b id="pos">0, 0</b> &nbsp; høyde <b id="alt">0</b> m</div>
   <div><b id="fps">0</b> fps &nbsp;&middot;&nbsp; <b id="bcount">0</b> bygninger &middot; <b id="propcount">0</b> props</div>
   <div id="mode" style="color:#f0c674">&nbsp;</div>
+  <div id="verline" style="color:#66708a;font-size:10px;letter-spacing:.12em"></div>
   <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
 </div>
 
@@ -1457,12 +1458,29 @@ window.__dbg={
   P:()=>({x:P.pos.x,y:P.pos.y,z:P.pos.z}),
   props:()=>propGroup?propGroup.children.length:0,
   frames:()=>FRAMES,
+  bilGeo:()=>{
+    const ut={};
+    for(const t in carGeo){
+      const g=carGeo[t]; g.computeBoundingBox();
+      const b=g.boundingBox;
+      const src=new THREE.Box3().setFromObject(carSrc[t]);
+      ut[t]={
+        merged:[+(b.max.x-b.min.x).toFixed(2),+(b.max.y-b.min.y).toFixed(2),+(b.max.z-b.min.z).toFixed(2)],
+        kilde :[+(src.max.x-src.min.x).toFixed(2),+(src.max.y-src.min.y).toFixed(2),+(src.max.z-src.min.z).toFixed(2)],
+        verteks:g.attributes.position.count
+      };
+      const m=ut[t].merged,k=ut[t].kilde;
+      ut[t].ok = Math.abs(m[0]-k[0])<0.15 && Math.abs(m[1]-k[1])<0.15 && Math.abs(m[2]-k[2])<0.15;
+    }
+    return ut;
+  },
+  gy:(x,z)=>groundAt(x,z),
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'bilfiks-3',
+  ver:()=>'bilfiks-4',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
@@ -2040,6 +2058,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
+  document.getElementById('verline').textContent='build bilfiks-4';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
