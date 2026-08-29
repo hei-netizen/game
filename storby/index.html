@@ -823,7 +823,7 @@ const CAR_YAW=0;                 // korrigerer modellens egen frontretning
 let carGeo={},carMat=null,carSrc={},carMats={},carYoff={};
 let traffic=[],carData=[],parked=[];
 const drive={on:false,car:null,spd:0,vx:0,vy:0,yawrate:0,ax:0,slip:0,
-              steer:0,head:0,spin:0,x:0,y:0,z:0};
+              steer:0,head:0,spin:0,x:0,y:0,z:0,skade:0,rist:0};
 
 async function loadCars(){
   const loader=new GLTFLoader();
@@ -1028,6 +1028,83 @@ function updateCars(dt){
   for(const m of traffic)m.instanceMatrix.needsUpdate=true;
 }
 
+// ---------------------------- KRASJ ---------------------------------------
+// Bil mot bil og bil mot bygg. Treffer du en bil i trafikken blir den tatt ut
+// av strømmen og gjort om til et ekte objekt med egen fart, så den blir dyttet
+// og spinner videre i stedet for å bare stå der.
+const KRASJ_R=2.7;                     // grov kollisjonsradius per bil
+function friPlass(x,z){
+  for(const b of nearby(x,z))
+    if(x>b.x0-0.7&&x<b.x1+0.7&&z>b.z0-0.7&&z<b.z1+0.7)return false;
+  return true;
+}
+function smell(kraft){
+  drive.skade=cl(drive.skade+kraft*1.7,0,100);
+  drive.rist=Math.min(1.4,drive.rist+kraft*0.10);
+  if(kraft>4)showToast('💥 Smell — '+Math.round(drive.skade)+' % skade');
+}
+function dyttBil(p,nx,nz,vn,overlapp){
+  drive.x-=nx*overlapp*0.55; drive.z-=nz*overlapp*0.55;
+  p.x+=nx*overlapp*0.45; p.z+=nz*overlapp*0.45;
+  if(vn<=0.4)return;
+  p.vx=(p.vx||0)+nx*vn*0.90;
+  p.vz=(p.vz||0)+nz*vn*0.90;
+  p.spin=(p.spin||0)+(rand()-0.5)*vn*0.30;
+  // ta farten ut av din egen bil, i verdenskoordinater
+  const sh=Math.sin(drive.head), ch=Math.cos(drive.head);
+  const wx=drive.vx*sh+drive.vy*ch, wz=drive.vx*ch-drive.vy*sh;
+  const j=vn*0.72;
+  const nwx=wx-nx*j, nwz=wz-nz*j;
+  drive.vx=nwx*sh+nwz*ch; drive.vy=nwx*ch-nwz*sh;
+  drive.yawrate+=(rand()-0.5)*vn*0.10;
+  smell(vn);
+}
+function sjekkBilkrasj(){
+  const sh=Math.sin(drive.head), ch=Math.cos(drive.head);
+  const wx=drive.vx*sh+drive.vy*ch, wz=drive.vx*ch-drive.vy*sh;
+  const D=KRASJ_R*2;
+  // --- mot parkerte / allerede løse biler ---
+  for(const p of parked){
+    if(drive.car===p)continue;
+    const dx=p.x-drive.x, dz=p.z-drive.z, d2=dx*dx+dz*dz;
+    if(d2>D*D||d2<1e-6)continue;
+    const d=Math.sqrt(d2), nx=dx/d, nz=dz/d;
+    dyttBil(p,nx,nz,Math.max(0,wx*nx+wz*nz),D-d);
+  }
+  // --- mot biler i trafikk: gjøres om til ekte objekter ved treff ---
+  for(const c of carData){
+    if(c.dead)continue;
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
+    const dx=cx-drive.x, dz=cz-drive.z, d2=dx*dx+dz*dz;
+    if(d2>D*D||d2<1e-6)continue;
+    const d=Math.sqrt(d2), nx=dx/d, nz=dz/d;
+    const vn=Math.max(0,wx*nx+wz*nz);
+    if(vn<1.2&&d>D*0.82)continue;
+    const yaw=(c.ax?(c.dir>0?0:Math.PI):(c.dir>0?Math.PI/2:-Math.PI/2))+CAR_YAW;
+    c.dead=true;
+    const p=spawnRealCar(c.type,cx,cz,yaw);
+    p.vx=nx*c.spd*0.25; p.vz=nz*c.spd*0.25;
+    dyttBil(p,nx,nz,vn,D-d);
+  }
+}
+// Løse biler ruller videre til de stopper, og stanger ikke gjennom bygg.
+function oppdaterLose(dt){
+  for(const p of parked){
+    if(drive.on&&drive.car===p)continue;
+    if(!p.vx&&!p.vz&&!p.spin)continue;
+    const fx=p.x,fz=p.z;
+    p.x+=p.vx*dt; p.z+=p.vz*dt; p.yaw+=(p.spin||0)*dt;
+    if(!friPlass(p.x,p.z)){p.x=fx;p.z=fz;p.vx*=-0.3;p.vz*=-0.3;p.spin*=0.4;}
+    const dmp=Math.max(0,1-2.4*dt);
+    p.vx*=dmp; p.vz*=dmp; p.spin*=dmp;
+    if(Math.abs(p.vx)<0.06&&Math.abs(p.vz)<0.06&&Math.abs(p.spin)<0.06){
+      p.vx=0;p.vz=0;p.spin=0;
+    }
+    p.obj.position.set(p.x,groundAt(p.x,p.z)+(p.yoff||0),p.z);
+    p.obj.rotation.y=p.yaw;
+  }
+}
+
 function enterExit(){
   if(drive.on){
     const ex=drive.x+Math.cos(drive.head)*2.6, ez=drive.z-Math.sin(drive.head)*2.6;
@@ -1049,6 +1126,7 @@ function enterExit(){
   drive.on=true;drive.car=best;drive.x=best.x;drive.z=best.z;
   drive.head=best.yaw-CAR_YAW;drive.steer=0;drive.y=groundAt(best.x,best.z);
   drive.spd=drive.vx=drive.vy=drive.yawrate=drive.ax=drive.slip=0;
+  drive.skade=0;drive.rist=0;
   P.fly=false;showMode();
 }
 
@@ -1103,7 +1181,7 @@ function carStep(h,th,hand,boost){
   const Fr=cl(-CARP.Cr*aR,-gripR*Wr,   gripR*Wr  );
 
   let Ft=0;
-  if(th>0)Ft+=boost?CARP.boost:CARP.motor;
+  if(th>0)Ft+=(boost?CARP.boost:CARP.motor)*(1-drive.skade/100*0.45);   // skade tar krefter
   else if(th<0)Ft-=(vx>0.6)?CARP.brems:CARP.revers;
   if(hand)Ft-=Math.sign(vx)*CARP.brems*0.55;
   Ft-=CARP.cLuft*vx*Math.abs(vx);
@@ -1166,7 +1244,10 @@ function updateDrive(dt){
       if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
     if(hit)break;
   }
-  if(hit){drive.vx*=-0.25;drive.vy*=0.2;drive.yawrate*=0.3;drive.hits=(drive.hits||0)+1;}
+  if(hit){
+    smell(Math.hypot(drive.vx,drive.vy)*0.55);      // smell i bygg
+    drive.vx*=-0.25;drive.vy*=0.2;drive.yawrate*=0.3;drive.hits=(drive.hits||0)+1;
+  }
   else {drive.x=nx;drive.z=nz;}
   drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
 
@@ -1179,6 +1260,8 @@ function updateDrive(dt){
     w.o.rotation.x=w.bx-drive.spin;
     if(w.front)w.o.rotation.y=w.by+drive.steer*.85;
   }
+  sjekkBilkrasj();
+  drive.rist=Math.max(0,drive.rist-dt*2.2);
   P.pos.set(drive.x,drive.y+1.4,drive.z);P.yaw=drive.head+Math.PI;
 }
 
@@ -1312,6 +1395,7 @@ function showMode(){
   document.getElementById('mode').textContent =
     drive.on ? '🚗 '+Math.round(Math.abs(drive.vx)*3.6)+' km/t'+
                (drive.slip>0.22?'  ·  💨 SLADD':'')+
+               (drive.skade>2?'  ·  🔧 '+Math.round(drive.skade)+' % skade':'')+
                '  ·  E ut  ·  Space håndbrekk  ·  Shift boost'
   : P.fly    ? '✈ FLY-MODUS (F for å lande)' : '';
 }
@@ -1358,11 +1442,28 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'gravity-1',
+  ver:()=>'krasj-2',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
   nocol:(v)=>{drive.nocol=!!v;},
+  krasjTest:()=>{
+    const c=carData.find(q=>!q.dead&&q!==drive.car);
+    if(!c)return {feil:'ingen trafikkbil'};
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
+    // still bilen 14 m unna og kjør rett på
+    const h=c.ax?0:Math.PI/2;
+    drive.x=cx-Math.sin(h)*14; drive.z=cz-Math.cos(h)*14; drive.head=h;
+    drive.vx=22; drive.vy=0; drive.yawrate=0; drive.skade=0; drive.rist=0;
+    const for_=parked.length;
+    keys['KeyW']=true;
+    for(let i=0;i<70;i++){updateDrive(0.016);oppdaterLose(0.016);}
+    keys['KeyW']=false;
+    return {skade:+drive.skade.toFixed(1), rist:+drive.rist.toFixed(2),
+            fartEtter:Math.round(Math.abs(drive.vx)*3.6),
+            nyeObjekter:parked.length-for_,
+            loseBiler:parked.filter(q=>q.vx||q.vz||q.spin).length};
+  },
   frihimmel:()=>{drive.x=0;drive.z=0;drive.head=0;      // tom flate, ingen bygg
                  drive.vx=drive.vy=drive.yawrate=drive.hits=0;},
   trace:(steps,ks,every,dt)=>{
@@ -1429,6 +1530,12 @@ function update(dt){
     updateDrive(dt);
     _cam.set(drive.x-Math.sin(drive.head)*8.6, drive.y+3.7, drive.z-Math.cos(drive.head)*8.6);
     camera.position.lerp(_cam,Math.min(1,dt*5.5));
+    if(drive.rist>0.001){                       // kameraet rister etter et smell
+      const r=drive.rist;
+      camera.position.x+=(Math.random()-.5)*r;
+      camera.position.y+=(Math.random()-.5)*r*0.7;
+      camera.position.z+=(Math.random()-.5)*r;
+    }
     camera.rotation.set(0,0,0);
     camera.lookAt(drive.x,drive.y+1.5,drive.z);
     sky.position.copy(camera.position);
@@ -1885,7 +1992,7 @@ function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
