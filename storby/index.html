@@ -170,8 +170,32 @@ function kanGa(x,z,fotY,maksSteg){
   if(!HG.apen[k])return false;
   return (HG.h[k]-fotY)<=(maksSteg||1.4);
 }
-// Havner man likevel inni noe, skal man kunne komme seg ut igjen.
 function sitterFast(x,z){ return HG.apen?HG.apen[hgIdx(x,z)]===0:false; }
+// Sjekker en hel sirkel, ikke bare ett punkt — ellers glipper tynne vegger.
+function kanGaBred(x,z,fotY,r,maksSteg){
+  if(!kanGa(x,z,fotY,maksSteg))return false;
+  for(let a=0;a<6;a++){
+    const v=a/6*6.283;
+    if(!kanGa(x+Math.cos(v)*r,z+Math.sin(v)*r,fotY,maksSteg))return false;
+  }
+  return true;
+}
+// Sitter man inni noe, dyttes man mot nærmeste åpne rute. Før slo jeg bare av
+// kollisjonen, og da kunne man gå tvers gjennom hele byen.
+function dyttUt(x,z){
+  if(!HG.apen)return null;
+  const i0=Math.round((x-HG.x0)/HG.cell), j0=Math.round((z-HG.z0)/HG.cell);
+  for(let r=1;r<=14;r++){
+    for(let d=-r;d<=r;d++)for(let e=-r;e<=r;e++){
+      if(Math.max(Math.abs(d),Math.abs(e))!==r)continue;
+      const i=i0+e,j=j0+d;
+      if(i<0||j<0||i>=HG.nx||j>=HG.nz)continue;
+      if(HG.apen[j*HG.nx+i])
+        return {x:HG.x0+i*HG.cell, z:HG.z0+j*HG.cell};
+    }
+  }
+  return null;
+}
 
 /* ---------------------------- TEKSTUR-VERKTØY --------------------------- */
 function cv(w,h){const c=document.createElement('canvas');c.width=w;c.height=h||w;return c}
@@ -948,7 +972,9 @@ function rasterHoydekart(bb){
     }
     return ut;
   };
-  HG.apen=eroder(dilat(dilat(HG.apen)));      // lukking, med litt slingringsmonn
+  // Ekte lukking: like mange eroderinger som dilateringer. Med én for få
+  // vokste alt åpent 1,6 m INN i veggene, og man kunne gå gjennom dem.
+  HG.apen=eroder(eroder(dilat(dilat(HG.apen))));
 
   // --- flomfyll: finn største sammenhengende område ---
   const merk=new Int32Array(N).fill(-1);
@@ -1357,10 +1383,15 @@ function updateDrive(dt){
   const fx=sh, fz=ch;
   const nx=drive.x+wx*Math.min(dt,0.05), nz=drive.z+wz*Math.min(dt,0.05);
   let hit=false;
-  if(!drive.nocol&&!sitterFast(drive.x,drive.z))
+  if(!drive.nocol&&!sitterFast(drive.x,drive.z)){
+    const sx=-fz,sz=fx;                        // sideveis vektor
     for(const o of [-1.9,0,1.9]){
-      if(!kanGa(nx+fx*o,nz+fz*o,drive.y,1.1)){hit=true;break;}
+      for(const b of [-0.85,0,0.85]){
+        if(!kanGa(nx+fx*o+sx*b, nz+fz*o+sz*b, drive.y,1.1)){hit=true;break;}
+      }
+      if(hit)break;
     }
+  }
   if(hit){drive.vx*=-0.25;drive.vy*=0.2;drive.yawrate*=0.3;drive.hits=(drive.hits||0)+1;}
   else {drive.x=nx;drive.z=nz;}
   drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
@@ -1563,7 +1594,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'walls-13',
+  ver:()=>'walls-14',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
@@ -1696,9 +1727,16 @@ function update(dt){
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
     // Kollisjon fra høydekartet: kan du ikke sette foten der, blir du stoppet.
-    if(!kanGa(P.pos.x,P.pos.z,P.pos.y-P.h)&&!sitterFast(fx0,fz0)){
-      if(kanGa(fx0,P.pos.z,P.pos.y-P.h)){P.pos.x=fx0;P.vel.x=0;}
-      else if(kanGa(P.pos.x,fz0,P.pos.y-P.h)){P.pos.z=fz0;P.vel.z=0;}
+    const fot=P.pos.y-P.h;
+    if(sitterFast(fx0,fz0)){
+      const ut=dyttUt(P.pos.x,P.pos.z);       // frigjør, men uten fri gjennomgang
+      if(ut){
+        P.pos.x+=(ut.x-P.pos.x)*Math.min(1,dt*5);
+        P.pos.z+=(ut.z-P.pos.z)*Math.min(1,dt*5);
+      }
+    } else if(!kanGaBred(P.pos.x,P.pos.z,fot,P.r)){
+      if(kanGaBred(fx0,P.pos.z,fot,P.r)){P.pos.x=fx0;P.vel.x=0;}
+      else if(kanGaBred(P.pos.x,fz0,fot,P.r)){P.pos.z=fz0;P.vel.z=0;}
       else {P.pos.x=fx0;P.pos.z=fz0;P.vel.x=0;P.vel.z=0;}
     }
     const g=groundAt(P.pos.x,P.pos.z);
