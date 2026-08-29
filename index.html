@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<title>Nettverkstest — prikk</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#0a0d16;overflow:hidden;color:#e8ecf5;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+  canvas{display:block;cursor:crosshair}
+
+  #lobby{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 40%,#151b2e 0%,#0a0d16 70%);padding:16px}
+  .card{width:min(94vw,400px);background:#0e1322;border:1px solid #242c46;border-radius:16px;
+    padding:26px;box-shadow:0 20px 50px rgba(0,0,0,.55)}
+  h1{font-size:19px;margin-bottom:5px}
+  .sub{font-size:13px;color:#8590ab;margin-bottom:20px;line-height:1.5}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+    color:#8590ab;margin:14px 0 6px}
+  input{width:100%;padding:12px 14px;background:#070a12;border:1px solid #2a3350;
+    border-radius:9px;color:#e8ecf5;font-size:15px;font-family:inherit;outline:none}
+  input:focus{border-color:#4d7cff}
+  #code{text-transform:uppercase;letter-spacing:.25em;font-weight:600}
+  button{width:100%;padding:13px;margin-top:11px;border:0;border-radius:9px;font-size:14px;
+    font-weight:600;font-family:inherit;cursor:pointer;transition:filter .15s}
+  button:hover:not(:disabled){filter:brightness(1.15)}
+  button:disabled{opacity:.4;cursor:default}
+  .primary{background:#4d7cff;color:#fff}
+  .ghost{background:#161d33;color:#c3cbe0;border:1px solid #2a3350}
+  .row{display:flex;align-items:center;gap:10px;margin:18px 0 2px}
+  .row hr{flex:1;border:0;border-top:1px solid #222a42}
+  .row span{font-size:11px;color:#59627d;letter-spacing:.1em}
+  #msg{margin-top:13px;font-size:13px;min-height:34px;color:#ffb84d;line-height:1.45}
+
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none;padding:14px}
+  .panel{position:absolute;background:rgba(10,13,22,.86);border:1px solid #232b45;
+    border-radius:11px;padding:12px 14px;backdrop-filter:blur(8px)}
+  #share{top:14px;left:14px;max-width:min(76vw,360px);pointer-events:auto}
+  .lbl{font-size:10px;letter-spacing:.13em;color:#8590ab;text-transform:uppercase}
+  #shareUrl{display:block;width:100%;margin-top:7px;font-size:12px;padding:8px 10px;
+    background:#070a12;border:1px solid #2a3350;border-radius:7px;color:#9fb4ff;
+    font-family:ui-monospace,Menlo,monospace}
+  #copy{margin-top:7px;padding:9px;font-size:12px}
+  #stats{top:14px;right:14px;min-width:160px}
+  .pl{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
+  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .meta{font-size:11px;color:#59627d;margin-top:9px;padding-top:9px;border-top:1px solid #232b45;line-height:1.6}
+  .ok{color:#5cff8f}.bad{color:#ff6b6b}.wait{color:#ffb84d}
+  #help{bottom:14px;left:14px;font-size:12px;color:#8590ab}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="lobby">
+  <div class="card">
+    <h1>Nettverkstest</h1>
+    <div class="sub">Sjekker om to maskiner kan koble seg sammen. Flytt prikken med musa.</div>
+
+    <label for="name">Navn</label>
+    <input id="name" maxlength="12" placeholder="Jona" autocomplete="off">
+
+    <button class="primary" id="btnHost">Start rom</button>
+
+    <div class="row"><hr><span>ELLER</span><hr></div>
+
+    <label for="code">Romkode</label>
+    <input id="code" maxlength="5" placeholder="ABCDE" autocomplete="off">
+    <button class="ghost" id="btnJoin">Bli med</button>
+
+    <div id="msg"></div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="panel" id="share">
+    <div class="lbl">Send denne til broren din</div>
+    <input id="shareUrl" readonly onclick="this.select()">
+    <button class="primary" id="copy">Kopier lenke</button>
+  </div>
+  <div class="panel" id="stats">
+    <div class="lbl">Tilkoblet</div>
+    <div id="list" style="margin-top:7px"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div class="panel" id="help">Beveg musa · <b>WASD</b> funker også</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+'use strict';
+
+/* ================================================================
+   NETTVERKSTEST — agar.io-prikk over WebRTC
+   Stjernetopologi: verten er nav, klientene eiker.
+   Klient -> vert : egen posisjon
+   Vert   -> alle : alle posisjoner
+   Ingen backend. Kjører rett fra GitHub Pages.
+   ================================================================ */
+
+const PREFIX  = 'dottest-v1-';
+const TICK_MS = 50;                    // 20 pakker i sekundet
+const WORLD   = 2000;                  // verdenens størrelse
+const COLORS  = ['#4d7cff','#ff3b8e','#5cff8f','#ffd23d','#b46bff','#ff7a3d','#3dd6ff','#ff6b6b'];
+
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0;
+function resize(){
+  const r = Math.min(devicePixelRatio, 2);
+  W = cv.width  = innerWidth  * r;
+  H = cv.height = innerHeight * r;
+  cv.style.width  = innerWidth  + 'px';
+  cv.style.height = innerHeight + 'px';
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+}
+addEventListener('resize', resize); resize();
+const vw = () => innerWidth, vh = () => innerHeight;
+
+/* ---------------- spillere ---------------- */
+const me = {
+  id: null, name: 'Spiller',
+  ci: Math.floor(Math.random() * COLORS.length),
+  x: WORLD / 2 + (Math.random() - 0.5) * 400,
+  y: WORLD / 2 + (Math.random() - 0.5) * 400
+};
+const others = new Map();              // id -> {name, ci, x, y, dx, dy, last}
+
+/* ---------------- input ---------------- */
+let mx = null, my = null;
+const keys = {};
+addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+const SPEED = 330;
+function move(dt){
+  let vx = 0, vy = 0;
+
+  if (keys.KeyW || keys.ArrowUp)    vy -= 1;
+  if (keys.KeyS || keys.ArrowDown)  vy += 1;
+  if (keys.KeyA || keys.ArrowLeft)  vx -= 1;
+  if (keys.KeyD || keys.ArrowRight) vx += 1;
+
+  if (!vx && !vy && mx !== null){
+    // følg musa, som i agar.io
+    const dx = mx - vw() / 2, dy = my - vh() / 2;
+    const d  = Math.hypot(dx, dy);
+    if (d > 12){ vx = dx / d; vy = dy / d; }
+  } else if (vx || vy){
+    const d = Math.hypot(vx, vy);
+    vx /= d; vy /= d;
+  }
+
+  me.x = Math.max(0, Math.min(WORLD, me.x + vx * SPEED * dt));
+  me.y = Math.max(0, Math.min(WORLD, me.y + vy * SPEED * dt));
+}
+
+/* ---------------- tegning ---------------- */
+function draw(){
+  const camX = me.x - vw() / 2, camY = me.y - vh() / 2;
+
+  ctx.fillStyle = '#0a0d16';
+  ctx.fillRect(0, 0, vw(), vh());
+
+  // rutenett, så man ser at man faktisk beveger seg
+  ctx.strokeStyle = '#161d33';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const G = 50;
+  for (let x = -camX % G; x < vw(); x += G){ ctx.moveTo(x, 0); ctx.lineTo(x, vh()); }
+  for (let y = -camY % G; y < vh(); y += G){ ctx.moveTo(0, y); ctx.lineTo(vw(), y); }
+  ctx.stroke();
+
+  // verdensgrense
+  ctx.strokeStyle = '#2a3350';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-camX, -camY, WORLD, WORLD);
+
+  const blob = (x, y, color, name, self) => {
+    const sx = x - camX, sy = y - camY;
+    if (sx < -80 || sy < -80 || sx > vw() + 80 || sy > vh() + 80) return;
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, 26, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 26;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (self){
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#e8ecf5';
+    ctx.font = '600 13px -apple-system,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, sx, sy - 36);
+  };
+
+  for (const o of others.values()) blob(o.dx, o.dy, COLORS[o.ci % COLORS.length], o.name, false);
+  blob(me.x, me.y, COLORS[me.ci], me.name, true);
+}
+
+/* ================================================================
+   NETTVERK
+   ================================================================ */
+let peer = null, isHost = false, hostConn = null;
+const conns = new Map();
+let roomCode = '', lastPing = 0, pingSent = 0, connState = 'venter';
+
+const msgEl = document.getElementById('msg');
+const say = t => { msgEl.innerHTML = t; };
+
+function code5(){
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // ingen 0/O/1/I
+  let s = '';
+  for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
+
+function enterGame(){
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+
+  const url = location.origin + location.pathname + '?rom=' + roomCode;
+  document.getElementById('shareUrl').value = url;
+  document.getElementById('copy').onclick = () => {
+    navigator.clipboard.writeText(url)
+      .then(() => { document.getElementById('copy').textContent = 'Kopiert ✓'; })
+      .catch(() => { document.getElementById('shareUrl').select(); });
+  };
+
+  requestAnimationFrame(loop);
+  setInterval(tick, TICK_MS);
+}
+
+/* ---- vert ---- */
+function host(){
+  me.name = (document.getElementById('name').value || 'Vert').trim().slice(0, 12) || 'Vert';
+  roomCode = code5();
+  say('Starter rom …');
+  setBusy(true);
+
+  peer = new Peer(PREFIX + roomCode);
+
+  peer.on('open', id => {
+    isHost = true; me.id = id; connState = 'vert klar';
+    enterGame();
+  });
+
+  peer.on('connection', c => {
+    conns.set(c.peer, c);
+    c.on('data', d => {
+      if (d.t === 's'){
+        const o = others.get(c.peer) || add(c.peer, d.n, d.c);
+        o.x = d.x; o.y = d.y; o.name = d.n; o.last = performance.now();
+      } else if (d.t === 'ping' && c.open){
+        c.send({t: 'pong', v: d.v});
+      }
+    });
+    c.on('close', () => { conns.delete(c.peer); rm(c.peer); });
+    c.on('error', () => { conns.delete(c.peer); rm(c.peer); });
+  });
+
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id'){
+      say('Romkoden var opptatt. Prøver på nytt …');
+      setTimeout(() => { setBusy(false); host(); }, 400);
+    } else {
+      say('Feil: <b>' + e.type + '</b><br>Sjekk nettforbindelsen og prøv igjen.');
+      setBusy(false);
+    }
+  });
+}
+
+/* ---- klient ---- */
+function join(c){
+  roomCode = (c || document.getElementById('code').value || '').trim().toUpperCase();
+  if (roomCode.length < 4){ say('Skriv inn romkoden.'); return; }
+
+  me.name = (document.getElementById('name').value || 'Gjest').trim().slice(0, 12) || 'Gjest';
+  say('Kobler til <b>' + roomCode + '</b> …');
+  setBusy(true);
+
+  peer = new Peer();
+
+  peer.on('open', myId => {
+    me.id = myId;
+    hostConn = peer.connect(PREFIX + roomCode, {reliable: false});
+
+    const giveUp = setTimeout(() => {
+      if (!hostConn.open){
+        say('Fikk ikke kontakt innen 15 sek.<br>Verten må ha fanen åpen mens du kobler til.');
+        setBusy(false);
+      }
+    }, 15000);
+
+    hostConn.on('open', () => { clearTimeout(giveUp); connState = 'tilkoblet'; enterGame(); });
+
+    hostConn.on('data', d => {
+      if (d.t === 'w'){
+        const seen = new Set();
+        for (const p of d.p){
+          if (p.id === me.id) continue;
+          seen.add(p.id);
+          const o = others.get(p.id) || add(p.id, p.n, p.c);
+          o.x = p.x; o.y = p.y; o.name = p.n; o.last = performance.now();
+        }
+        for (const id of [...others.keys()]) if (!seen.has(id)) rm(id);
+      } else if (d.t === 'pong'){
+        lastPing = Math.round(performance.now() - d.v);
+      }
+    });
+
+    hostConn.on('close', () => { connState = 'verten koblet fra'; });
+  });
+
+  peer.on('error', e => {
+    say(e.type === 'peer-unavailable'
+      ? 'Fant ikke rom <b>' + roomCode + '</b>.<br>Er verten fortsatt inne med fanen åpen?'
+      : 'Feil: <b>' + e.type + '</b>');
+    setBusy(false);
+  });
+}
+
+function setBusy(b){
+  document.getElementById('btnHost').disabled = b;
+  document.getElementById('btnJoin').disabled = b;
+}
+
+function add(id, name, ci){
+  const o = {id, name: name || '?', ci: ci ?? 0, x: WORLD/2, y: WORLD/2,
+             dx: WORLD/2, dy: WORLD/2, last: performance.now()};
+  others.set(id, o);
+  return o;
+}
+function rm(id){ others.delete(id); }
+
+/* ---- puls ---- */
+function tick(){
+  if (isHost){
+    const p = [{id: me.id, n: me.name, c: me.ci, x: me.x, y: me.y}];
+    for (const [id, o] of others) p.push({id, n: o.name, c: o.ci, x: o.x, y: o.y});
+    const pkt = {t: 'w', p};
+    for (const c of conns.values()) if (c.open) c.send(pkt);
+
+    const now = performance.now();
+    for (const [id, o] of [...others]) if (now - o.last > 6000) rm(id);
+
+  } else if (hostConn && hostConn.open){
+    hostConn.send({t: 's', n: me.name, c: me.ci, x: me.x, y: me.y});
+    if (performance.now() - pingSent > 1000){
+      pingSent = performance.now();
+      hostConn.send({t: 'ping', v: performance.now()});
+    }
+  }
+  paintHud();
+}
+
+function paintHud(){
+  let html = `<div class="pl"><span class="dot" style="background:${COLORS[me.ci]}"></span>`
+           + `${me.name}${isHost ? ' <span style="color:#59627d">(vert)</span>' : ''}</div>`;
+  for (const o of others.values())
+    html += `<div class="pl"><span class="dot" style="background:${COLORS[o.ci % COLORS.length]}"></span>${o.name}</div>`;
+  document.getElementById('list').innerHTML = html;
+
+  const n = others.size + 1;
+  const status = others.size > 0
+    ? '<span class="ok">● tilkoblet</span>'
+    : '<span class="wait">● venter på spiller</span>';
+
+  document.getElementById('meta').innerHTML =
+    status + '<br>Rom: <b>' + roomCode + '</b><br>Spillere: ' + n
+    + (!isHost && lastPing ? '<br>Ping: ' + lastPing + ' ms' : '');
+}
+
+/* ================================================================
+   LØKKE
+   ================================================================ */
+let prev = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - prev) / 1000);
+  prev = now;
+
+  move(dt);
+
+  // glatt ut andres bevegelse mellom pakkene
+  for (const o of others.values()){
+    const k = Math.min(1, dt * 12);
+    o.dx += (o.x - o.dx) * k;
+    o.dy += (o.y - o.dy) * k;
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- oppstart ---------------- */
+document.getElementById('btnHost').onclick = host;
+document.getElementById('btnJoin').onclick = () => join();
+document.getElementById('code').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+
+// romkode i lenka: broren trykker bare på URL-en
+const fromUrl = new URLSearchParams(location.search).get('rom');
+if (fromUrl){
+  document.getElementById('code').value = fromUrl.toUpperCase();
+  say('Rom <b>' + fromUrl.toUpperCase() + '</b> funnet i lenka. Skriv navn og trykk «Bli med».');
+}
+</script>
+</body>
+</html>
