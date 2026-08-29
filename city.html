@@ -35,6 +35,7 @@ canvas{display:block}
 #lobby .row{display:flex;align-items:center;gap:10px;margin:18px 0 2px}
 #lobby .row hr{flex:1;border:0;border-top:1px solid #33283f}
 #lobby .row span{font-size:11px;color:#6e6079;letter-spacing:.1em}
+#msg .ok{color:#5cff8f}#msg .bad{color:#ff6b6b}
 #msg{margin-top:12px;font-size:13px;min-height:34px;color:#ffb84d;line-height:1.45}
 
 /* ---------- delepanel i spillet ---------- */
@@ -57,18 +58,12 @@ canvas{display:block}
 <div id="lobby">
   <div class="card">
     <h1>SOL CITY</h1>
-    <div class="sub">Kjør rundt i samme by som gutta.</div>
+    <div class="sub">Alle som åpner lenken havner i samme by.</div>
 
     <label for="pname">Navn</label>
-    <input id="pname" maxlength="12" placeholder="Jona" autocomplete="off">
+    <input id="pname" maxlength="12" placeholder="Skriv navnet ditt" autocomplete="off">
 
-    <button class="primary" id="btnHost">Start rom</button>
-
-    <div class="row"><hr><span>ELLER</span><hr></div>
-
-    <label for="code">Romkode</label>
-    <input id="code" maxlength="5" placeholder="ABCDE" autocomplete="off">
-    <button class="ghost" id="btnJoin">Bli med</button>
+    <button class="primary" id="btnPlay">SPILL</button>
 
     <div id="msg"></div>
     <button class="solo" id="btnSolo">Spill alene uten nett</button>
@@ -1015,12 +1010,7 @@ const conns=new Map();
 
 const $=id=>document.getElementById(id);
 const say=t=>{$('msg').innerHTML=t;};
-function busy(b){$('btnHost').disabled=b;$('btnJoin').disabled=b;}
 
-function code5(){
-  const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s='';for(let i=0;i<5;i++)s+=A[(Math.random()*A.length)|0];return s;
-}
 
 function beginPlay(){
   $('lobby').style.display='none';
@@ -1049,53 +1039,89 @@ function takeState(o,d){
   o.last=performance.now();
 }
 function whoLine(){
-  $('who').textContent='Rom '+roomCode+' · '+(others.size+1)+' spiller'+(others.size?'e':'')
+  $('who').textContent=(others.size+1)+' spiller'+(others.size?'e':'')+' i byen'
     +(isHost?' · du er vert':'');
 }
 
-/* ---- vert ---- */
-function hostRoom(){
-  myName=($('pname').value||'Vert').trim().slice(0,12)||'Vert';
-  roomCode=code5();say('Starter rom …');busy(true);
-  peer=new Peer(NET_PREFIX+roomCode);
+/* ================================================================
+   AUTOJOIN — ett fast rom, ingen kode
 
-  peer.on('open',id=>{isHost=true;myId=id;startNet();whoLine();});
+   Uten en server må nettleserne selv bli enige om hvem som er nav.
+   Alle prøver derfor FØRST å koble seg til rommet som klient.
+   Den som får «peer-unavailable» vet at ingen er vert enda, og
+   tar rollen selv ved å kreve romnavnet som sin egen peer-id.
 
-  peer.on('connection',c=>{
-    conns.set(c.peer,c);
-    c.on('data',d=>{
-      if(d.t==='s'){
-        const o=others.get(c.peer)||addOther(c.peer,d.n,d.col);
-        takeState(o,d);whoLine();
-      }
-    });
-    const bye=()=>{conns.delete(c.peer);others.delete(c.peer);whoLine();};
-    c.on('close',bye);c.on('error',bye);
-  });
+   Race: åpner to stykker samtidig, vil begge prøve å bli vert.
+   Bare én får id-en; den andre får 'unavailable-id' og går
+   tilbake til å være klient etter en tilfeldig liten pause.
+   Samme mekanikk gir automatisk ny vert hvis verten drar.
+   ================================================================ */
+const ROOM = new URLSearchParams(location.search).get('rom') || 'FELLES';
+// Uten STUN finner ikke to maskiner bak hver sin hjemmeruter hverandre.
+const ICE={config:{iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:global.stun.twilio.com:3478'}
+]}};
+let netStarted=false, retries=0;
+let joinTimer=null, joinSettled=false;   // hindrer at vertsvalget fyrer to ganger
 
-  peer.on('error',e=>{
-    if(e.type==='unavailable-id'){say('Koden var opptatt, prøver ny …');busy(false);setTimeout(hostRoom,350);}
-    else{say('Feil: <b>'+e.type+'</b>');busy(false);}
-  });
+function setStatus(t,cls){
+  $('msg').innerHTML = cls ? '<span class="'+cls+'">'+t+'</span>' : t;
 }
 
-/* ---- klient ---- */
-function joinRoom(pre){
-  roomCode=(pre||$('code').value||'').trim().toUpperCase();
-  if(roomCode.length<4){say('Skriv inn romkoden.');return;}
-  myName=($('pname').value||'Gjest').trim().slice(0,12)||'Gjest';
-  say('Kobler til <b>'+roomCode+'</b> …');busy(true);
-  peer=new Peer();
+function goLive(){
+  // Kobler opp nettet i bakgrunnen. Starter IKKE spillet — det skjer
+  // først når spilleren har skrevet navn og trykket SPILL.
+  if(netStarted)return;
+  netStarted=true;
+  $('share').style.display='block';
+  const url=location.origin+location.pathname+(ROOM!=='FELLES'?'?rom='+ROOM:'');
+  $('shareUrl').value=url;
+  $('copy').onclick=()=>navigator.clipboard.writeText(url)
+    .then(()=>{$('copy').textContent='Kopiert';setTimeout(()=>$('copy').textContent='Kopier',1600);})
+    .catch(()=>$('shareUrl').select());
+  setInterval(netTick,NET_TICK);
+  whoLine();
+}
+
+function cleanPeer(){
+  if(joinTimer){clearTimeout(joinTimer);joinTimer=null;}
+  try{ if(peer&&!peer.destroyed)peer.destroy(); }catch(e){}
+  peer=null;hostConn=null;conns.clear();
+}
+
+/* ---- forsøk 1: bli med som klient ----
+   Vi lar MEGLEREN avgjøre om det finnes en vert. Får vi
+   'peer-unavailable' vet vi sikkert at rommet er tomt. En timeout
+   kan bare gjette, og gjetter den feil begynner klientene å veksle
+   mellom klient- og vertsrolle i en løkke som spiser forbindelser. */
+function connectAsClient(){
+  cleanPeer();
+  joinSettled=false;
+  isHost=false;
+  setStatus('Kobler til …');
+  peer=new Peer(ICE);
 
   peer.on('open',id=>{
     myId=id;
-    hostConn=peer.connect(NET_PREFIX+roomCode,{reliable:false});
+    // unreliable: posisjonsdata er ferskvare, en tapt pakke er
+    // uinteressant. Målt til å åpne seg langt mer pålitelig enn
+    // reliable-kanalen i testene våre.
+    hostConn=peer.connect(NET_PREFIX+ROOM,{reliable:false});
 
-    const giveUp=setTimeout(()=>{
-      if(!hostConn.open){say('Fikk ikke kontakt på 15 sek.<br>Verten må ha fanen åpen.');busy(false);}
-    },15000);
+    // Ren nødbrems hvis megleren hverken svarer eller feiler.
+    joinTimer=setTimeout(()=>{
+      if(!joinSettled&&(!hostConn||!hostConn.open))becomeHost();
+    },12000);
 
-    hostConn.on('open',()=>{clearTimeout(giveUp);startNet();whoLine();});
+    hostConn.on('open',()=>{
+      joinSettled=true;
+      if(joinTimer){clearTimeout(joinTimer);joinTimer=null;}
+      retries=0;
+      setStatus('Tilkoblet','ok');
+      goLive();whoLine();
+    });
 
     hostConn.on('data',d=>{
       if(d.t!=='w')return;
@@ -1110,14 +1136,68 @@ function joinRoom(pre){
       whoLine();
     });
 
-    hostConn.on('close',()=>{msg='Verten koblet fra';msgT=5;});
+    // Verten dro. Alle gjenværende venter litt tilfeldig og prøver på
+    // nytt; den første som finner rommet tomt overtar som vert.
+    hostConn.on('close',()=>{
+      if(!netStarted||isHost)return;
+      msg='Verten dro — kobler om …';msgT=3;
+      others.clear();
+      setTimeout(connectAsClient,500+Math.random()*1500);
+    });
   });
 
   peer.on('error',e=>{
-    say(e.type==='peer-unavailable'
-      ? 'Fant ikke rom <b>'+roomCode+'</b>.<br>Er verten fortsatt inne?'
-      : 'Feil: <b>'+e.type+'</b>');
-    busy(false);
+    if(e.type==='peer-unavailable'){
+      // Ingen vert i rommet. Ta rollen.
+      if(!joinSettled)becomeHost();
+    }else if(e.type==='network'||e.type==='server-error'||e.type==='socket-error'){
+      if(++retries<5)setTimeout(connectAsClient,1200*retries);
+      else{setStatus('Fikk ikke kontakt med nettet. Spiller alene.','bad');goLive();}
+    }
+  });
+}
+
+/* ---- forsøk 2: bli vert ---- */
+function becomeHost(){
+  if(isHost&&peer&&!peer.destroyed)return;
+  joinSettled=true;
+  cleanPeer();
+  setStatus('Starter byen …');
+  peer=new Peer(NET_PREFIX+ROOM,ICE);
+
+  peer.on('open',id=>{
+    isHost=true;myId=id;retries=0;
+    setStatus('Du er vert','ok');
+    goLive();whoLine();
+  });
+
+  peer.on('connection',c=>{
+    // Kast en eventuell gammel forbindelse fra samme spiller, ellers
+    // hoper døde kanaler seg opp når noen kobler til på nytt.
+    const gammel=conns.get(c.peer);
+    if(gammel&&gammel!==c){try{gammel.close();}catch(e){}}
+    conns.set(c.peer,c);
+
+    c.on('data',d=>{
+      if(d.t==='s'){
+        const o=others.get(c.peer)||addOther(c.peer,d.n,d.col);
+        takeState(o,d);whoLine();
+      }
+    });
+    const bye=()=>{conns.delete(c.peer);others.delete(c.peer);whoLine();};
+    c.on('close',bye);c.on('error',bye);
+  });
+
+  peer.on('error',e=>{
+    if(e.type==='unavailable-id'){
+      // Noen andre rakk det først. Bli klient, med litt slingring
+      // så ikke alle prøver igjen i samme øyeblikk.
+      isHost=false;
+      setTimeout(connectAsClient,600+Math.random()*1400);
+    }else if(!netStarted){
+      if(++retries<5)setTimeout(connectAsClient,1200*retries);
+      else{setStatus('Fikk ikke kontakt med nettet. Spiller alene.','bad');goLive();}
+    }
   });
 }
 
@@ -1131,11 +1211,16 @@ function myState(){
 function netTick(){
   if(isHost){
     const me=myState();
-    const p=[{id:myId,n:me.n,col:me.col,x:me.x,y:me.y,a:me.a,car:me.car}];
+    const p=[{id:myId,n:me.n,col:me.col,x:me.x,y:me.y,a:me.a,car:me.car,loc:me.loc}];
     for(const [id,o] of others)
       p.push({id,n:o.name,col:o.col,x:o.x,y:o.y,a:o.a,car:o.car,loc:o.loc});
     const pkt={t:'w',p};
-    for(const c of conns.values())if(c.open)c.send(pkt);
+    for(const [id,c] of [...conns]){
+      if(c.open)c.send(pkt);
+      else if(c.peerConnection&&c.peerConnection.connectionState==='failed'){
+        conns.delete(id);others.delete(id);
+      }
+    }
 
     const now=performance.now();
     for(const [id,o] of [...others])if(now-o.last>6000){others.delete(id);whoLine();}
@@ -1144,19 +1229,26 @@ function netTick(){
   }
 }
 
-/* ---- lobby-knapper ---- */
-$('btnHost').onclick=hostRoom;
-$('btnJoin').onclick=()=>joinRoom();
-$('btnSolo').onclick=()=>{$('lobby').style.display='none';beginPlay();};
-$('code').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinRoom();}});
-$('pname').addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault();});
+/* ---- start ---- */
+// Vi kobler til med én gang siden er lastet, mens spilleren skriver navnet sitt.
+// Da er forbindelsen som regel oppe før hen rekker å trykke SPILL.
+myName='Spiller'+((Math.random()*900+100)|0);
+connectAsClient();
 
-// romkode rett i lenka
-const _rom=new URLSearchParams(location.search).get('rom');
-if(_rom){
-  $('code').value=_rom.toUpperCase();
-  say('Rom <b>'+_rom.toUpperCase()+'</b> funnet i lenka.<br>Skriv navn og trykk «Bli med».');
-}
+$('btnPlay').onclick=()=>{
+  myName=($('pname').value||myName).trim().slice(0,12)||myName;
+  if(netStarted){$('lobby').style.display='none';}
+  else{setStatus('Kobler til … blir med så snart den er oppe');
+       const w=setInterval(()=>{if(netStarted){clearInterval(w);$('lobby').style.display='none';}},200);}
+  beginPlay();
+};
+$('pname').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('btnPlay').click();}});
+$('btnSolo').onclick=()=>{
+  cleanPeer();netStarted=true;
+  myName=($('pname').value||myName).trim().slice(0,12)||myName;
+  $('lobby').style.display='none';$('share').style.display='none';
+  beginPlay();
+};
 
 let last=performance.now();
 function loop(now){
