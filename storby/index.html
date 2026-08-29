@@ -170,6 +170,8 @@ function kanGa(x,z,fotY,maksSteg){
   if(!HG.apen[k])return false;
   return (HG.h[k]-fotY)<=(maksSteg||1.4);
 }
+// Havner man likevel inni noe, skal man kunne komme seg ut igjen.
+function sitterFast(x,z){ return HG.apen?HG.apen[hgIdx(x,z)]===0:false; }
 
 /* ---------------------------- TEKSTUR-VERKTØY --------------------------- */
 function cv(w,h){const c=document.createElement('canvas');c.width=w;c.height=h||w;return c}
@@ -791,7 +793,7 @@ function generateCity(scene,mats,gm){
      - mesher høyere enn 5 m  -> bygg, blir kollisjonsbokser
    ========================================================================== */
 const CITY_SCALE=30;
-const HG={cell:3.0,x0:0,z0:0,nx:0,nz:0,h:null,apen:null,grunn:null};
+const HG={cell:1.6,x0:0,z0:0,nx:0,nz:0,h:null,apen:null,hoved:null,komponenter:0,hovedN:0};
 let cityGroup=null,cityBB=null,lanes=[];
 
 function hgIdx(x,z){
@@ -805,6 +807,7 @@ function cityGround(x,z){
   return (v===v)?v:0;                      // NaN-sjekk
 }
 function erApen(x,z){ return HG.apen?HG.apen[hgIdx(x,z)]===1:false; }
+function erHoved(x,z){ return HG.hoved?HG.hoved[hgIdx(x,z)]===1:erApen(x,z); }
 
 async function loadCity(){
   const g=await new GLTFLoader().loadAsync('assets/city.glb');
@@ -859,7 +862,9 @@ async function loadCity(){
   rasterHoydekart(bb);
   finnKjorefelt();
   let kjorbar=0; for(let k=0;k<HG.apen.length;k++)if(HG.apen[k])kjorbar++;
+  const hoved=HG.hovedN;
   return {mesher:deler.length,tegnekall:cityGroup.children.length,kjorbar:kjorbar,
+          hoved:hoved,komponenter:HG.komponenter,
           felt:lanes.length,bredde:Math.round(bb.max.x-bb.min.x),
           dybde:Math.round(bb.max.z-bb.min.z)};
 }
@@ -873,45 +878,104 @@ function rasterHoydekart(bb){
   HG.nz=Math.ceil((bb.max.z-bb.min.z)/HG.cell)+1;
   const N=HG.nx*HG.nz;
   const lav=new Float32Array(N).fill(Infinity);
-  const hoy=new Float32Array(N).fill(-Infinity);
-  for(const m of cityGroup.children){
-    const pos=m.geometry.attributes.position, idx=m.geometry.index;
-    const antall=idx?idx.count:pos.count;
-    for(let t=0;t<antall;t+=3){
-      const a=idx?idx.getX(t):t, b2=idx?idx.getX(t+1):t+1, c=idx?idx.getX(t+2):t+2;
-      const x0=Math.min(pos.getX(a),pos.getX(b2),pos.getX(c));
-      const x1=Math.max(pos.getX(a),pos.getX(b2),pos.getX(c));
-      const z0=Math.min(pos.getZ(a),pos.getZ(b2),pos.getZ(c));
-      const z1=Math.max(pos.getZ(a),pos.getZ(b2),pos.getZ(c));
-      const yl=Math.min(pos.getY(a),pos.getY(b2),pos.getY(c));
-      const yh=Math.max(pos.getY(a),pos.getY(b2),pos.getY(c));
-      const i0=cl(Math.floor((x0-HG.x0)/HG.cell),0,HG.nx-1);
-      const i1=cl(Math.ceil ((x1-HG.x0)/HG.cell),0,HG.nx-1);
-      const j0=cl(Math.floor((z0-HG.z0)/HG.cell),0,HG.nz-1);
-      const j1=cl(Math.ceil ((z1-HG.z0)/HG.cell),0,HG.nz-1);
-      for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
-        const k=j*HG.nx+i;
-        if(yl<lav[k])lav[k]=yl;
-        if(yh>hoy[k])hoy[k]=yh;
+  const blokk=new Uint8Array(N);
+
+  // Går gjennom trekantene to ganger. Første runde finner bakkenivået,
+  // andre runde sjekker om noe faktisk STÅR der i kroppshøyde. Å måle hele
+  // kolonnens høyde (som før) gjorde at gater med tak eller bro over ble
+  // markert som vegg — derav usynlige vegger overalt.
+  const kjor=(fase)=>{
+    for(const m of cityGroup.children){
+      const pos=m.geometry.attributes.position, idx=m.geometry.index;
+      const antall=idx?idx.count:pos.count;
+      for(let t=0;t<antall;t+=3){
+        const a=idx?idx.getX(t):t, b2=idx?idx.getX(t+1):t+1, c=idx?idx.getX(t+2):t+2;
+        const ax=pos.getX(a),bx=pos.getX(b2),cx=pos.getX(c);
+        const az=pos.getZ(a),bz=pos.getZ(b2),cz=pos.getZ(c);
+        const yl=Math.min(pos.getY(a),pos.getY(b2),pos.getY(c));
+        const yh=Math.max(pos.getY(a),pos.getY(b2),pos.getY(c));
+        const i0=cl(Math.floor((Math.min(ax,bx,cx)-HG.x0)/HG.cell),0,HG.nx-1);
+        const i1=cl(Math.ceil ((Math.max(ax,bx,cx)-HG.x0)/HG.cell),0,HG.nx-1);
+        const j0=cl(Math.floor((Math.min(az,bz,cz)-HG.z0)/HG.cell),0,HG.nz-1);
+        const j1=cl(Math.ceil ((Math.max(az,bz,cz)-HG.z0)/HG.cell),0,HG.nz-1);
+        for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
+          const k=j*HG.nx+i;
+          if(fase===0){ if(yl<lav[k])lav[k]=yl; }
+          else if(lav[k]!==Infinity){
+            // hindring bare hvis trekanten er i beltet 0,5–2,3 m over bakken
+            const g=lav[k];
+            if(yh>g+0.5 && yl<g+2.3) blokk[k]=1;
+          }
+        }
       }
     }
-  }
+  };
+  kjor(0); kjor(1);
+
   HG.h=new Float32Array(N);
   HG.apen=new Uint8Array(N);
   for(let k=0;k<N;k++){
     if(lav[k]===Infinity){HG.h[k]=0;HG.apen[k]=0;continue;}
     HG.h[k]=lav[k];
-    // kjørbar: kolonnen er lav (ingen vegg eller bygg står her)
-    HG.apen[k]=(hoy[k]-lav[k])<2.6?1:0;
+    HG.apen[k]=blokk[k]?0:1;
   }
-  // fjern enkeltruter som stikker ut, de gir hakkete kjørefelt
-  const kopi=HG.apen.slice();
-  for(let j=1;j<HG.nz-1;j++)for(let i=1;i<HG.nx-1;i++){
-    const k=j*HG.nx+i; if(!kopi[k])continue;
-    let n=0;
-    for(let d=-1;d<=1;d++)for(let e=-1;e<=1;e++)if(kopi[(j+d)*HG.nx+(i+e)])n++;
-    if(n<4)HG.apen[k]=0;
+  // --- morfologisk lukking: tetter små brudd i gatenettet ---
+  const dilat=(src)=>{
+    const ut=new Uint8Array(N);
+    for(let j=0;j<HG.nz;j++)for(let i=0;i<HG.nx;i++){
+      if(src[j*HG.nx+i]){ut[j*HG.nx+i]=1;continue;}
+      let treff=0;
+      for(let d=-1;d<=1&&!treff;d++)for(let e=-1;e<=1;e++){
+        const ii=i+e,jj=j+d;
+        if(ii<0||jj<0||ii>=HG.nx||jj>=HG.nz)continue;
+        if(src[jj*HG.nx+ii]){treff=1;break;}
+      }
+      ut[j*HG.nx+i]=treff;
+    }
+    return ut;
+  };
+  const eroder=(src)=>{
+    const ut=new Uint8Array(N);
+    for(let j=0;j<HG.nz;j++)for(let i=0;i<HG.nx;i++){
+      if(!src[j*HG.nx+i])continue;
+      let alle=1;
+      for(let d=-1;d<=1&&alle;d++)for(let e=-1;e<=1;e++){
+        const ii=i+e,jj=j+d;
+        if(ii<0||jj<0||ii>=HG.nx||jj>=HG.nz)continue;
+        if(!src[jj*HG.nx+ii]){alle=0;break;}
+      }
+      ut[j*HG.nx+i]=alle;
+    }
+    return ut;
+  };
+  HG.apen=eroder(dilat(dilat(HG.apen)));      // lukking, med litt slingringsmonn
+
+  // --- flomfyll: finn største sammenhengende område ---
+  const merk=new Int32Array(N).fill(-1);
+  const ko=new Int32Array(N);
+  let beste=-1,besteN=0;
+  const storrelser=[];
+  for(let start=0;start<N;start++){
+    if(!HG.apen[start]||merk[start]>=0)continue;
+    const id=storrelser.length; let hode=0,hale=0,antall=0;
+    ko[hale++]=start; merk[start]=id;
+    while(hode<hale){
+      const k=ko[hode++]; antall++;
+      const i=k%HG.nx, j=(k-i)/HG.nx;
+      if(i>0)       {const q=k-1;      if(HG.apen[q]&&merk[q]<0){merk[q]=id;ko[hale++]=q;}}
+      if(i<HG.nx-1) {const q=k+1;      if(HG.apen[q]&&merk[q]<0){merk[q]=id;ko[hale++]=q;}}
+      if(j>0)       {const q=k-HG.nx;  if(HG.apen[q]&&merk[q]<0){merk[q]=id;ko[hale++]=q;}}
+      if(j<HG.nz-1) {const q=k+HG.nx;  if(HG.apen[q]&&merk[q]<0){merk[q]=id;ko[hale++]=q;}}
+    }
+    storrelser.push(antall);
+    if(antall>besteN){besteN=antall;beste=id;}
   }
+  // Bare det største nettet brukes til spawn, biler og kjørefelt. Uten dette
+  // kunne man starte i en isolert lomme og ikke komme seg noen vei.
+  HG.hoved=new Uint8Array(N);
+  for(let k=0;k<N;k++)if(merk[k]===beste)HG.hoved[k]=1;
+  HG.komponenter=storrelser.length;
+  HG.hovedN=besteN;
 }
 
 // Finner kjørbare korridorer: lange sammenhengende strekk av åpne ruter.
@@ -921,7 +985,7 @@ function finnKjorefelt(){
   for(let j=0;j<HG.nz;j++){
     let run=0;
     for(let i=0;i<=HG.nx;i++){
-      const apen=i<HG.nx&&HG.apen[j*HG.nx+i]===1;
+      const apen=i<HG.nx&&HG.hoved[j*HG.nx+i]===1;
       if(apen)run++;
       else{ if(run>=minLen)
           lanes.push({ax:false,off:HG.z0+j*HG.cell,
@@ -932,7 +996,7 @@ function finnKjorefelt(){
   for(let i=0;i<HG.nx;i++){
     let run=0;
     for(let j=0;j<=HG.nz;j++){
-      const apen=j<HG.nz&&HG.apen[j*HG.nx+i]===1;
+      const apen=j<HG.nz&&HG.hoved[j*HG.nx+i]===1;
       if(apen)run++;
       else{ if(run>=minLen)
           lanes.push({ax:true,off:HG.x0+i*HG.cell,
@@ -946,11 +1010,11 @@ function finnApenPlass(nx,nz,rad){
   for(let t=0;t<6000;t++){
     const x=(nx!==undefined?nx:0)+rnd(-1,1)*(nx!==undefined?90:(HG.nx-2)*HG.cell/2);
     const z=(nz!==undefined?nz:0)+rnd(-1,1)*(nz!==undefined?90:(HG.nz-2)*HG.cell/2);
-    if(!erApen(x,z))continue;
+    if(!erHoved(x,z))continue;
     let ok=true; const r=rad||5;
     for(let a=0;a<8&&ok;a++){
       const v=a/8*6.283;
-      if(!erApen(x+Math.cos(v)*r,z+Math.sin(v)*r))ok=false;
+      if(!erHoved(x+Math.cos(v)*r,z+Math.sin(v)*r))ok=false;
     }
     if(ok)return {x:x,z:z};
   }
@@ -1293,9 +1357,10 @@ function updateDrive(dt){
   const fx=sh, fz=ch;
   const nx=drive.x+wx*Math.min(dt,0.05), nz=drive.z+wz*Math.min(dt,0.05);
   let hit=false;
-  if(!drive.nocol)for(const o of [-2.0,0,2.0]){
-    if(!kanGa(nx+fx*o,nz+fz*o,drive.y,1.1)){hit=true;break;}
-  }
+  if(!drive.nocol&&!sitterFast(drive.x,drive.z))
+    for(const o of [-1.9,0,1.9]){
+      if(!kanGa(nx+fx*o,nz+fz*o,drive.y,1.1)){hit=true;break;}
+    }
   if(hit){drive.vx*=-0.25;drive.vy*=0.2;drive.yawrate*=0.3;drive.hits=(drive.hits||0)+1;}
   else {drive.x=nx;drive.z=nz;}
   drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
@@ -1439,7 +1504,9 @@ async function build(){
   renderMinimapBase();
   document.getElementById('bcount').textContent=(cityInfo?cityInfo.felt:0)+' kjørefelt';
   document.getElementById('ostats').innerHTML=
-    (cityInfo?cityInfo.kjorbar.toLocaleString('nb-NO'):'?')+' kjørbare ruter &middot; '+
+    (cityInfo?('hovednett '+Math.round(cityInfo.hoved*1.6*1.6).toLocaleString('nb-NO')+' m² av '+
+      Math.round(cityInfo.kjorbar*1.6*1.6).toLocaleString('nb-NO')+' m² kjørbart, '+
+      cityInfo.komponenter+' områder'):'?')+' &middot; '+
     CITY_W+' &times; '+CITY_D+' m &middot; '+(cityInfo?cityInfo.tegnekall:0)+' tegnekall';
 }
 
@@ -1496,11 +1563,43 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'citymodel-11',
+  ver:()=>'walls-13',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
   nocol:(v)=>{drive.nocol=!!v;},
+  maske:()=>{                       // tegner kjørbarhets-masken som bilde
+    const c=document.createElement('canvas');
+    c.width=HG.nx;c.height=HG.nz;
+    const g=c.getContext('2d'),img=g.createImageData(HG.nx,HG.nz),d=img.data;
+    for(let k=0;k<HG.nx*HG.nz;k++){
+      const h=HG.hoved&&HG.hoved[k], a=HG.apen[k];
+      d[k*4]  = h?90:(a?150:24);
+      d[k*4+1]= h?230:(a?150:26);
+      d[k*4+2]= h?140:(a?150:42);
+      d[k*4+3]=255;
+    }
+    g.putImageData(img,0,0);
+    const i=cl(Math.round((SPAWN.x-HG.x0)/HG.cell),0,HG.nx-1);
+    const j=cl(Math.round((SPAWN.z-HG.z0)/HG.cell),0,HG.nz-1);
+    g.fillStyle='#ff3b30';g.fillRect(i-3,j-3,7,7);
+    return c.toDataURL('image/png');
+  },
+  veggtest:(n)=>{
+    const ut=[],sx=SPAWN.x,sz=SPAWN.z;
+    for(let a=0;a<n;a++){
+      drive.x=sx;drive.z=sz;drive.head=a/n*6.283;
+      drive.vx=0;drive.vy=0;drive.yawrate=0;drive.steer=0;drive.hits=0;
+      keys['KeyW']=true;
+      for(let i=0;i<220;i++)updateDrive(0.016);
+      keys['KeyW']=false;
+      ut.push({grader:Math.round(a/n*360),
+               meter:+Math.hypot(drive.x-sx,drive.z-sz).toFixed(0),
+               stopp:drive.hits||0});
+    }
+    drive.x=sx;drive.z=sz;drive.vx=0;drive.vy=0;drive.yawrate=0;
+    return ut;
+  },
   frihimmel:()=>{drive.x=0;drive.z=0;drive.head=0;      // tom flate, ingen bygg
                  drive.vx=drive.vy=drive.yawrate=drive.hits=0;},
   trace:(steps,ks,every,dt)=>{
@@ -1597,7 +1696,7 @@ function update(dt){
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
     // Kollisjon fra høydekartet: kan du ikke sette foten der, blir du stoppet.
-    if(!kanGa(P.pos.x,P.pos.z,P.pos.y-P.h)){
+    if(!kanGa(P.pos.x,P.pos.z,P.pos.y-P.h)&&!sitterFast(fx0,fz0)){
       if(kanGa(fx0,P.pos.z,P.pos.y-P.h)){P.pos.x=fx0;P.vel.x=0;}
       else if(kanGa(P.pos.x,fz0,P.pos.y-P.h)){P.pos.z=fz0;P.vel.z=0;}
       else {P.pos.x=fx0;P.pos.z=fz0;P.vel.x=0;P.vel.z=0;}
