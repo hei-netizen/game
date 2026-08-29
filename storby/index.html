@@ -63,6 +63,7 @@
   <div>pos <b id="pos">0, 0</b> &nbsp; høyde <b id="alt">0</b> m</div>
   <div><b id="fps">0</b> fps &nbsp;&middot;&nbsp; <b id="bcount">0</b> bygninger &middot; <b id="propcount">0</b> props</div>
   <div id="mode" style="color:#f0c674">&nbsp;</div>
+  <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
 </div>
 
 <canvas id="minimap" width="300" height="200"></canvas>
@@ -765,7 +766,7 @@ const CAR_TYPES=['sedan','sedan-sports','suv','suv-luxury','taxi','police',
                  'van','delivery','hatchback-sports','truck-flat','ambulance'];
 const CAR_SCALE=1.75;            // modellen er ~2,55 m lang -> ~4,5 m
 const CAR_YAW=0;                 // korrigerer modellens egen frontretning
-let carGeo={},carMat=null,carSrc={};
+let carGeo={},carMat=null,carSrc={},carMats={},carYoff={};
 let traffic=[],carData=[],parked=[];
 const drive={on:false,car:null,spd:0,vx:0,vy:0,yawrate:0,ax:0,slip:0,
               steer:0,head:0,spin:0,x:0,y:0,z:0};
@@ -786,14 +787,54 @@ async function loadCars(){
           q.applyMatrix4(o.matrixWorld);
           q.deleteAttribute('tangent');      // ulike attributtsett bryter merge
           geos.push(q);
+          if(!carMats[t])carMats[t]=o.material;
           if(!carMat)carMat=o.material;
         }
       });
       if(geos.length)carGeo[t]=mergeGeometries(geos,false);
       carSrc[t]=g.scene;
+      // noen modeller ligger litt under origo — løft dem opp på bakken
+      const bb=new THREE.Box3().setFromObject(g.scene);
+      carYoff[t]=-bb.min.y;
     }catch(e){ console.warn('bilmodell mangler:',t,e.message); }
   }
-  if(carMat){carMat.roughness=.42;carMat.metalness=.30;carMat.envMapIntensity=1.15;}
+  // Hver bil har sin egen KHR_texture_transform inn i det delte atlaset. Deles
+  // ett materiale mellom typene, sampler de fleste feil område av teksturen.
+  for(const t in carMats){
+    const m=carMats[t];
+    if(m&&m.isMeshStandardMaterial){m.roughness=.42;m.metalness=.30;m.envMapIntensity=1.15;}
+  }
+}
+
+// Helte-biler: for tunge til trafikk (McLaren er 4,7 MB / 187k verteks), så de
+// lastes etter at byen står, og settes ut som noen få parkerte eksemplarer.
+const HERO_CARS=['mclaren'];
+async function loadHeroCars(){
+  const loader=new GLTFLoader();
+  for(const t of HERO_CARS){
+    try{
+      const g=await loader.loadAsync('assets/cars/'+t+'.glb');
+      g.scene.updateMatrixWorld(true);
+      const bb=new THREE.Box3().setFromObject(g.scene);
+      carYoff[t]=-bb.min.y;
+      carSrc[t]=g.scene;
+      placeHero(t,3);
+    }catch(e){ console.warn('helte-bil mangler:',t,e.message); }
+  }
+  const el=document.getElementById('herocar');
+  if(el)el.textContent=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0).length?'· McLaren står ved startpunktet':'';
+}
+function placeHero(t,n){
+  const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
+  const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
+  spawnRealCar(t,ax.p+5.5,az.p+11,0);            // én rett ved der du starter
+  let lagt=1,forsok=0;
+  while(lagt<n&&forsok++<200){
+    const b=blocks[rndi(0,blocks.length-1)];
+    if(!b||b.d===D_PARK)continue;
+    spawnRealCar(t,(b.x0+b.x1)/2,b.z0-3.2,0);
+    lagt++;
+  }
 }
 
 function buildTraffic(){
@@ -804,7 +845,7 @@ function buildTraffic(){
   const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
   const per=Math.ceil(230/types.length);
   for(const t of types){
-    const im=new THREE.InstancedMesh(carGeo[t],carMat,per);
+    const im=new THREE.InstancedMesh(carGeo[t],carMats[t]||carMat,per);
     im.castShadow=true;im.frustumCulled=false;
     for(let i=0;i<per;i++){
       const isX=rand()<.5;
@@ -842,17 +883,55 @@ function buildParked(){
 
 // Lager en ekte, kjørbar bil. Brukes både til parkerte biler og når du kaprer
 // en bil fra trafikken.
+// Finner hjul. Kenney-modellene har navngitte hjul; Sketchfab-modeller (som
+// McLaren-en) heter bare Object_N, og da må hjulene finnes på formen: lave,
+// runde, ute i de fire hjørnene. Delene grupperes per hjørne i én pivot.
+function rigWheels(root){
+  root.updateMatrixWorld(true);
+  const named=[];
+  root.traverse(o=>{if(o.isMesh&&/wheel|tire|tyre|rim/i.test(o.name))named.push(o);});
+  if(named.length>=4)
+    return named.map(o=>({o:o,front:/front/i.test(o.name),by:o.rotation.y,bx:o.rotation.x}));
+
+  const bb=new THREE.Box3().setFromObject(root);
+  const W=bb.max.x-bb.min.x, H=bb.max.y-bb.min.y, L=bb.max.z-bb.min.z;
+  const cands=[];
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry)return;
+    const b=new THREE.Box3().setFromObject(o),sz=new THREE.Vector3(),c=new THREE.Vector3();
+    b.getSize(sz);b.getCenter(c);
+    const rund=Math.abs(sz.y-sz.z)<Math.max(sz.y,sz.z)*0.42;
+    if(c.y<bb.min.y+H*0.58 && rund && sz.y>H*0.28 &&
+       Math.abs(c.x-(bb.min.x+W/2))>W*0.20 && Math.abs(c.z-(bb.min.z+L/2))>L*0.16)
+      cands.push({o:o,c:c});
+  });
+  const grupper={};
+  const mx=bb.min.x+W/2, mz=bb.min.z+L/2;
+  for(const k of cands){
+    const key=(k.c.x<mx?'L':'R')+(k.c.z<mz?'B':'F');
+    (grupper[key]=grupper[key]||[]).push(k);
+  }
+  const out=[];
+  for(const key in grupper){
+    const g=grupper[key], midt=new THREE.Vector3();
+    g.forEach(k=>midt.add(k.c)); midt.divideScalar(g.length);
+    const pivot=new THREE.Group(); pivot.position.copy(midt); root.add(pivot);
+    for(const k of g) pivot.attach(k.o);          // attach beholder verdenstransform
+    out.push({o:pivot,front:key[1]==='F',by:0,bx:0});
+  }
+  return out;
+}
+
 function spawnRealCar(type,x,z,yaw){
   const obj=carSrc[type].clone(true);
-  obj.scale.setScalar(CAR_SCALE);obj.position.set(x,groundAt(x,z),z);obj.rotation.y=yaw;
-  const wheels=[];
-  obj.traverse(o=>{
-    if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}
-    if(/wheel/i.test(o.name))wheels.push({o:o,front:/front/i.test(o.name),
-                                          by:o.rotation.y,bx:o.rotation.x});
-  });
+  const wheels=rigWheels(obj);                    // rigges FØR skalering/plassering
+  const sc=(type==='mclaren')?1.0:CAR_SCALE;      // McLaren er allerede i ekte skala
+  obj.scale.setScalar(sc);
+  obj.position.set(x,groundAt(x,z)+(carYoff[type]||0)*sc,z);
+  obj.rotation.y=yaw;
+  obj.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
   scene.add(obj);
-  const p={obj:obj,wheels:wheels,x:x,z:z,yaw:yaw,type:type};
+  const p={obj:obj,wheels:wheels,x:x,z:z,yaw:yaw,type:type,sc:sc,yoff:(carYoff[type]||0)*sc};
   parked.push(p);return p;
 }
 // nærmeste bil du kan sette deg inn i — parkert eller i fart
@@ -925,11 +1004,16 @@ function enterExit(){
    når grensen slipper bakenden og bilen sladder. Håndbrekket senker bakgrepet
    og starter driften.                                                        */
 const CARP={
-  M:1250, I:1900,          // masse (kg) og treghetsmoment om z (kg·m²)
-  b:1.25, c:1.35, h:0.55,  // CG til for-/bakaksel, CG-høyde (m)
-  Cf:58000, Cr:64000,      // cornering stiffness foran/bak (N/rad)
-  mu:1.45,                 // dekkgrep
-  muHand:0.42,             // bakgrep med håndbrekk -> drift
+  M:1250, I:2500,          // treghetsmoment opp -> bilen snurrer ikke like lett
+  b:1.25, c:1.35, h:0.55,
+  Cf:60000, Cr:56000,      // mykere bak = progressiv sladd i stedet for brå spinn
+  mu:1.45,
+  muHand:0.55,             // håndbrekk løsner bakenden, men slipper den ikke helt
+  gassLos:0.20,            // gass reduserer bakgrepet -> du doserer sladden med foten
+  girDemp:2600,            // girdemping (N·m per rad/s) -> sladden er til å holde
+  girTak:1.5,              // maks girfart
+  sladdDemp:1.25,          // hvor fort sidefarten dør ut uten håndbrekk
+  sladdDempH:0.22,         // ... med håndbrekk (nesten fritt slipp)
   motor:10000, boost:15000, brems:13500, revers:3400,
   cLuft:2.1, cRull:63, ratt:0.56
 };
@@ -956,7 +1040,11 @@ function carStep(h,th,hand,boost){
   let Wr=(CARP.b/L)*W+(CARP.h/L)*CARP.M*(drive.ax||0);
   Wf=Math.max(Wf,W*0.12); Wr=Math.max(Wr,W*0.12);
 
-  const gripR=hand?CARP.muHand:CARP.mu;
+  // Gassen styrer bakgrepet: full gass løsner bakenden og forlenger sladden,
+  // letter du på gassen tar den grep igjen og retter seg opp. Det er dette som
+  // gjør at man kan velge mellom en myk kurve og en brå sving.
+  const gass=th>0?1:0;
+  const gripR=hand?CARP.muHand:CARP.mu*(1-CARP.gassLos*gass);
   const Ff=cl(-CARP.Cf*aF,-CARP.mu*Wf, CARP.mu*Wf);   // kraften motvirker slippet
   const Fr=cl(-CARP.Cr*aR,-gripR*Wr,   gripR*Wr  );
 
@@ -971,14 +1059,19 @@ function carStep(h,th,hand,boost){
   const ay=(Math.cos(d)*Ff+Fr)/CARP.M-yr*vx;
   drive.vx+=ax*h; drive.vy+=ay*h; drive.ax=ax;
 
-  const moment=Math.cos(d)*Ff*CARP.b-Fr*CARP.c;
+  const moment=Math.cos(d)*Ff*CARP.b-Fr*CARP.c-CARP.girDemp*yr;   // demping = kontroll
   const dynYaw=drive.yawrate+(moment/CARP.I)*h;
 
   // Under ~3 m/s TOTAL fart er den dynamiske modellen meningsløs; da blandes
   // den mot kinematisk sykkelmodell så parkering og rygging blir rolig.
   const kinYaw=(Math.abs(vx)>0.15)?(vx*Math.tan(d)/L):0;
   const t=cl((vmag-3.0)/4.0,0,1);
-  drive.yawrate=cl(kinYaw*(1-t)+dynYaw*t,-2.6,2.6);
+  drive.yawrate=cl(kinYaw*(1-t)+dynYaw*t,-CARP.girTak,CARP.girTak);
+  // Sidefarten dempes mot null når du IKKE holder håndbrekk. Det er dette som
+  // gjør sladden styrbar: hold håndbrekket for å holde den gående, slipp for
+  // å hekte den opp igjen.
+  const sd=hand?CARP.sladdDempH:CARP.sladdDemp;
+  drive.vy-=drive.vy*Math.min(1,sd*h);
   drive.vy=cl(drive.vy*((1-t)*0.90+t),-26,26);
   drive.head+=drive.yawrate*h;
 
@@ -1026,7 +1119,7 @@ function updateDrive(dt){
   drive.spin+=drive.spd*dt/0.34;   // hjulradius ~0,34 m
   const o=drive.car.obj;
   drive.y=groundAt(drive.x,drive.z);
-  o.position.set(drive.x,drive.y,drive.z);
+  o.position.set(drive.x,drive.y+(drive.car.yoff||0),drive.z);
   o.rotation.y=drive.head+CAR_YAW;
   for(const w of drive.car.wheels){
     w.o.rotation.x=w.bx-drive.spin;
@@ -1204,7 +1297,10 @@ window.__dbg={
   P:()=>({x:P.pos.x,y:P.pos.y,z:P.pos.z}),
   props:()=>propGroup?propGroup.children.length:0,
   frames:()=>FRAMES,
-  ver:()=>'lat-fix-2',
+  ver:()=>'drift-6',
+  hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
+    return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
+            pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
   nocol:(v)=>{drive.nocol=!!v;},
   frihimmel:()=>{drive.x=0;drive.z=0;drive.head=0;      // tom flate, ingen bygg
                  drive.vx=drive.vy=drive.yawrate=drive.hits=0;},
@@ -1383,8 +1479,12 @@ function drawMinimap(){
     const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
     mc.fillRect((cx+HW)*SX-1,(cz+HD)*SZ-1,2,2);
   }
-  mc.fillStyle='#6cf09a';                                // parkerte — kan kjøres
-  for(const p of parked)mc.fillRect((p.x+HW)*SX-1.5,(p.z+HD)*SZ-1.5,3,3);
+  for(const p of parked){                                // parkerte — kan kjøres
+    const hero=HERO_CARS.indexOf(p.type)>=0;
+    mc.fillStyle=hero?'#ff9a3c':'#6cf09a';
+    const r=hero?2.5:1.5;
+    mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
+  }
   const x=(P.pos.x+HW)*300/CITY_W,y=(P.pos.z+HD)*200/CITY_D;
   mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
   mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
@@ -1753,7 +1853,7 @@ setTimeout(async ()=>{
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
   requestAnimationFrame(loop);
-  loadProps();
+  loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
 },30);
 </script>
