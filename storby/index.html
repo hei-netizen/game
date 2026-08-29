@@ -446,6 +446,26 @@ function dashTex(){
 }
 
 /* ---------------------------- GEOMETRI ---------------------------------- */
+// KHR_mesh_quantization lagrer posisjoner og UV som normaliserte heltall, og
+// dequantiseringen ligger i nodens matrise. Ganger man matrisen inn i et
+// heltallsbuffer blir geometrien ødelagt — bilene ble til eksploderte klumper.
+// Derfor konverteres alt til Float32 (denormalisert) FØR matrisen brukes.
+function tilFloat32(g){
+  for(const navn in g.attributes){
+    const a=g.attributes[navn];
+    if(a.array instanceof Float32Array&&!a.normalized)continue;
+    const n=a.itemSize,ut=new Float32Array(a.count*n);
+    for(let i=0;i<a.count;i++){
+      ut[i*n]=a.getX(i);
+      if(n>1)ut[i*n+1]=a.getY(i);
+      if(n>2)ut[i*n+2]=a.getZ(i);
+      if(n>3)ut[i*n+3]=a.getW(i);
+    }
+    g.setAttribute(navn,new THREE.BufferAttribute(ut,n));
+  }
+  return g;
+}
+
 function Buf(){return{p:[],n:[],u:[],c:[]}}
 function quad(b,ax,ay,az,bx,by,bz,cx,cy,cz,dx,dy,dz,nx,ny,nz,u0,v0,u1,v1,col){
   b.p.push(ax,ay,az,bx,by,bz,cx,cy,cz, ax,ay,az,cx,cy,cz,dx,dy,dz);
@@ -837,7 +857,7 @@ async function loadCars(){
           // quantize gir interleaved attributter — de må flates ut før merge.
           // deinterleaveGeometry muterer på stedet og returnerer ingenting.
           deinterleaveGeometry(o.geometry);
-          const q=o.geometry.clone();
+          const q=tilFloat32(o.geometry.clone());
           q.applyMatrix4(o.matrixWorld);
           q.deleteAttribute('tangent');      // ulike attributtsett bryter merge
           geos.push(q);
@@ -1442,7 +1462,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'krasj-2',
+  ver:()=>'bilfiks-3',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
