@@ -108,7 +108,8 @@ import { mergeGeometries, deinterleaveGeometry } from './BufferGeometryUtils.js'
    ========================================================================== */
 
 /* ---------------------------- KONFIG ------------------------------------ */
-const CITY_W=3000, CITY_D=2000, HW=CITY_W/2, HD=CITY_D/2;
+let CITY_W=3000, CITY_D=2000, HW=1500, HD=1000;   // settes fra bymodellen
+const MM={hw:1500,hd:1000};                        // minikart-utsnitt
 const FH=3.6;                       // etasjehøyde
 const TEX_W=16.0, TEX_H=14.4;       // meter per fasade-teksturrepetisjon
 const GROUND_H=5.4;                 // høyde på gateplan-sonen (butikk/inngang)
@@ -161,11 +162,13 @@ function addPad(b){
       const k=cx+':'+cz;let a=padHash.get(k);if(!a){a=[];padHash.set(k,a);}a.push(b);
     }
 }
-function groundAt(x,z){
-  const a=padHash.get(Math.floor(x/GRID)+':'+Math.floor(z/GRID));
-  if(a)for(const b of a)
-    if(x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1)return b.pad;
-  return terrainH(x,z);
+function groundAt(x,z){ return cityGround(x,z); }
+// Kan man stå/kjøre her? Ruten må ha bakke, være åpen, og steget opp må være lite.
+function kanGa(x,z,fotY,maksSteg){
+  if(!HG.apen)return true;
+  const k=hgIdx(x,z);
+  if(!HG.apen[k])return false;
+  return (HG.h[k]-fotY)<=(maksSteg||1.4);
 }
 
 /* ---------------------------- TEKSTUR-VERKTØY --------------------------- */
@@ -442,6 +445,26 @@ function dashTex(){
 }
 
 /* ---------------------------- GEOMETRI ---------------------------------- */
+// KHR_mesh_quantization lagrer posisjoner/UV som normaliserte heltall, og
+// dequantiseringen ligger i nodens matrise. Ganger man matrisen inn i et
+// heltallsbuffer blir dataene ødelagt — og merge feiler på blandede typer.
+// Derfor konverteres alt til Float32 (denormalisert) FØR matrisen brukes.
+function tilFloat32(g){
+  for(const navn in g.attributes){
+    const a=g.attributes[navn];
+    if(a.array instanceof Float32Array&&!a.normalized)continue;
+    const n=a.itemSize,ut=new Float32Array(a.count*n);
+    for(let i=0;i<a.count;i++){
+      ut[i*n]=a.getX(i);
+      if(n>1)ut[i*n+1]=a.getY(i);
+      if(n>2)ut[i*n+2]=a.getZ(i);
+      if(n>3)ut[i*n+3]=a.getW(i);
+    }
+    g.setAttribute(navn,new THREE.BufferAttribute(ut,n));
+  }
+  return g;
+}
+
 function Buf(){return{p:[],n:[],u:[],c:[]}}
 function quad(b,ax,ay,az,bx,by,bz,cx,cy,cz,dx,dy,dz,nx,ny,nz,u0,v0,u1,v1,col){
   b.p.push(ax,ay,az,bx,by,bz,cx,cy,cz, ax,ay,az,cx,cy,cz,dx,dy,dz);
@@ -759,6 +782,181 @@ function generateCity(scene,mats,gm){
   return group;
 }
 
+/* ==========================================================================
+   BYMODELL  (city_02.glb)
+   Erstatter den prosedurale byen. Modellen er 14,6 x 23,9 enheter, så den
+   skaleres 30x -> ca. 440 x 717 m. Den har ingen gategrid eller kollisjons-
+   data, så begge deler utledes fra mesh-geometrien:
+     - mesher lavere enn 5 m  -> bakke, stemples inn i et høydekart
+     - mesher høyere enn 5 m  -> bygg, blir kollisjonsbokser
+   ========================================================================== */
+const CITY_SCALE=30;
+const HG={cell:3.0,x0:0,z0:0,nx:0,nz:0,h:null,apen:null,grunn:null};
+let cityGroup=null,cityBB=null,lanes=[];
+
+function hgIdx(x,z){
+  const i=cl(Math.round((x-HG.x0)/HG.cell),0,HG.nx-1);
+  const j=cl(Math.round((z-HG.z0)/HG.cell),0,HG.nz-1);
+  return j*HG.nx+i;
+}
+function cityGround(x,z){
+  if(!HG.h)return 0;
+  const v=HG.h[hgIdx(x,z)];
+  return (v===v)?v:0;                      // NaN-sjekk
+}
+function erApen(x,z){ return HG.apen?HG.apen[hgIdx(x,z)]===1:false; }
+
+async function loadCity(){
+  const g=await new GLTFLoader().loadAsync('assets/city.glb');
+  const root=g.scene; root.updateMatrixWorld(true);
+  const bb0=new THREE.Box3().setFromObject(root);
+  const c=new THREE.Vector3(); bb0.getCenter(c);
+  root.scale.setScalar(CITY_SCALE);
+  root.position.set(-c.x*CITY_SCALE,-bb0.min.y*CITY_SCALE,-c.z*CITY_SCALE);
+  root.updateMatrixWorld(true);
+  const bb=new THREE.Box3().setFromObject(root); cityBB=bb;
+
+  const deler=[],perMat=new Map();
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry)return;
+    const b=new THREE.Box3().setFromObject(o);
+    deler.push({b:b,h:b.max.y-b.min.y});
+    deinterleaveGeometry(o.geometry);
+    const gm=tilFloat32(o.geometry.clone());
+    gm.applyMatrix4(o.matrixWorld);
+    gm.deleteAttribute('tangent');
+    const k=o.material.uuid;
+    if(!perMat.has(k))perMat.set(k,{mat:o.material,geos:[]});
+    perMat.get(k).geos.push(gm);
+  });
+
+  // Bygg først, høydekart etterpå (rasteriseres fra de merga trekantene).
+  // --- slå sammen per materiale: 2455 draw calls -> ca. 100 ---
+  cityGroup=new THREE.Group();
+  // Scannede bymodeller har lyset bakt inn i teksturen. Kjører man dem gjennom
+  // PBR med sol og miljøkart blir de utvasket, så de rendres flatt i stedet.
+  const flatt=m=>{
+    const n=new THREE.MeshLambertMaterial({
+      map:m.map||null, color:0xffffff, side:m.side,
+      transparent:m.transparent, alphaTest:m.alphaTest||0, opacity:m.opacity});
+    if(n.map)n.map.colorSpace=THREE.SRGBColorSpace;
+    return n;
+  };
+  for(const {mat,geos} of perMat.values()){
+    let merged=null;
+    try{ merged=geos.length>1?mergeGeometries(geos,false):geos[0]; }catch(e){ merged=null; }
+    if(merged){
+      const m=new THREE.Mesh(merged,flatt(mat)); m.castShadow=true;m.receiveShadow=true;
+      cityGroup.add(m);
+    } else {
+      for(const gm of geos){
+        const m=new THREE.Mesh(gm,flatt(mat)); m.castShadow=true;m.receiveShadow=true;
+        cityGroup.add(m);
+      }
+    }
+  }
+  scene.add(cityGroup);
+  rasterHoydekart(bb);
+  finnKjorefelt();
+  let kjorbar=0; for(let k=0;k<HG.apen.length;k++)if(HG.apen[k])kjorbar++;
+  return {mesher:deler.length,tegnekall:cityGroup.children.length,kjorbar:kjorbar,
+          felt:lanes.length,bredde:Math.round(bb.max.x-bb.min.x),
+          dybde:Math.round(bb.max.z-bb.min.z)};
+}
+
+// Rasteriserer alle trekanter ned i et høydekart. Dette er langt mer presist
+// enn bounding-bokser på scannet geometri: gatene får gatehøyde, byggene får
+// takhøyde, og en rute regnes som kjørbar bare når kolonnen er lav og flat.
+function rasterHoydekart(bb){
+  HG.x0=bb.min.x; HG.z0=bb.min.z;
+  HG.nx=Math.ceil((bb.max.x-bb.min.x)/HG.cell)+1;
+  HG.nz=Math.ceil((bb.max.z-bb.min.z)/HG.cell)+1;
+  const N=HG.nx*HG.nz;
+  const lav=new Float32Array(N).fill(Infinity);
+  const hoy=new Float32Array(N).fill(-Infinity);
+  for(const m of cityGroup.children){
+    const pos=m.geometry.attributes.position, idx=m.geometry.index;
+    const antall=idx?idx.count:pos.count;
+    for(let t=0;t<antall;t+=3){
+      const a=idx?idx.getX(t):t, b2=idx?idx.getX(t+1):t+1, c=idx?idx.getX(t+2):t+2;
+      const x0=Math.min(pos.getX(a),pos.getX(b2),pos.getX(c));
+      const x1=Math.max(pos.getX(a),pos.getX(b2),pos.getX(c));
+      const z0=Math.min(pos.getZ(a),pos.getZ(b2),pos.getZ(c));
+      const z1=Math.max(pos.getZ(a),pos.getZ(b2),pos.getZ(c));
+      const yl=Math.min(pos.getY(a),pos.getY(b2),pos.getY(c));
+      const yh=Math.max(pos.getY(a),pos.getY(b2),pos.getY(c));
+      const i0=cl(Math.floor((x0-HG.x0)/HG.cell),0,HG.nx-1);
+      const i1=cl(Math.ceil ((x1-HG.x0)/HG.cell),0,HG.nx-1);
+      const j0=cl(Math.floor((z0-HG.z0)/HG.cell),0,HG.nz-1);
+      const j1=cl(Math.ceil ((z1-HG.z0)/HG.cell),0,HG.nz-1);
+      for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
+        const k=j*HG.nx+i;
+        if(yl<lav[k])lav[k]=yl;
+        if(yh>hoy[k])hoy[k]=yh;
+      }
+    }
+  }
+  HG.h=new Float32Array(N);
+  HG.apen=new Uint8Array(N);
+  for(let k=0;k<N;k++){
+    if(lav[k]===Infinity){HG.h[k]=0;HG.apen[k]=0;continue;}
+    HG.h[k]=lav[k];
+    // kjørbar: kolonnen er lav (ingen vegg eller bygg står her)
+    HG.apen[k]=(hoy[k]-lav[k])<2.6?1:0;
+  }
+  // fjern enkeltruter som stikker ut, de gir hakkete kjørefelt
+  const kopi=HG.apen.slice();
+  for(let j=1;j<HG.nz-1;j++)for(let i=1;i<HG.nx-1;i++){
+    const k=j*HG.nx+i; if(!kopi[k])continue;
+    let n=0;
+    for(let d=-1;d<=1;d++)for(let e=-1;e<=1;e++)if(kopi[(j+d)*HG.nx+(i+e)])n++;
+    if(n<4)HG.apen[k]=0;
+  }
+}
+
+// Finner kjørbare korridorer: lange sammenhengende strekk av åpne ruter.
+function finnKjorefelt(){
+  lanes=[];
+  const minLen=Math.ceil(55/HG.cell);
+  for(let j=0;j<HG.nz;j++){
+    let run=0;
+    for(let i=0;i<=HG.nx;i++){
+      const apen=i<HG.nx&&HG.apen[j*HG.nx+i]===1;
+      if(apen)run++;
+      else{ if(run>=minLen)
+          lanes.push({ax:false,off:HG.z0+j*HG.cell,
+                      a:HG.x0+(i-run)*HG.cell,b:HG.x0+(i-1)*HG.cell});
+        run=0; }
+    }
+  }
+  for(let i=0;i<HG.nx;i++){
+    let run=0;
+    for(let j=0;j<=HG.nz;j++){
+      const apen=j<HG.nz&&HG.apen[j*HG.nx+i]===1;
+      if(apen)run++;
+      else{ if(run>=minLen)
+          lanes.push({ax:true,off:HG.x0+i*HG.cell,
+                      a:HG.z0+(j-run)*HG.cell,b:HG.z0+(j-1)*HG.cell});
+        run=0; }
+    }
+  }
+}
+
+function finnApenPlass(nx,nz,rad){
+  for(let t=0;t<6000;t++){
+    const x=(nx!==undefined?nx:0)+rnd(-1,1)*(nx!==undefined?90:(HG.nx-2)*HG.cell/2);
+    const z=(nz!==undefined?nz:0)+rnd(-1,1)*(nz!==undefined?90:(HG.nz-2)*HG.cell/2);
+    if(!erApen(x,z))continue;
+    let ok=true; const r=rad||5;
+    for(let a=0;a<8&&ok;a++){
+      const v=a/8*6.283;
+      if(!erApen(x+Math.cos(v)*r,z+Math.sin(v)*r))ok=false;
+    }
+    if(ok)return {x:x,z:z};
+  }
+  return {x:0,z:0};
+}
+
 /* ---------------------------- BILER ------------------------------------- */
 /* Kenney Car Kit (CC0). Trafikk instanseres som én merget geometri per type;
    parkerte biler er ekte objekter med navngitte hjul, så de kan kjøres.      */
@@ -783,7 +981,7 @@ async function loadCars(){
           // quantize gir interleaved attributter — de må flates ut før merge.
           // deinterleaveGeometry muterer på stedet og returnerer ingenting.
           deinterleaveGeometry(o.geometry);
-          const q=o.geometry.clone();
+          const q=tilFloat32(o.geometry.clone());
           q.applyMatrix4(o.matrixWorld);
           q.deleteAttribute('tangent');      // ulike attributtsett bryter merge
           geos.push(q);
@@ -825,15 +1023,11 @@ async function loadHeroCars(){
   if(el)el.textContent=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0).length?'· McLaren står ved startpunktet':'';
 }
 function placeHero(t,n){
-  const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
-  const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
-  spawnRealCar(t,ax.p+5.5,az.p+11,0);            // én rett ved der du starter
-  let lagt=1,forsok=0;
-  while(lagt<n&&forsok++<200){
-    const b=blocks[rndi(0,blocks.length-1)];
-    if(!b||b.d===D_PARK)continue;
-    spawnRealCar(t,(b.x0+b.x1)/2,b.z0-3.2,0);
-    lagt++;
+  const nær=finnApenPlass(SPAWN.x,SPAWN.z,4.5);
+  spawnRealCar(t,nær.x,nær.z,0);                 // én i nærheten av start
+  for(let i=1;i<n;i++){
+    const s=finnApenPlass(undefined,undefined,4.5);
+    spawnRealCar(t,s.x,s.z,rand()*6.283);
   }
 }
 
@@ -842,17 +1036,16 @@ function buildTraffic(){
   traffic=[];carData=[];
   const types=CAR_TYPES.filter(t=>carGeo[t]);
   if(!types.length)return;
-  const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
-  const per=Math.ceil(230/types.length);
+  const L=lanes.filter(l=>Math.abs(l.b-l.a)>60);
+  if(!L.length)return;
+  const per=Math.ceil(120/types.length);
   for(const t of types){
     const im=new THREE.InstancedMesh(carGeo[t],carMats[t]||carMat,per);
     im.castShadow=true;im.frustumCulled=false;
     for(let i=0;i<per;i++){
-      const isX=rand()<.5;
-      const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
-      const dir=rand()<.5?1:-1;
-      carData.push({m:im,i:i,ax:isX,pos:rnd(-1,1)*(isX?HD:HW),type:t,dead:false,
-        off:line.p+(dir>0?4.8:-4.8),dir:dir,spd:rnd(9,20)});
+      const ln=L[rndi(0,L.length-1)];
+      carData.push({m:im,i:i,ax:ln.ax,pos:rnd(ln.a,ln.b),off:ln.off,a:ln.a,b:ln.b,
+        dir:rand()<.5?1:-1,spd:rnd(6,15),type:t,dead:false});
     }
     traffic.push(im);scene.add(im);
   }
@@ -863,21 +1056,16 @@ function buildParked(){
   parked=[];drive.on=false;drive.car=null;
   const types=CAR_TYPES.filter(t=>carSrc[t]);
   if(!types.length)return;
-  for(const b of blocks){
-    if(b.d===D_PARK||parked.length>=58)continue;
-    if(rand()>.32)continue;
-    const sides=[
-      {ax:b.x0,az:b.z0,bx:b.x1,bz:b.z0,nx:0,nz:-1,yaw:Math.PI/2},
-      {ax:b.x1,az:b.z0,bx:b.x1,bz:b.z1,nx:1,nz:0,yaw:0},
-      {ax:b.x1,az:b.z1,bx:b.x0,bz:b.z1,nx:0,nz:1,yaw:Math.PI/2},
-      {ax:b.x0,az:b.z1,bx:b.x0,bz:b.z0,nx:-1,nz:0,yaw:0}
-    ];
-    const s=sides[rndi(0,3)];
-    const len=Math.hypot(s.bx-s.ax,s.bz-s.az);
-    if(len<24)continue;
-    const t=rnd(8,len-8),dx=(s.bx-s.ax)/len,dz=(s.bz-s.az)/len,off=3.0;
-    const x=s.ax+dx*t+s.nx*off, z=s.az+dz*t+s.nz*off;
-    spawnRealCar(types[rndi(0,types.length-1)],x,z,s.yaw+(rand()<.5?0:Math.PI)+CAR_YAW);
+  let lagt=0,forsok=0;
+  while(lagt<40&&forsok++<600){
+    const s=finnApenPlass(undefined,undefined,4.5);
+    if(!s)break;
+    let forNaer=false;                       // ikke stable dem oppå hverandre
+    for(const q of parked)
+      if((q.x-s.x)*(q.x-s.x)+(q.z-s.z)*(q.z-s.z)<140){forNaer=true;break;}
+    if(forNaer)continue;
+    spawnRealCar(types[rndi(0,types.length-1)],s.x,s.z,rand()*6.283);
+    lagt++;
   }
 }
 
@@ -962,11 +1150,10 @@ function updateCars(dt){
       _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);continue;
     }
     c.pos+=c.spd*c.dir*dt;
-    const lim=c.ax?HD:HW;
-    if(c.pos>lim)c.pos=-lim; if(c.pos<-lim)c.pos=lim;
+    if(c.pos>c.b)c.pos=c.a; if(c.pos<c.a)c.pos=c.b;
     let yaw;
-    if(c.ax){_cd.position.set(c.off,terrainH(c.off,c.pos),c.pos);yaw=c.dir>0?0:Math.PI;}
-    else    {_cd.position.set(c.pos,terrainH(c.pos,c.off),c.off);yaw=c.dir>0?Math.PI/2:-Math.PI/2;}
+    if(c.ax){_cd.position.set(c.off,cityGround(c.off,c.pos),c.pos);yaw=c.dir>0?0:Math.PI;}
+    else    {_cd.position.set(c.pos,cityGround(c.pos,c.off),c.off);yaw=c.dir>0?Math.PI/2:-Math.PI/2;}
     _cd.rotation.set(0,yaw+CAR_YAW,0);
     _cd.scale.setScalar(CAR_SCALE);
     _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);
@@ -1107,10 +1294,7 @@ function updateDrive(dt){
   const nx=drive.x+wx*Math.min(dt,0.05), nz=drive.z+wz*Math.min(dt,0.05);
   let hit=false;
   if(!drive.nocol)for(const o of [-2.0,0,2.0]){
-    const px=nx+fx*o,pz=nz+fz*o;
-    for(const b of nearby(px,pz))
-      if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
-    if(hit)break;
+    if(!kanGa(nx+fx*o,nz+fz*o,drive.y,1.1)){hit=true;break;}
   }
   if(hit){drive.vx*=-0.25;drive.vy*=0.2;drive.yawrate*=0.3;drive.hits=(drive.hits||0)+1;}
   else {drive.x=nx;drive.z=nz;}
@@ -1224,7 +1408,7 @@ groundGeo.rotateX(-Math.PI/2);
 const ground=new THREE.Mesh(groundGeo,
   new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
     roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,envMapIntensity:.65}));
-ground.receiveShadow=true;scene.add(ground);
+ground.receiveShadow=true;   // bymodellen har egen bakke — denne legges ikke inn
 function reshapeGround(){
   const pos=groundGeo.attributes.position;
   for(let i=0;i<pos.count;i++)pos.setY(i,terrainH(pos.getX(i),pos.getZ(i)));
@@ -1233,19 +1417,30 @@ function reshapeGround(){
   groundGeo.computeBoundingSphere();
 }
 
-let city=null;
-function build(){
-  if(city)scene.remove(city);
+let cityInfo=null;
+async function build(){
   rand=mulberry32(SEED);
-  NOFF=(SEED%977)*0.37; PKX=300+rand()*600; PKZ=-200+rand()*500;
-  reshapeGround();
-  city=generateCity(scene,mats,gm);
+  if(!cityGroup){
+    const el=document.getElementById('load');
+    if(el)el.textContent='Laster bymodell (12 MB)…';
+    cityInfo=await loadCity();
+    CITY_W=cityInfo.bredde; CITY_D=cityInfo.dybde;
+    HW=CITY_W/2; HD=CITY_D/2;
+    MM.hw=HW; MM.hd=HD;
+    const asp=300/200;
+    if(MM.hw/MM.hd<asp)MM.hw=MM.hd*asp; else MM.hd=MM.hw/asp;
+    scene.fog.near=60; scene.fog.far=Math.max(700,Math.hypot(CITY_W,CITY_D)*1.15);
+    sun.shadow.camera.far=900;
+    let sp=finnApenPlass(0,0,6);
+    if(sp.x===0&&sp.z===0)sp=finnApenPlass(undefined,undefined,6);
+    SPAWN=sp;
+  }
   buildTraffic();buildParked();
-  drawMinimapBase();
-  document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
+  renderMinimapBase();
+  document.getElementById('bcount').textContent=(cityInfo?cityInfo.felt:0)+' kjørefelt';
   document.getElementById('ostats').innerHTML=
-    buildingCount.toLocaleString('nb-NO')+' bygninger &middot; '+
-    (streetsX.length+streetsZ.length)+' gater &middot; '+blocks.length+' kvartaler';
+    (cityInfo?cityInfo.kjorbar.toLocaleString('nb-NO'):'?')+' kjørbare ruter &middot; '+
+    CITY_W+' &times; '+CITY_D+' m &middot; '+(cityInfo?cityInfo.tegnekall:0)+' tegnekall';
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
@@ -1268,8 +1463,7 @@ addEventListener('keydown',e=>{
     scene.traverse(o=>{if(o.material)o.material.needsUpdate=true});}
   if(e.code==='KeyR'){
     // Ny by må gjelde ALLE, ellers står dere i hver deres verden.
-    if(net.isHost||!net.live){SEED=(Math.random()*1e9)|0;build();spawn();}
-    else showToast('Bare verten kan lage ny by');
+    spawn(); showToast('Tilbake til startpunktet');
   }
   if(e.code==='Space')e.preventDefault();
 });
@@ -1284,10 +1478,10 @@ document.addEventListener('mousemove',e=>{
   P.yaw-=e.movementX*.0022;P.pitch-=e.movementY*.0022;
   P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch));
 });
+let SPAWN={x:0,z:0};
 function spawn(){
-  const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
-  const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
-  P.pos.set(ax.p,groundAt(ax.p,az.p)+1.75,az.p);P.vel.set(0,0,0);P.yaw=0;P.pitch=-.04;
+  P.pos.set(SPAWN.x,groundAt(SPAWN.x,SPAWN.z)+1.75,SPAWN.z);
+  P.vel.set(0,0,0);P.yaw=0;P.pitch=-.04;
 }
 
 // utviklingskrok — lar meg flytte kamera fra testrigg/konsoll
@@ -1297,7 +1491,12 @@ window.__dbg={
   P:()=>({x:P.pos.x,y:P.pos.y,z:P.pos.z}),
   props:()=>propGroup?propGroup.children.length:0,
   frames:()=>FRAMES,
-  ver:()=>'drift-6',
+  frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
+  // Tvinger én frame og leser canvas med det samme. Uten dette er
+  // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
+  snap:()=>{renderer.render(scene,camera);
+            return renderer.domElement.toDataURL('image/jpeg',0.72);},
+  ver:()=>'citymodel-11',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
@@ -1394,30 +1593,16 @@ function update(dt){
     P.vel.z+=(wish.z*spd-P.vel.z)*Math.min(1,acc*dt);
     P.vel.y-=24*dt;
     if(keys['Space']&&P.onGround){P.vel.y=8.2;P.onGround=false;}
+    const fx0=P.pos.x,fz0=P.pos.z;
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
-    const list=nearby(P.pos.x,P.pos.z), feet=P.pos.y-P.h;
-    for(const b of list){
-      if(feet+.05>=b.top)continue;
-      const nx=Math.max(b.x0,Math.min(P.pos.x,b.x1)),nz=Math.max(b.z0,Math.min(P.pos.z,b.z1));
-      const dx=P.pos.x-nx,dz=P.pos.z-nz,d2=dx*dx+dz*dz;
-      if(d2<P.r*P.r){
-        if(d2>1e-5){
-          const d=Math.sqrt(d2),push=P.r-d;
-          P.pos.x+=dx/d*push;P.pos.z+=dz/d*push;
-          const vn=P.vel.x*(dx/d)+P.vel.z*(dz/d);
-          if(vn<0){P.vel.x-=vn*(dx/d);P.vel.z-=vn*(dz/d);}
-        } else {
-          const l=P.pos.x-b.x0,r2=b.x1-P.pos.x,f=P.pos.z-b.z0,k=b.z1-P.pos.z,m=Math.min(l,r2,f,k);
-          if(m===l)P.pos.x=b.x0-P.r;else if(m===r2)P.pos.x=b.x1+P.r;
-          else if(m===f)P.pos.z=b.z0-P.r;else P.pos.z=b.z1+P.r;
-        }
-      }
+    // Kollisjon fra høydekartet: kan du ikke sette foten der, blir du stoppet.
+    if(!kanGa(P.pos.x,P.pos.z,P.pos.y-P.h)){
+      if(kanGa(fx0,P.pos.z,P.pos.y-P.h)){P.pos.x=fx0;P.vel.x=0;}
+      else if(kanGa(P.pos.x,fz0,P.pos.y-P.h)){P.pos.z=fz0;P.vel.z=0;}
+      else {P.pos.x=fx0;P.pos.z=fz0;P.vel.x=0;P.vel.z=0;}
     }
-    let g=groundAt(P.pos.x,P.pos.z);
-    for(const b of list)
-      if(P.pos.x>b.x0-.3&&P.pos.x<b.x1+.3&&P.pos.z>b.z0-.3&&P.pos.z<b.z1+.3)
-        if(b.top>g&&P.pos.y-P.h>=b.top-.8)g=b.top;
+    const g=groundAt(P.pos.x,P.pos.z);
     if(P.pos.y-P.h<=g){P.pos.y=g+P.h;P.vel.y=0;P.onGround=true;}else P.onGround=false;
   }
   P.pos.x=Math.max(-HW+6,Math.min(HW-6,P.pos.x));
@@ -1448,8 +1633,8 @@ function applyTime(){
     skyM.uniforms.tc.value.setHex(0x3f7fc4);skyM.uniforms.bc.value.setHex(0xd3dfe9);
     skyM.uniforms.sc.value.setHex(0xffe6c4);
     scene.fog.color.setHex(0xc6d4e3);renderer.setClearColor(0xc6d4e3);
-    sun.intensity=2.5;sun.color.setHex(0xfff0d8);hemi.intensity=.95;
-    renderer.toneMappingExposure=1.22;
+    sun.intensity=1.25;sun.color.setHex(0xfff0d8);hemi.intensity=.70;
+    renderer.toneMappingExposure=1.0;
     for(const i of em)mats[i].emissive.setHex(0x000000);
     gm.lamp.emissive.setHex(0x000000);
     buildEnv(0x3f7fc4,0xd3dfe9,0xffe6c4);
@@ -1461,31 +1646,39 @@ function applyTime(){
 /* ---------------------------- MINIKART ---------------------------------- */
 const mm=document.getElementById('minimap'),mc=mm.getContext('2d');
 const mb=document.createElement('canvas');mb.width=300;mb.height=200;
-function drawMinimapBase(){
-  const g=mb.getContext('2d'),SX=300/CITY_W,SZ=200/CITY_D;
-  g.fillStyle='#15181f';g.fillRect(0,0,300,200);
-  for(const b of blocks){g.fillStyle=D_COL[b.d];
-    g.fillRect((b.x0+HW)*SX,(b.z0+HD)*SZ,(b.x1-b.x0)*SX,(b.z1-b.z0)*SZ);}
-  g.strokeStyle='rgba(230,235,245,.30)';g.lineWidth=1.3;
-  for(const s of streetsX)if(s.art){g.beginPath();g.moveTo((s.p+HW)*SX,0);g.lineTo((s.p+HW)*SX,200);g.stroke();}
-  for(const s of streetsZ)if(s.art){g.beginPath();g.moveTo(0,(s.p+HD)*SZ);g.lineTo(300,(s.p+HD)*SZ);g.stroke();}
+// Minikartet rendres nå faktisk ovenfra med et ortografisk kamera — det gir
+// et ekte kart av bymodellen i stedet for tegnede kvartaler.
+function renderMinimapBase(){
+  const g=mb.getContext('2d');
+  g.fillStyle='#15181f'; g.fillRect(0,0,300,200);
+  if(!cityGroup)return;
+  const cam=new THREE.OrthographicCamera(-MM.hw,MM.hw,MM.hd,-MM.hd,1,4000);
+  cam.position.set(0,1500,0); cam.up.set(0,0,-1); cam.lookAt(0,0,0);
+  const st=new THREE.Vector2(); renderer.getSize(st);
+  const fog=scene.fog; scene.fog=null;
+  renderer.setSize(300,200,false);
+  renderer.render(scene,cam);
+  g.drawImage(renderer.domElement,0,0,300,200);
+  scene.fog=fog;
+  renderer.setSize(st.x,st.y,false);
+  camera.aspect=st.x/st.y; camera.updateProjectionMatrix();
 }
 function drawMinimap(){
   mc.drawImage(mb,0,0);
-  const SX=300/CITY_W,SZ=200/CITY_D;
+  const SX=300/(MM.hw*2),SZ=200/(MM.hd*2),OX=MM.hw,OZ=MM.hd;
   mc.fillStyle='rgba(140,185,255,.60)';                 // biler i trafikk
   for(const c of carData){
     if(c.dead)continue;
     const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
-    mc.fillRect((cx+HW)*SX-1,(cz+HD)*SZ-1,2,2);
+    mc.fillRect((cx+OX)*SX-1,(cz+OZ)*SZ-1,2,2);
   }
   for(const p of parked){                                // parkerte — kan kjøres
     const hero=HERO_CARS.indexOf(p.type)>=0;
     mc.fillStyle=hero?'#ff9a3c':'#6cf09a';
     const r=hero?2.5:1.5;
-    mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
+    mc.fillRect((p.x+OX)*SX-r,(p.z+OZ)*SZ-r,r*2,r*2);
   }
-  const x=(P.pos.x+HW)*300/CITY_W,y=(P.pos.z+HD)*200/CITY_D;
+  const x=(P.pos.x+MM.hw)*300/(MM.hw*2),y=(P.pos.z+MM.hd)*200/(MM.hd*2);
   mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
   mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
   mc.arc(0,0,26,-Math.PI/2-.5,-Math.PI/2+.5);mc.closePath();mc.fill();
@@ -1832,8 +2025,7 @@ function loop(now){
     document.getElementById('fps').textContent=Math.round(fa/fn);fa=0;fn=0;ht=0;
     document.getElementById('pos').textContent=Math.round(P.pos.x)+', '+Math.round(P.pos.z);
     document.getElementById('alt').textContent=Math.round(P.pos.y);
-    document.getElementById('district').textContent=
-      D_NAME[isPark(P.pos.x,P.pos.z)?D_PARK:districtAt(P.pos.x,P.pos.z)];
+    document.getElementById('district').textContent='SENTRUM';
     if(drive.on){showMode();}
     else if(toastT<=0){
       const n=nearestCar();
@@ -1849,11 +2041,12 @@ addEventListener('resize',()=>{
 
 setTimeout(async ()=>{
   await loadCars();
-  build();spawn();applyTime();
+  await build();
+  spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
   requestAnimationFrame(loop);
-  loadProps().then(loadHeroCars);      // tyngste last helt til slutt
+  loadHeroCars();                      // props droppet — modellen har egen detalj
   connectAsClient();          // kobler opp mens spilleren leser overlayet
 },30);
 </script>
