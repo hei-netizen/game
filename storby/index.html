@@ -78,7 +78,7 @@
 
 <div id="keys">
   <kbd>W A S D</kbd> gå &nbsp; <kbd>Shift</kbd> løp &nbsp; <kbd>Space</kbd> hopp<br>
-  <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>R</kbd> ny by &nbsp; <kbd>Esc</kbd> slipp mus
+  <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>R</kbd> ny by &nbsp; <kbd>Esc</kbd> slipp mus
 </div>
 
 <div id="overlay" style="display:none">
@@ -99,6 +99,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './GLTFLoader.js';
+import { mergeGeometries, deinterleaveGeometry } from './BufferGeometryUtils.js';
 
 /* ==========================================================================
    STORBY v2 — prosedural by med PBR-materialer
@@ -712,45 +713,163 @@ function generateCity(scene,mats,gm){
 }
 
 /* ---------------------------- BILER ------------------------------------- */
-let cars=null,carData=[];
-function makeCars(scene){
-  const b=Buf(),W=[1,1,1];
-  const box=(x0,x1,y0,y1,z0,z1)=>{
-    walls(b,x0,x1,y0,y1,z0,z1,1,1,1,W);
-    slab(b,x0,x1,y1,z0,z1,1,W);
-  };
-  box(-2.15,2.15,.28,1.05,-.88,.88);
-  box(-.95,1.05,1.05,1.62,-.80,.80);
-  const geo=bufGeo(b);
-  const N=280;
-  cars=new THREE.InstancedMesh(geo,new THREE.MeshStandardMaterial({
-    roughness:.32,metalness:.55,vertexColors:true}),N);
-  cars.castShadow=true;
-  cars.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(N*3),3);
-  const pal=[0xd9dee4,0x1b1e25,0x878d96,0x8d302b,0x1f4d7a,0xc9a227,0x2e5c3f,0xf0f0f0,0x5a2f2a];
-  const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
-  const c=new THREE.Color();
-  for(let i=0;i<N;i++){
-    const isX=rand()<.5;
-    const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
-    const dir=rand()<.5?1:-1;
-    carData.push({ax:isX,pos:rnd(-1,1)*(isX?HD:HW),off:line.p+(dir>0?4.5:-4.5),dir:dir,spd:rnd(9,20)});
-    c.setHex(pal[rndi(0,pal.length-1)]);cars.setColorAt(i,c);
+/* Kenney Car Kit (CC0). Trafikk instanseres som én merget geometri per type;
+   parkerte biler er ekte objekter med navngitte hjul, så de kan kjøres.      */
+const CAR_TYPES=['sedan','sedan-sports','suv','suv-luxury','taxi','police',
+                 'van','delivery','hatchback-sports','truck-flat','ambulance'];
+const CAR_SCALE=1.75;            // modellen er ~2,55 m lang -> ~4,5 m
+const CAR_YAW=0;                 // korrigerer modellens egen frontretning
+let carGeo={},carMat=null,carSrc={};
+let traffic=[],carData=[],parked=[];
+const drive={on:false,car:null,spd:0,steer:0,head:0,spin:0,x:0,z:0};
+
+async function loadCars(){
+  const loader=new GLTFLoader();
+  for(const t of CAR_TYPES){
+    try{
+      const g=await loader.loadAsync('assets/cars/'+t+'.glb');
+      g.scene.updateMatrixWorld(true);
+      const geos=[];
+      g.scene.traverse(o=>{
+        if(o.isMesh&&o.geometry){
+          // quantize gir interleaved attributter — de må flates ut før merge.
+          // deinterleaveGeometry muterer på stedet og returnerer ingenting.
+          deinterleaveGeometry(o.geometry);
+          const q=o.geometry.clone();
+          q.applyMatrix4(o.matrixWorld);
+          q.deleteAttribute('tangent');      // ulike attributtsett bryter merge
+          geos.push(q);
+          if(!carMat)carMat=o.material;
+        }
+      });
+      if(geos.length)carGeo[t]=mergeGeometries(geos,false);
+      carSrc[t]=g.scene;
+    }catch(e){ console.warn('bilmodell mangler:',t,e.message); }
   }
-  cars.instanceColor.needsUpdate=true;scene.add(cars);
+  if(carMat){carMat.roughness=.42;carMat.metalness=.30;carMat.envMapIntensity=1.15;}
 }
+
+function buildTraffic(){
+  for(const m of traffic)scene.remove(m);
+  traffic=[];carData=[];
+  const types=CAR_TYPES.filter(t=>carGeo[t]);
+  if(!types.length)return;
+  const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
+  const per=Math.ceil(230/types.length);
+  for(const t of types){
+    const im=new THREE.InstancedMesh(carGeo[t],carMat,per);
+    im.castShadow=true;im.frustumCulled=false;
+    for(let i=0;i<per;i++){
+      const isX=rand()<.5;
+      const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
+      const dir=rand()<.5?1:-1;
+      carData.push({m:im,i:i,ax:isX,pos:rnd(-1,1)*(isX?HD:HW),
+        off:line.p+(dir>0?4.8:-4.8),dir:dir,spd:rnd(9,20)});
+    }
+    traffic.push(im);scene.add(im);
+  }
+}
+
+function buildParked(){
+  for(const p of parked)scene.remove(p.obj);
+  parked=[];drive.on=false;drive.car=null;
+  const types=CAR_TYPES.filter(t=>carSrc[t]);
+  if(!types.length)return;
+  for(const b of blocks){
+    if(b.d===D_PARK||parked.length>=58)continue;
+    if(rand()>.32)continue;
+    const sides=[
+      {ax:b.x0,az:b.z0,bx:b.x1,bz:b.z0,nx:0,nz:-1,yaw:Math.PI/2},
+      {ax:b.x1,az:b.z0,bx:b.x1,bz:b.z1,nx:1,nz:0,yaw:0},
+      {ax:b.x1,az:b.z1,bx:b.x0,bz:b.z1,nx:0,nz:1,yaw:Math.PI/2},
+      {ax:b.x0,az:b.z1,bx:b.x0,bz:b.z0,nx:-1,nz:0,yaw:0}
+    ];
+    const s=sides[rndi(0,3)];
+    const len=Math.hypot(s.bx-s.ax,s.bz-s.az);
+    if(len<24)continue;
+    const t=rnd(8,len-8),dx=(s.bx-s.ax)/len,dz=(s.bz-s.az)/len,off=3.0;
+    const x=s.ax+dx*t+s.nx*off, z=s.az+dz*t+s.nz*off;
+    const type=types[rndi(0,types.length-1)];
+    const obj=carSrc[type].clone(true);
+    const yaw=s.yaw+(rand()<.5?0:Math.PI)+CAR_YAW;
+    obj.scale.setScalar(CAR_SCALE);obj.position.set(x,0,z);obj.rotation.y=yaw;
+    const wheels=[];
+    obj.traverse(o=>{
+      if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}
+      if(/wheel/i.test(o.name))wheels.push({o:o,front:/front/i.test(o.name),
+                                            by:o.rotation.y,bx:o.rotation.x});
+    });
+    scene.add(obj);
+    parked.push({obj:obj,wheels:wheels,x:x,z:z,yaw:yaw,type:type});
+  }
+}
+
 const _cd=new THREE.Object3D();
 function updateCars(dt){
-  if(!cars)return;
-  for(let i=0;i<carData.length;i++){
-    const c=carData[i];c.pos+=c.spd*c.dir*dt;
+  for(const c of carData){
+    c.pos+=c.spd*c.dir*dt;
     const lim=c.ax?HD:HW;
     if(c.pos>lim)c.pos=-lim; if(c.pos<-lim)c.pos=lim;
-    if(c.ax){_cd.position.set(c.off,0,c.pos);_cd.rotation.set(0,c.dir>0?0:Math.PI,0);}
-    else{_cd.position.set(c.pos,0,c.off);_cd.rotation.set(0,c.dir>0?-Math.PI/2:Math.PI/2,0);}
-    _cd.updateMatrix();cars.setMatrixAt(i,_cd.matrix);
+    let yaw;
+    if(c.ax){_cd.position.set(c.off,0,c.pos);yaw=c.dir>0?0:Math.PI;}
+    else    {_cd.position.set(c.pos,0,c.off);yaw=c.dir>0?Math.PI/2:-Math.PI/2;}
+    _cd.rotation.set(0,yaw+CAR_YAW,0);
+    _cd.scale.setScalar(CAR_SCALE);
+    _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);
   }
-  cars.instanceMatrix.needsUpdate=true;
+  for(const m of traffic)m.instanceMatrix.needsUpdate=true;
+}
+
+function enterExit(){
+  if(drive.on){
+    P.pos.set(drive.x+Math.cos(drive.head)*2.6,1.75,drive.z-Math.sin(drive.head)*2.6);
+    P.yaw=drive.head+Math.PI;
+    drive.on=false;drive.car=null;showMode();return;
+  }
+  let best=null,bd=42;
+  for(const p of parked){
+    const d=(p.x-P.pos.x)*(p.x-P.pos.x)+(p.z-P.pos.z)*(p.z-P.pos.z);
+    if(d<bd){bd=d;best=p;}
+  }
+  if(!best){showToast('Ingen bil i nærheten');return;}
+  drive.on=true;drive.car=best;drive.x=best.x;drive.z=best.z;
+  drive.head=best.yaw-CAR_YAW;drive.spd=0;drive.steer=0;P.fly=false;showMode();
+}
+
+function updateDrive(dt){
+  const th=(keys['KeyW']?1:0)-(keys['KeyS']?1:0);
+  const st=(keys['KeyA']?1:0)-(keys['KeyD']?1:0);
+  const maxS=(keys['ShiftLeft']||keys['ShiftRight'])?40:27;
+  if(th>0)drive.spd+=12*dt; else if(th<0)drive.spd-=16*dt;
+  drive.spd-=drive.spd*.5*dt;
+  if(keys['Space'])drive.spd-=drive.spd*3.4*dt;      // håndbrekk
+  drive.spd=cl(drive.spd,-10,maxS);
+
+  drive.steer+=(st*.60-drive.steer)*Math.min(1,dt*8);
+  const grip=Math.min(1,Math.abs(drive.spd)/6);       // står den stille, svinger den ikke
+  drive.head+=drive.steer*grip*dt*1.9*(drive.spd<0?-1:1);
+
+  const fx=Math.sin(drive.head),fz=Math.cos(drive.head);
+  const nx=drive.x+fx*drive.spd*dt, nz=drive.z+fz*drive.spd*dt;
+  let hit=false;
+  for(const o of [-2.0,0,2.0]){
+    const px=nx+fx*o,pz=nz+fz*o;
+    for(const b of nearby(px,pz))
+      if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
+    if(hit)break;
+  }
+  if(hit)drive.spd*=-0.22; else {drive.x=nx;drive.z=nz;}
+  drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
+
+  drive.spin+=drive.spd*dt/0.62;
+  const o=drive.car.obj;
+  o.position.set(drive.x,0,drive.z);
+  o.rotation.y=drive.head+CAR_YAW;
+  for(const w of drive.car.wheels){
+    w.o.rotation.x=w.bx-drive.spin;
+    if(w.front)w.o.rotation.y=w.by+drive.steer*.85;
+  }
+  P.pos.set(drive.x,1.4,drive.z);P.yaw=drive.head+Math.PI;
 }
 
 /* ---------------------------- RENDERER ---------------------------------- */
@@ -859,8 +978,7 @@ function build(){
   rand=mulberry32(SEED);
   NOFF=(SEED%977)*0.37; PKX=300+rand()*600; PKZ=-200+rand()*500;
   city=generateCity(scene,mats,gm);
-  if(cars){scene.remove(cars);cars=null;carData=[];}
-  makeCars(scene);
+  buildTraffic();buildParked();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
   document.getElementById('ostats').innerHTML=
@@ -873,10 +991,13 @@ const P={pos:new THREE.Vector3(0,1.75,0),vel:new THREE.Vector3(),yaw:0,pitch:0,
          onGround:false,fly:false,h:1.75,r:.6};
 const keys={};
 function showMode(){
-  document.getElementById('mode').textContent=P.fly?'✈ FLY-MODUS (F for å lande)':'';
+  document.getElementById('mode').textContent =
+    drive.on ? '🚗 KJØRER  ·  E gå ut  ·  Space håndbrekk  ·  Shift boost'
+  : P.fly    ? '✈ FLY-MODUS (F for å lande)' : '';
 }
 addEventListener('keydown',e=>{
   keys[e.code]=true;
+  if(e.code==='KeyE')enterExit();
   if(e.code==='KeyF'){P.fly=!P.fly;P.vel.set(0,0,0);showMode();}
   if(e.code==='KeyN'){night=!night;applyTime();}
   if(e.code==='KeyT'){renderer.shadowMap.enabled=!renderer.shadowMap.enabled;
@@ -910,11 +1031,28 @@ window.__dbg={
   tp:(x,y,z,yaw,pitch)=>{P.pos.set(x,y,z);
     if(yaw!==undefined)P.yaw=yaw; if(pitch!==undefined)P.pitch=pitch; P.fly=true;},
   P:()=>({x:P.pos.x,y:P.pos.y,z:P.pos.z}),
-  props:()=>propGroup?propGroup.children.length:0
+  props:()=>propGroup?propGroup.children.length:0,
+  cars:()=>({geo:Object.keys(carGeo).length,src:Object.keys(carSrc).length,
+             traffic:traffic.length,data:carData.length,parked:parked.length,
+             mat:!!carMat,
+             firstGeo:traffic[0]?traffic[0].geometry.attributes.position.count:-1,
+             p0:parked[0]?[Math.round(parked[0].x),Math.round(parked[0].z),parked[0].type]:null})
 };
 
 const fw=new THREE.Vector3(),rt=new THREE.Vector3(),wish=new THREE.Vector3();
+const _cam=new THREE.Vector3();
 function update(dt){
+  if(drive.on){
+    updateDrive(dt);
+    _cam.set(drive.x-Math.sin(drive.head)*8.6, 3.7, drive.z-Math.cos(drive.head)*8.6);
+    camera.position.lerp(_cam,Math.min(1,dt*5.5));
+    camera.rotation.set(0,0,0);
+    camera.lookAt(drive.x,1.5,drive.z);
+    sky.position.copy(camera.position);
+    sun.position.copy(camera.position).addScaledVector(SUN_DIR,320);
+    sun.target.position.set(drive.x,0,drive.z);sun.target.updateMatrixWorld();
+    return;
+  }
   fw.set(-Math.sin(P.yaw),0,-Math.cos(P.yaw));rt.set(fw.z,0,-fw.x);
   wish.set(0,0,0);
   if(keys['KeyW'])wish.add(fw); if(keys['KeyS'])wish.sub(fw);
@@ -1367,7 +1505,8 @@ addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);});
 
-setTimeout(()=>{
+setTimeout(async ()=>{
+  await loadCars();
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
