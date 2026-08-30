@@ -649,10 +649,10 @@ function perimeterKvartal(ch,x0,x1,z0,z1,pad,dist,gard){
   if(x1-x0<dyp*2+10||z1-z0<dyp*2+10)return false;
   const etg=()=> dist===D_DOWN?rndi(5,7):dist===D_MID?rndi(4,6):rndi(3,5);
   const sider=[
-    {langsX:true, a:x0,b:x1, c0:z0,        c1:z0+dyp},
-    {langsX:true, a:x0,b:x1, c0:z1-dyp,    c1:z1},
-    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x0,        c1:x0+dyp},
-    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x1-dyp,    c1:x1}
+    {langsX:true, a:x0,b:x1, c0:z0,        c1:z0+dyp, dor:'z0'},
+    {langsX:true, a:x0,b:x1, c0:z1-dyp,    c1:z1,     dor:'z1'},
+    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x0,        c1:x0+dyp, dor:'x0'},
+    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x1-dyp,    c1:x1,     dor:'x1'}
   ];
   for(const s of sider){
     let t=s.a;
@@ -670,8 +670,14 @@ function perimeterKvartal(ch,x0,x1,z0,z1,pad,dist,gard){
         volume(ch,mat,s.c0,s.c1,pad,Y1,t,t+bredde-0.15,fc,true,M_SHOP);
         gableZ(ch[M_ROOF],s.c0,s.c1,Y1,t,t+bredde-0.15,rnd(2.4,3.8),tc);
       }
-      addCol({x0:s.langsX?t:s.c0, x1:s.langsX?t+bredde:s.c1,
-              z0:s.langsX?s.c0:t, z1:s.langsX?s.c1:t+bredde, top:Y1});
+      const pkol={x0:s.langsX?t:s.c0, x1:s.langsX?t+bredde:s.c1,
+              z0:s.langsX?s.c0:t, z1:s.langsX?s.c1:t+bredde, top:Y1};
+      addCol(pkol);
+      // Kvartalshusene manglet dør før — det var derfor store deler av
+      // boligstrøket ikke gikk an å gå inn i.
+      bygg.push({x0:pkol.x0,x1:pkol.x1,z0:pkol.z0,z1:pkol.z1,pad:pad,top:Y1,
+                 type:rand()<.50?'leil':['kafe','butikk','bar','bibl'][rndi(0,3)],
+                 side:s.dor,kol:pkol});
       buildingCount++;
       t+=bredde;
     }
@@ -799,6 +805,7 @@ function generateCity(scene,mats,gm){
       else{floors=rndi(2,4);mw=M_IND;useShop=false;}
 
       const H=floors*FH, form=rand(), Y0=pad, Y1=pad+H;
+      let ib=null;   // interiør-rektangel når grunnplanet ikke fyller tomta
 
       if(dist===D_IND){                                   // lagerhall
         volume(ch,mw,x0,x1,Y0,Y1,z0,z1,col,false,shopM);
@@ -840,6 +847,7 @@ function generateCity(scene,mats,gm){
         volume(ch,mw,x1-t,x1,Y0,Y1,z0+t,z1-t,col,useShop,shopM);
         parapet(ch[M_CONC],x0,x1,Y1,z0,z1,0.8,0.3,col);
         slab(hage,x0+t,x1-t,pad+0.05,z0+t,z1-t,9,W);      // indre grønt gårdsrom
+        ib=[x0,x1,z0,z0+t];                               // rommet ligger i fremre fløy
       }
       else if(dist===D_RES&&form<0.40&&w>26&&d>11){       // rekkehus
         const n=rndi(3,5), bw=w/n;
@@ -878,6 +886,7 @@ function generateCity(scene,mats,gm){
         const h2=Y0+Math.max(2,floors-rndi(0,2))*FH;
         volume(ch,mw,x0+w*sp,x1,Y0,h2,z0,z0+d*rnd(.5,.78),col,useShop,shopM);
         parapet(ch[M_CONC],x0,x0+w*sp,Y1,z0,z1,0.6,0.28,col);
+        ib=[x0,x0+w*sp,z0,z1];                            // bare hovedfløyen
       }
       else{                                               // rett volum
         volume(ch,mw,x0,x1,Y0,Y1,z0,z1,col,useShop,shopM);
@@ -889,9 +898,10 @@ function generateCity(scene,mats,gm){
         roofProps.push([rnd(x0+3,x1-3),Y1,rnd(z0+3,z1-3),rnd(1.6,4.4),rnd(1,2.9),rnd(1.6,4.4)]);
       const kol={x0:x0,x1:x1,z0:z0,z1:z1,top:Y1};
       addCol(kol);
-      if(w>9&&d>9){
+      const R=ib||[x0,x1,z0,z1];
+      if(R[1]-R[0]>7&&R[3]-R[2]>7){
         // døra legges på sida som vender nærmest gata
-        const av=[[z0-bz0,'z0'],[bz1-z1,'z1'],[x0-bx0,'x0'],[bx1-x1,'x1']];
+        const av=[[R[2]-bz0,'z0'],[bz1-R[3],'z1'],[R[0]-bx0,'x0'],[bx1-R[1],'x1']];
         av.sort((a,b)=>a[0]-b[0]);
         const side=av[0][1];
         let type;
@@ -899,7 +909,7 @@ function generateCity(scene,mats,gm){
         else if(dist===D_RES) type=rand()<.72?'leil':(rand()<.5?'kafe':'butikk');
         else if(floors>12) type=rand()<.6?'kontor':'bank';
         else type=['butikk','kafe','kontor','bar','bibl','bank'][rndi(0,5)];
-        bygg.push({x0:x0,x1:x1,z0:z0,z1:z1,pad:pad,top:Y1,type:type,side:side,kol:kol});
+        bygg.push({x0:R[0],x1:R[1],z0:R[2],z1:R[3],pad:pad,top:Y1,type:type,side:side,kol:kol});
       }
       buildingCount++;
     }
@@ -1049,6 +1059,31 @@ function generateCity(scene,mats,gm){
       dm.position.set(l[0],ly+7.95,l[1]);dm.updateMatrix();hm.setMatrixAt(i,dm.matrix);});
     group.add(pm,hm);
   }
+  // Synlige dører. Uten dem var det umulig å se hvor man kom inn — man måtte
+  // gjette hvilken vegg som hadde åpning.
+  if(bygg.length){
+    const dc=document.createElement('canvas'); dc.width=64; dc.height=96;
+    const q=dc.getContext('2d');
+    q.fillStyle='#241d1a'; q.fillRect(0,0,64,96);
+    q.fillStyle='#ffd98a'; q.fillRect(4,2,56,13);          // lyst skilt over døra
+    q.fillStyle='#3d2c22'; q.fillRect(7,18,50,78);
+    q.fillStyle='#4d392c'; q.fillRect(11,24,17,66); q.fillRect(36,24,17,66);
+    q.fillStyle='#1a1512'; q.fillRect(31,18,2,78);
+    q.fillStyle='#e8d49a'; q.fillRect(27,54,3,7); q.fillRect(34,54,3,7);
+    const dt=new THREE.CanvasTexture(dc); dt.colorSpace=THREE.SRGBColorSpace;
+    const dmesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(2.7,3.1),
+      new THREE.MeshBasicMaterial({color:0xffffff,map:dt}),bygg.length);
+    const ROT={z1:0,z0:Math.PI,x1:Math.PI/2,x0:-Math.PI/2};
+    bygg.forEach((b,i)=>{
+      let x=(b.x0+b.x1)/2, z=(b.z0+b.z1)/2;
+      if(b.side==='z0')z=b.z0-0.10; else if(b.side==='z1')z=b.z1+0.10;
+      else if(b.side==='x0')x=b.x0-0.10; else x=b.x1+0.10;
+      dm.position.set(x,b.pad+1.58,z); dm.scale.set(1,1,1);
+      dm.rotation.set(0,ROT[b.side],0); dm.updateMatrix();
+      dmesh.setMatrixAt(i,dm.matrix);
+    });
+    group.add(dmesh);
+  }
   scene.add(group);
   return group;
 }
@@ -1194,11 +1229,17 @@ function oppdaterInteriør(){
     if(!inne&&Math.hypot(d.x-px,d.z-pz)>26){ rivInteriør(); }
     else return;
   }
-  let best=null,bd=13*13;
+  // Åpner seg både når du står ved døra og når du bare er inntil en vegg —
+  // 13 m fra dørpunktet var for smalt, mange bygg føltes låst.
+  let best=null,bs=1e9;
   for(const b of bygg){
     const d=dorPunkt(b);
-    const q=(d.x-px)*(d.x-px)+(d.z-pz)*(d.z-pz);
-    if(q<bd){bd=q;best=b;}
+    const qd=Math.hypot(d.x-px,d.z-pz);
+    const bx=Math.max(b.x0-px,0,px-b.x1), bz=Math.max(b.z0-pz,0,pz-b.z1);
+    const nb=Math.hypot(bx,bz);
+    if(qd>18&&nb>5)continue;
+    const s=Math.min(qd,nb+9);
+    if(s<bs){bs=s;best=b;}
   }
   if(best)byggInteriør(best);
 }
@@ -2569,8 +2610,30 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'interior-26',
+  ver:()=>'dorer-27',
+  typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
+  // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
+  // spilleren havner innenfor fotavtrykket.
+  innTest:(i)=>{
+    const b=bygg[i]; if(!b)return null;
+    const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
+    let px,pz,yaw;
+    if(b.side==='z0'){px=mx;pz=b.z0-4;yaw=Math.PI;}
+    else if(b.side==='z1'){px=mx;pz=b.z1+4;yaw=0;}
+    else if(b.side==='x0'){px=b.x0-4;pz=mz;yaw=-Math.PI/2;}
+    else {px=b.x1+4;pz=mz;yaw=Math.PI/2;}
+    drive.on=false; P.fly=false; P.vel.set(0,0,0);
+    P.pos.set(px,groundAt(px,pz)+P.h,pz); P.yaw=yaw; P.pitch=0;
+    const g=keys['KeyW']; keys['KeyW']=true;
+    for(let k=0;k<160;k++){ update(1/60); oppdaterInteriør(); }
+    keys['KeyW']=g;
+    return {inne:P.pos.x>b.x0&&P.pos.x<b.x1&&P.pos.z>b.z0&&P.pos.z<b.z1,
+            type:b.type, aktiv:aktivtBygg===b,
+            x:+P.pos.x.toFixed(1), z:+P.pos.z.toFixed(1)};
+  },
   bygg:()=>bygg.length,
+  bx:(i)=>bygg[i],
+  kart:()=>{drawMinimap();return {n:poi?poi.length:0,png:mm.toDataURL('image/png')};},
   aktivt:()=>aktivtBygg?{type:aktivtBygg.type,side:aktivtBygg.side,
     mesher:innMesh.length,kol:innKol.length}:null,
   gaTil:(i)=>{const b=bygg[i]; if(!b)return null;
@@ -2813,6 +2876,20 @@ function applyTime(){
 }
 
 /* ---------------------------- MINIKART ---------------------------------- */
+// De største byggene av hver type blir landemerker på kartet, slik at
+// bibliotek/bank/bar faktisk er mulig å finne fram til.
+let poi=null;
+const POI_DEF={bibl:['L','#59d6d0'],bank:['$','#ffd85e'],bar:['R','#c07aff'],
+  butikk:['B','#7ddc8a'],kafe:['C','#e0a35c'],kontor:['O','#9fb6cf'],verk:['V','#ff8a4c']};
+function lagPoi(){
+  poi=[];
+  for(const t in POI_DEF){
+    const liste=bygg.filter(b=>b.type===t)
+      .sort((a,b)=>((b.x1-b.x0)*(b.z1-b.z0))-((a.x1-a.x0)*(a.z1-a.z0))).slice(0,4);
+    for(const b of liste) poi.push({x:(b.x0+b.x1)/2,z:(b.z0+b.z1)/2,
+      bok:POI_DEF[t][0],farge:POI_DEF[t][1],navn:BYGGTYPER[t].navn});
+  }
+}
 const mm=document.getElementById('minimap'),mc=mm.getContext('2d');
 const mb=document.createElement('canvas');mb.width=300;mb.height=200;
 function drawMinimapBase(){
@@ -2839,17 +2916,20 @@ function drawMinimap(){
     const r=p.erPoliti?2.6:(hero?2.5:1.5);
     mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
   }
-  // landemerker: rosa K = nattklubb, blå F = fengsel
-  const merke=(x,z,farge,bokstav)=>{
+  // landemerker: rosa K = nattklubb, hvit F = fengsel, resten er bygg du kan gå inn i
+  const merke=(x,z,farge,bokstav,r)=>{
+    r=r||5;
     const mx2=(x+HW)*SX, mz2=(z+HD)*SZ;
     mc.fillStyle='rgba(0,0,0,.55)';
-    mc.fillRect(mx2-6,mz2-6,12,12);
-    mc.fillStyle=farge; mc.fillRect(mx2-5,mz2-5,10,10);
+    mc.fillRect(mx2-r-1,mz2-r-1,r*2+2,r*2+2);
+    mc.fillStyle=farge; mc.fillRect(mx2-r,mz2-r,r*2,r*2);
     mc.fillStyle='#0d1016';
-    mc.font='bold 9px ui-monospace,Menlo,monospace';
+    mc.font='bold '+(r*2-1)+'px ui-monospace,Menlo,monospace';
     mc.textAlign='center'; mc.textBaseline='middle';
     mc.fillText(bokstav,mx2,mz2+0.5);
   };
+  if(!poi&&bygg.length)lagPoi();
+  if(poi)for(const q of poi) merke(q.x,q.z,q.farge,q.bok,4);
   if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
   if(fengsel)merke(fengsel.x,fengsel.z,'#eef2f8','F');   // hvit, ikke blå som bilprikkene
 
@@ -3226,6 +3306,12 @@ function loop(now){
                     Math.round(Math.hypot(klubb.x-sp.x,klubb.z-sp.z))+' m '+pil(klubb.x,klubb.z)+'<br>';
       if(fengsel)h+='<span style="color:#eef2f8">F</span> fengsel '+
                     Math.round(Math.hypot(fengsel.x-sp.x,fengsel.z-sp.z))+' m '+pil(fengsel.x,fengsel.z);
+      if(poi){
+        const n=poi.map(q=>({q:q,d:Math.hypot(q.x-sp.x,q.z-sp.z)}))
+                   .sort((a,b)=>a.d-b.d).slice(0,3);
+        for(const o of n) h+='<br><span style="color:'+o.q.farge+'">'+o.q.bok+'</span> '+
+          o.q.navn.toLowerCase()+' '+Math.round(o.d)+' m '+pil(o.q.x,o.q.z);
+      }
       document.getElementById('landemerker').innerHTML=h;
     }
   }
@@ -3239,7 +3325,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build interior-26';
+  document.getElementById('verline').textContent='build dorer-27';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
