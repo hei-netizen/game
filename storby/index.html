@@ -360,6 +360,43 @@ function trianguler(ring,holes){
     return {pts,f};
   }catch(e){return null;}
 }
+// En AABB rundt et helt fotavtrykk er i snitt 1,64x for stor, og for hver
+// tredje bygning over 2x. Det er de usynlige veggene: L-formede og skra bygg
+// sperret halve gata. Her rasteriseres fotavtrykket i 1,5 m ruter og
+// rutene slas sammen grovt til fa, tette rektangler. Kollisjonskoden ellers
+// er uendret — den far bare bokser som faktisk foelger bygningen.
+function fotavtrykkBokser(ring,celle){
+  celle=celle||1.5;
+  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
+  for(const p of ring){
+    if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0];
+    if(p[1]<z0)z0=p[1]; if(p[1]>z1)z1=p[1];
+  }
+  const nx=Math.ceil((x1-x0)/celle), nz=Math.ceil((z1-z0)/celle);
+  if(nx<1||nz<1)return [{x0:x0,x1:x1,z0:z0,z1:z1}];
+  if(nx*nz>4000)return [{x0:x0,x1:x1,z0:z0,z1:z1}];   // absurd stort: behold AABB
+  const m=new Uint8Array(nx*nz);
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++)
+    if(pktIPolygon(x0+(i+0.5)*celle, z0+(j+0.5)*celle, ring)) m[j*nx+i]=1;
+  const ut=[];
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
+    if(!m[j*nx+i])continue;
+    let w=1; while(i+w<nx&&m[j*nx+i+w])w++;              // strekk mot hoyre
+    let h=1;                                            // sa nedover, hele bredden
+    outer: while(j+h<nz){
+      for(let k=0;k<w;k++) if(!m[(j+h)*nx+i+k]) break outer;
+      h++;
+    }
+    for(let b=0;b<h;b++)for(let a=0;a<w;a++) m[(j+b)*nx+i+a]=0;
+    const inn=0.42;                      // motvekt til rute-avrunding + kollisjonsmargin
+    const bx0=x0+i*celle, bx1=x0+(i+w)*celle;
+    const bz0=z0+j*celle, bz1=z0+(j+h)*celle;
+    ut.push({x0:bx0+Math.min(inn,(bx1-bx0)/3), x1:bx1-Math.min(inn,(bx1-bx0)/3),
+             z0:bz0+Math.min(inn,(bz1-bz0)/3), z1:bz1-Math.min(inn,(bz1-bz0)/3)});
+    i+=w-1;
+  }
+  return ut.length?ut:[{x0:x0,x1:x1,z0:z0,z1:z1}];
+}
 function pktIPolygon(x,z,ring){
   let inne=false;
   for(let i=0,j=ring.length-1;i<ring.length;j=i++){
@@ -926,6 +963,77 @@ const SK_GANGVEI=new Set(['footway','path','cycleway','steps','track','pedestria
 
 let skienRuter=[];   // kjorbare veier med buelengde, brukt av trafikken
 
+// Veibanen er hellig. OSM har steder der en bygning er tegnet over en vei, og
+// rasteriseringen runder uansett litt utover. Her males alle kjorbare gater
+// inn i et 1 m rutenett, og kollisjonsbokser med senter pa veien forkastes.
+// Da kan du alltid kjore gata — uansett hva kartet sier.
+let veimaske=null;
+const VM_W=CITY_W|0, VM_D=CITY_D|0;
+function byggVeimaske(){
+  veimaske=new Uint8Array(VM_W*VM_D);
+  const mrk=(x,z)=>{
+    const i=(x+HW)|0, j=(z+HD)|0;
+    if(i>=0&&i<VM_W&&j>=0&&j<VM_D)veimaske[j*VM_W+i]=1;
+  };
+  for(const v of SK.veier){
+    if(!SK_KJORBAR.has(v.k)&&v.k!=='service'&&v.k!=='pedestrian')continue;
+    const h=Math.max(2.5,v.w/2-0.6);          // litt smalere enn asfalten
+    for(let i=0;i<v.p.length-1;i++){
+      const a=v.p[i],b=v.p[i+1];
+      const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
+      if(L<1e-3)continue;
+      const ux=dx/L,uz=dz/L,nx=-uz,nz=ux;
+      for(let d=0;d<=L;d+=0.8)
+        for(let o=-h;o<=h;o+=0.8)
+          mrk(a[0]+ux*d+nx*o, a[1]+uz*d+nz*o);
+    }
+  }
+}
+// Parker og skog la seg som egne flate polygoner OVER terrenget. Selv
+// oppdelt ble de et lappeteppe med egen skyggelegging og synlige sommer.
+// Her males de i stedet inn i en maske, og terrenget selv farges gronnere
+// der masken slar til. En sammenhengende bakke, ingen skjoter.
+let grontmaske=null;
+const GM=4, GM_W=(CITY_W/GM)|0, GM_D=(CITY_D/GM)|0;   // 4 m ruter holder:
+                                                     // bakkepunktene star 5 m fra hverandre
+function byggGrontmaske(){
+  grontmaske=new Uint8Array(GM_W*GM_D);
+  for(const g of SK.gronn){
+    const p=g.p; if(p.length<4)continue;
+    const skog=g.k==='forest'||g.k==='wood'||g.k==='scrub'?2:1;
+    let z0=1e9,z1=-1e9;
+    for(const q of p){ if(q[1]<z0)z0=q[1]; if(q[1]>z1)z1=q[1]; }
+    z0=Math.max(-HD,z0); z1=Math.min(HD,z1);
+    const kryss=[];
+    for(let z=Math.floor(z0/GM)*GM+GM/2; z<z1; z+=GM){
+      kryss.length=0;
+      for(let i=0;i<p.length-1;i++){
+        const a=p[i],b=p[i+1];
+        if((a[1]>z)!==(b[1]>z))kryss.push(a[0]+(z-a[1])/(b[1]-a[1])*(b[0]-a[0]));
+      }
+      if(kryss.length<2)continue;
+      kryss.sort((u,v)=>u-v);
+      const rad=(((z+HD)/GM)|0)*GM_W;
+      if(rad<0||rad>=grontmaske.length)continue;
+      for(let k=0;k+1<kryss.length;k+=2){
+        let ia=(((kryss[k]+HW)/GM)|0), ib=(((kryss[k+1]+HW)/GM)|0);
+        if(ia<0)ia=0; if(ib>GM_W-1)ib=GM_W-1;
+        for(let i=ia;i<=ib;i++)grontmaske[rad+i]=skog;
+      }
+    }
+  }
+}
+function grontVed(x,z){
+  if(!grontmaske)return 0;
+  const i=((x+HW)/GM)|0, j=((z+HD)/GM)|0;
+  return (i>=0&&i<GM_W&&j>=0&&j<GM_D)?grontmaske[j*GM_W+i]:0;
+}
+function paaVei(x,z){
+  if(!veimaske)return false;
+  const i=(x+HW)|0, j=(z+HD)|0;
+  return i>=0&&i<VM_W&&j>=0&&j<VM_D&&veimaske[j*VM_W+i]===1;
+}
+
 function generateSkien(scene,mats,gm){
   blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
   streetsX=[];streetsZ=[];diagonaler=[];
@@ -935,8 +1043,7 @@ function generateSkien(scene,mats,gm){
     Math.min(CHZ-1,Math.max(0,Math.floor((z+HD)/CHD)))*CHX+
     Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
 
-  const vannB=Buf(),gressB=Buf(),skogB=Buf(),veiB=Buf(),gangB=Buf(),
-        dashB=Buf(),kantB=Buf();
+  const vannB=Buf(),veiB=Buf(),gangB=Buf(),dashB=Buf(),kantB=Buf();
   const trees=[],lamps=[];
   const W=[1,1,1];
   const H=(x,z)=>skienH(x,z);
@@ -948,6 +1055,11 @@ function generateSkien(scene,mats,gm){
     const y=v.y+0.05;
     for(const f of t.f){
       const a=t.pts[f[0]],b=t.pts[f[1]],c=t.pts[f[2]];
+      // et vannspeil skal vaere flatt, men trekanter som ligger dypt under
+      // terrenget horer ikke til flaten — de kommer av lange triangulerings-
+      // vifter over land, og er nettopp de spissene som stakk ut av elva
+      const mx=(a.x+b.x+c.x)/3, mz=(a.y+b.y+c.y)/3;
+      if(H(mx,mz) > y+1.2) continue;
       tri(vannB,a.x,y,a.y,b.x,y,b.y,c.x,y,c.y,0,1,0,
           a.x/26,a.y/26,b.x/26,b.y/26,c.x/26,c.y/26,W);
     }
@@ -963,12 +1075,6 @@ function generateSkien(scene,mats,gm){
     if(g.p.length<4)continue;
     const t=trianguler(g.p);if(!t)continue;
     const skog=g.k==='forest'||g.k==='wood'||g.k==='scrub';
-    const buf=skog?skogB:gressB;
-    for(const f of t.f){
-      const a=t.pts[f[0]],b=t.pts[f[1]],c=t.pts[f[2]];
-      tri(buf,a.x,H(a.x,a.y)+0.05,a.y, b.x,H(b.x,b.y)+0.05,b.y, c.x,H(c.x,c.y)+0.05,c.y,
-          0,1,0, a.x/14,a.y/14,b.x/14,b.y/14,c.x/14,c.y/14,W);
-    }
     // trebeplantning: tettere i skog enn i park
     const steg=skog?13:19;
     let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
@@ -1025,7 +1131,9 @@ function generateSkien(scene,mats,gm){
     if(x1<-HW||x0>HW||z1<-HD||z0>HD)continue;
 
     const grunn=hoy+0.15;                 // planert tomt, som ekte byggegrunn
-    const fot=lav-1.6;                    // gravd ned sa terrenget ikke stikker gjennom
+    // I bratt terreng holdt det ikke a grave 1,6 m: bygget ble hengende med
+    // luft under nedsiden. Fundamentet folger fallet over fotavtrykket.
+    const fot=lav-Math.max(1.6,(hoy-lav)*1.35+1.0);
     const topp=grunn+b.h;
     const mat=SK_MAT[b.k]!==undefined?SK_MAT[b.k]:(b.h>18?M_OFFICE:M_PLASTER);
     const butikk=SK_SHOP.has(b.k)&&b.h>GROUND_H+4;
@@ -1052,16 +1160,24 @@ function generateSkien(scene,mats,gm){
              nx,0,nz,0,0,ru,cl(Math.round(b.h/TEX_H),1,40),col);
       }
     }
-    // tak
+    // tak — trekantene fra triangulatoren kan komme i begge retninger, og et
+    // tak som vender ned er usynlig ovenfra. Snu det som peker feil vei.
     for(const f of t.f){
-      const p=t.pts[f[0]],q=t.pts[f[1]],r=t.pts[f[2]];
+      let p=t.pts[f[0]],q=t.pts[f[1]],r=t.pts[f[2]];
+      if((q.x-p.x)*(r.y-p.y)-(r.x-p.x)*(q.y-p.y) > 0){const tmp=q;q=r;r=tmp;}
       tri(ch[M_ROOF],p.x,topp,p.y,q.x,topp,q.y,r.x,topp,r.y,0,1,0,
           p.x/7,p.y/7,q.x/7,q.y/7,r.x/7,r.y/7,col);
     }
     buildingCount++;
-    addCol({x0:x0,x1:x1,z0:z0,z1:z1,top:topp});
-    const B={x0:x0,z0:z0,x1:x1,z1:z1,d:b.h>18?D_DOWN:(b.h>10?D_MID:D_RES),pad:grunn};
-    blocks.push(B);addPad(B);
+    // tette bokser: bade for kollisjon og for platet spilleren star pa
+    const bokser=fotavtrykkBokser(b.p,1.5);
+    for(const k of bokser){
+      if(paaVei((k.x0+k.x1)/2,(k.z0+k.z1)/2))continue;   // veibanen vinner
+      addCol({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,top:topp});
+      addPad({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,pad:grunn});
+    }
+    blocks.push({x0:x0,z0:z0,x1:x1,z1:z1,
+                 d:b.h>18?D_DOWN:(b.h>10?D_MID:D_RES),pad:grunn});
   }
 
   /* ---- monter alt ---- */
@@ -1074,7 +1190,6 @@ function generateSkien(scene,mats,gm){
   const add=(b,mat,shadow)=>{if(!b.p.length)return;
     const m=new THREE.Mesh(bufGeo(b),mat);m.receiveShadow=true;
     if(shadow)m.castShadow=true;group.add(m);return m;};
-  add(gressB,gm.grass);add(skogB,gm.grass);
   add(kantB,gm.walk);add(veiB,gm.diagvei);add(gangB,gm.sti);
   add(dashB,gm.dashMat);
   add(vannB,gm.vann);
@@ -1083,6 +1198,26 @@ function generateSkien(scene,mats,gm){
   monterLykter(group,lamps,gm);
   scene.add(group);
   return group;
+}
+
+// Deler en trekant rekursivt til ingen kant er lenger enn ~14 m, og legger
+// hvert hjorne pa terrenget. Uten dette henger store gronnflater som flate
+// plater over bakken og stikker gjennom den i skraningene.
+function drapertTrekant(buf,a,b,c,H,col,uv,dyp){
+  dyp=dyp||0;
+  const ab=Math.hypot(b.x-a.x,b.y-a.y), bc=Math.hypot(c.x-b.x,c.y-b.y),
+        ca=Math.hypot(a.x-c.x,a.y-c.y);
+  const maks=Math.max(ab,bc,ca);
+  if(maks>14&&dyp<5){
+    let p,q,r;                                  // del den lengste kanten
+    if(maks===ab){p=a;q=b;r=c;} else if(maks===bc){p=b;q=c;r=a;} else {p=c;q=a;r=b;}
+    const m={x:(p.x+q.x)/2,y:(p.y+q.y)/2};
+    drapertTrekant(buf,p,m,r,H,col,uv,dyp+1);
+    drapertTrekant(buf,m,q,r,H,col,uv,dyp+1);
+    return;
+  }
+  tri(buf,a.x,H(a.x,a.y)+0.06,a.y, b.x,H(b.x,b.y)+0.06,b.y, c.x,H(c.x,c.y)+0.06,c.y,
+      0,1,0, a.x/uv,a.y/uv,b.x/uv,b.y/uv,c.x/uv,c.y/uv,col);
 }
 
 // Legger et band langs en polylinje, drapert pa terrenget. Lange segmenter
@@ -1838,6 +1973,7 @@ function sporEtterHjul(){
 // og spinner videre i stedet for å bare stå der.
 const KRASJ_R=2.7;                     // grov kollisjonsradius per bil
 function friPlass(x,z){
+  if(paaVei(x,z))return true;          // veibanen er alltid fri
   for(const b of nearby(x,z))
     if(x>b.x0-0.7&&x<b.x1+0.7&&z>b.z0-0.7&&z<b.z1+0.7)return false;
   return true;
@@ -2077,6 +2213,7 @@ function updateDrive(dt){
   let hit=false;
   if(!drive.nocol)for(const o of [-2.0,0,2.0]){
     const px=nx+fx*o,pz=nz+fz*o;
+    if(paaVei(px,pz))continue;         // veibanen er alltid fri
     for(const b of nearby(px,pz))
       if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
     if(hit)break;
@@ -2219,7 +2356,7 @@ const asfaltGrunn=new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normal
     roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,envMapIntensity:.65});
 // Terrenggrunn for Skien: mark og berg, ikke asfalt. Uten dette blir hele
 // dalen et blankt metallspeil sa snart bakken faktisk er synlig.
-const markTex=plainTex('#55703f',.97,0,26000);
+const markTex=plainTex('#6d8a52',.97,0,26000);
 markTex.map.repeat.set(CITY_W/26,CITY_D/26);markTex.map.needsUpdate=true;
 markTex.rmMap.repeat.set(CITY_W/26,CITY_D/26);markTex.rmMap.needsUpdate=true;
 const markGrunn=new THREE.MeshStandardMaterial({map:markTex.map,roughnessMap:markTex.rmMap,
@@ -2245,9 +2382,15 @@ function reshapeGround(){
     const bratt=1-Math.min(1,Math.max(0,nrm.getY(i)));      // 0 flatt, 1 loddrett
     const berg=Math.min(1,bratt*3.4);
     const t=Math.min(1,Math.max(0,(y-6)/54));               // hoyere = mer lyng
-    const r=(0.42+t*0.30)*(1-berg)+0.60*berg;
-    const g=(0.72-t*0.16)*(1-berg)+0.56*berg;
-    const b=(0.36+t*0.14)*(1-berg)+0.52*berg;
+    let r=(0.24+t*0.20)*(1-berg)+0.58*berg;
+    let g=(0.78-t*0.12)*(1-berg)+0.57*berg;
+    let b=(0.26+t*0.12)*(1-berg)+0.55*berg;
+    // Park og skog skal ANES, ikke sta som paklistrede lapper. Svak dytt.
+    const gr=grontVed(pos.getX(i),pos.getZ(i));    // park = 1, skog = 2
+    if(gr){
+      const k=gr===2?0.34:0.20;
+      r=r*(1-k)+0.16*k; g=g*(1-k)+0.80*k; b=b*(1-k)+0.20*k;
+    }
     c.setXYZ(i,r,g,b);
   }
   c.needsUpdate=true;
@@ -2258,6 +2401,11 @@ function build(){
   if(city)scene.remove(city);
   rand=mulberry32(SEED);
   NOFF=(SEED%977)*0.37; PKX=300+rand()*600; PKZ=-200+rand()*500;
+  if(SK){
+    const t0=performance.now(); byggVeimaske();
+    const t1=performance.now(); byggGrontmaske();
+    console.log('masker: vei '+Math.round(t1-t0)+' ms, gront '+Math.round(performance.now()-t1)+' ms');
+  }
   reshapeGround();
   if(SK){
     skienRuter=[];
@@ -2355,6 +2503,26 @@ window.__dbg={
     return ut;
   },
   gy:(x,z)=>groundAt(x,z),
+  // Kjorer langs hver kjorbare gate og teller hvor mange punkter som er
+  // sperret av en kollisjonsboks. Alt over null er en usynlig vegg i veibanen.
+  veisjekk:()=>{
+    if(!SK)return {feil:'ikke Skien-modus'};
+    let n=0,sperret=0; const verste=[];
+    for(const v of SK.veier){
+      if(!SK_KJORBAR.has(v.k))continue;
+      for(let i=0;i<v.p.length-1;i++){
+        const a=v.p[i],b=v.p[i+1];
+        const L=Math.hypot(b[0]-a[0],b[1]-a[1]);
+        for(let d=0;d<L;d+=4){
+          const t=d/L, x=a[0]+(b[0]-a[0])*t, z=a[1]+(b[1]-a[1])*t;
+          n++;
+          if(!friPlass(x,z)){sperret++; if(verste.length<8)verste.push([Math.round(x),Math.round(z),v.n||v.k]);}
+        }
+      }
+    }
+    return {punkter:n, sperret:sperret, andel:+(100*sperret/n).toFixed(2)+' %',
+            kollisjonsbokser:colliders.length, eksempler:verste};
+  },
   grunn:()=>{
     const p=groundGeo.attributes.position;
     let lo=1e9,hi=-1e9;
@@ -2510,7 +2678,8 @@ function update(dt){
     if(keys['Space']&&P.onGround){P.vel.y=8.2;P.onGround=false;}
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
-    const list=nearby(P.pos.x,P.pos.z), feet=P.pos.y-P.h;
+    const list=paaVei(P.pos.x,P.pos.z)?[]:nearby(P.pos.x,P.pos.z);
+    const feet=P.pos.y-P.h;
     for(const b of list){
       if(feet+.05>=b.top)continue;
       const nx=Math.max(b.x0,Math.min(P.pos.x,b.x1)),nz=Math.max(b.z0,Math.min(P.pos.z,b.z1));

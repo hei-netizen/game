@@ -37,6 +37,27 @@ def proj(geom):
         out.append((round(E-E0,1), round(-(N-N0),1)))
     return out
 
+def signert_areal(p):
+    a=0.0
+    for i in range(len(p)-1): a+=p[i][0]*p[i+1][1]-p[i+1][0]*p[i][1]
+    return a/2
+
+def rens(ring, mot_klokka=True):
+    """Lukk ringen, fjern duplikatpunkter, og legg den i riktig omlopsretning.
+
+    91 % av OSM-ringene gar MED klokka. Da peker veggnormalen innover, og
+    baksidekutting gjor at man ser rett gjennom bygningen. Alt normaliseres
+    til mot klokka (positivt areal) her, en gang, sa motoren slipper a tenke."""
+    if len(ring)<3: return None
+    ut=[ring[0]]
+    for q in ring[1:]:
+        if abs(q[0]-ut[-1][0])>1e-4 or abs(q[1]-ut[-1][1])>1e-4: ut.append(q)
+    if abs(ut[0][0]-ut[-1][0])>1e-4 or abs(ut[0][1]-ut[-1][1])>1e-4: ut.append(ut[0])
+    else: ut[-1]=ut[0]
+    if len(ut)<4: return None
+    if (signert_areal(ut)<0)==mot_klokka: ut.reverse()
+    return ut
+
 def sy_ringer(biter, toler=1.0):
     """Sy sammen linjebiter ende-mot-ende til lukkede ringer."""
     rester=[list(b) for b in biter if len(b)>=2]
@@ -104,15 +125,25 @@ for e in els:
             except: hoy=None
         if hoy is None: hoy=STD_HOYDE.get(b, 8)
         ringer = [pts] if pts else deler
-        bygg.append({'n':tg.get('name'),'k':b,'h':round(hoy,1),'p':ringer[0],
-                     'hull':ringer[1:] if len(ringer)>1 else None})
+        ytre = rens(ringer[0], True)
+        if not ytre: continue
+        A = abs(signert_areal(ytre))
+        # Smabygg roter til bybildet uten a tilfore noe: 970 boder, garasjer og
+        # navnlose skur under 25 m2. Ute.
+        if A < 25: continue
+        if b in ('garage','garages','shed','carport','roof','hut') and A < 45: continue
+        hull = [r for r in (rens(x, False) for x in ringer[1:]) if r]
+        bygg.append({'n':tg.get('name'),'k':b,'h':round(hoy,1),'a':round(A),
+                     'p':ytre,'hull':hull or None})
     elif tg.get('natural')=='water' or 'waterway' in tg:
         art = tg.get('natural') or tg.get('waterway')
         ringer = [pts] if pts else deler
         for r in ringer:
             lukket = len(r)>=4 and abs(r[0][0]-r[-1][0])<0.5 and abs(r[0][1]-r[-1][1])<0.5
             if art in ('water','riverbank') or lukket:
-                vann.append({'n':tg.get('name'),'k':art,'flate':True,'p':r})
+                rr = rens(r, True)
+                if rr and abs(signert_areal(rr)) > 40:
+                    vann.append({'n':tg.get('name'),'k':art,'flate':True,'p':rr})
             elif art in ('river','stream','canal','ditch'):
                 vann.append({'n':tg.get('name'),'k':art,'flate':False,
                              'w':{'river':28,'canal':14,'stream':5,'ditch':3}[art],'p':r})
@@ -121,8 +152,10 @@ for e in els:
          tg.get('natural') in ('wood','scrub','grassland'):
         ringer = [pts] if pts else deler
         for r in ringer:
-            gronn.append({'n':tg.get('name'),
-                          'k':tg.get('leisure') or tg.get('landuse') or tg.get('natural'),'p':r})
+            rr = rens(r, True)
+            if rr and abs(signert_areal(rr)) > 60:
+                gronn.append({'n':tg.get('name'),
+                              'k':tg.get('leisure') or tg.get('landuse') or tg.get('natural'),'p':rr})
 
 # ---- terreng: DTM -> uint16 binaerfil, 5 m/piksel, radvis fra nord-vest
 px = list(im.getdata())
