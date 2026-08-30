@@ -75,6 +75,7 @@
   <div id="mode" style="color:#f0c674">&nbsp;</div>
   <div id="verline" style="color:#66708a;font-size:10px;letter-spacing:.12em"></div>
   <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
+  <div id="landemerker" style="color:#9aa2b7;font-size:11px;line-height:1.7"></div>
 </div>
 
 <canvas id="minimap" width="300" height="200"></canvas>
@@ -2377,7 +2378,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'fengsel-18',
+  ver:()=>'kart-19',
   flytt:(x,z)=>{if(drive.on){drive.x=x;drive.z=z;}else P.pos.set(x,groundAt(x,z)+1.75,z);},
   fengsel:()=>fengsel?{x:Math.round(fengsel.x),z:Math.round(fengsel.z),
      inne:fengsel.inne,dor:fengsel.dorAapen,soning:+fengsel.soning.toFixed(1),fri:fengsel.fri}:null,
@@ -2635,8 +2636,19 @@ function drawMinimap(){
   mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
   mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
   mc.arc(0,0,26,-Math.PI/2-.5,-Math.PI/2+.5);mc.closePath();mc.fill();
-  if(klubb){mc.fillStyle='#ff3d8b';
-    mc.fillRect((klubb.x+HW)*SX-3,(klubb.z+HD)*SZ-3,6,6);}
+  // landemerker: rosa K = nattklubb, blå F = fengsel
+  const merke=(x,z,farge,bokstav)=>{
+    const mx2=(x+HW)*SX, mz2=(z+HD)*SZ;
+    mc.fillStyle='rgba(0,0,0,.55)';
+    mc.fillRect(mx2-6,mz2-6,12,12);
+    mc.fillStyle=farge; mc.fillRect(mx2-5,mz2-5,10,10);
+    mc.fillStyle='#0d1016';
+    mc.font='bold 9px ui-monospace,Menlo,monospace';
+    mc.textAlign='center'; mc.textBaseline='middle';
+    mc.fillText(bokstav,mx2,mz2+0.5);
+  };
+  if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
+  if(fengsel)merke(fengsel.x,fengsel.z,'#7fb6ff','F');
   mc.fillStyle='#ffe26a';mc.beginPath();mc.moveTo(0,-5);mc.lineTo(3.6,4);mc.lineTo(-3.6,4);
   mc.closePath();mc.fill();mc.restore();
 }
@@ -2990,6 +3002,22 @@ function loop(now){
         (n.p||n.tr)?'🚗 Trykk E for å '+(n.tr?'kapre bilen':'kjøre'):(P.fly?'✈ FLY-MODUS (F for å lande)':'');
     }
     drawMinimap();plist();visJakt();
+    {
+      const sp=drive.on?{x:drive.x,z:drive.z}:{x:P.pos.x,z:P.pos.z};
+      const pil=(x,z)=>{
+        // retning relativt til der du ser
+        let a=Math.atan2(x-sp.x,z-sp.z)-(P.yaw+Math.PI);
+        while(a>Math.PI)a-=6.283; while(a<-Math.PI)a+=6.283;
+        const i=Math.round((a+Math.PI)/(6.283/8))%8;
+        return ['↓','↙','←','↖','↑','↗','→','↘'][i];
+      };
+      let h='';
+      if(klubb)  h+='<span style="color:#ff5fa2">K</span> nattklubb '+
+                    Math.round(Math.hypot(klubb.x-sp.x,klubb.z-sp.z))+' m '+pil(klubb.x,klubb.z)+'<br>';
+      if(fengsel)h+='<span style="color:#7fb6ff">F</span> fengsel '+
+                    Math.round(Math.hypot(fengsel.x-sp.x,fengsel.z-sp.z))+' m '+pil(fengsel.x,fengsel.z);
+      document.getElementById('landemerker').innerHTML=h;
+    }
   }
 }
 addEventListener('resize',()=>{
@@ -3001,7 +3029,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build fengsel-18';
+  document.getElementById('verline').textContent='build kart-19';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
