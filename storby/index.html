@@ -410,8 +410,13 @@ function pktIPolygon(x,z,ring){
 /* Kvartalene planeres som flate platåer (slik ekte byer gjør det), mens
    veiene følger terrenget. Kantsteinen blir da en støttemur der det er bratt. */
 let TER_AMP=1.0;                      // 0 = helt flatt
+// Flat verden. Kartet — gater, bygninger, elva — er det som gjor byen til
+// Skien; kupert terreng ga bare humper i veibanen, bygg som hang i lufta og
+// selvskygging som sa ut som hull i bakken. Sett FLATT=false for a fa
+// Kartverkets hoydemodell tilbake.
+const FLATT=true;
 function terrainH(x,z){
-  if(SKT)return skienH(x,z);          // ekte Skien-terreng fra Kartverket DTM1
+  if(SKT)return FLATT?0:skienH(x,z);  // ekte Skien-terreng fra Kartverket DTM1
   if(TER_AMP<=0)return 0;
   // Bølgelengdene må være korte nok til at vi krysser MANGE støyceller over
   // byens 3 km. Med 1500 m krysset vi bare 2 celler og hele byen ble ett
@@ -1023,7 +1028,7 @@ function byggVeimaske(){
   for(const v of SK.veier){
     if(!SK_KJORBAR.has(v.k)&&v.k!=='service'&&v.k!=='pedestrian')continue;
     const halv=Math.max(3,v.w/2-0.8);
-    v.h=glattProfil(v.p,halv+1.5);
+    v.h=FLATT?v.p.map(()=>0.12):glattProfil(v.p,halv+1.5);
     for(let i=0;i<v.p.length-1;i++){
       const a=v.p[i],b=v.p[i+1];
       const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
@@ -1121,14 +1126,14 @@ function generateSkien(scene,mats,gm){
   for(const v of SK.vann){
     if(!v.flate||v.p.length<4)continue;
     const t=trianguler(v.p);if(!t)continue;
-    const y=v.y+0.05;
+    const y=FLATT?-0.45:v.y+0.05;
     for(const f of t.f){
       const a=t.pts[f[0]],b=t.pts[f[1]],c=t.pts[f[2]];
       // et vannspeil skal vaere flatt, men trekanter som ligger dypt under
       // terrenget horer ikke til flaten — de kommer av lange triangulerings-
       // vifter over land, og er nettopp de spissene som stakk ut av elva
       const mx=(a.x+b.x+c.x)/3, mz=(a.y+b.y+c.y)/3;
-      if(H(mx,mz) > y+1.2) continue;
+      if(!FLATT&&H(mx,mz)>y+1.2) continue;
       tri(vannB,a.x,y,a.y,b.x,y,b.y,c.x,y,c.y,0,1,0,
           a.x/26,a.y/26,b.x/26,b.y/26,c.x/26,c.y/26,W);
     }
