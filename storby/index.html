@@ -365,6 +365,62 @@ function trianguler(ring,holes){
 // sperret halve gata. Her rasteriseres fotavtrykket i 1,5 m ruter og
 // rutene slas sammen grovt til fa, tette rektangler. Kollisjonskoden ellers
 // er uendret — den far bare bokser som faktisk foelger bygningen.
+// Vi bygger ikke fotavtrykket slik det er. Vi legger EN ren boks der
+// bygningen star, vridd slik bygningen faktisk ligger. Da folger husene
+// gatelopet uten a arve alle knekk og karnapper fra kartet — og de blir
+// like, ryddige og billige a tegne.
+function minsteRektangel(ring){
+  let best=null;
+  const N=Math.min(ring.length-1,24);
+  for(let e=0;e<N;e++){
+    const a=ring[e],b=ring[e+1];
+    const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
+    if(L<0.5)continue;
+    const ux=dx/L,uz=dz/L;                       // kandidatretning
+    let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9;
+    for(const p of ring){
+      const u=p[0]*ux+p[1]*uz, v=-p[0]*uz+p[1]*ux;
+      if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v;
+    }
+    const w=u1-u0, d=v1-v0, A=w*d;
+    if(!best||A<best.A){
+      const cu=(u0+u1)/2, cv=(v0+v1)/2;
+      best={A:A, w:w, d:d, ux:ux, uz:uz,
+            cx:cu*ux-cv*uz, cz:cu*uz+cv*ux};
+    }
+  }
+  return best;
+}
+function boksHjorner(r,krymp){
+  const w=Math.max(3,r.w-krymp*2)/2, d=Math.max(3,r.d-krymp*2)/2;
+  const ux=r.ux,uz=r.uz, vx=-uz,vz=ux;
+  const P=(a,b)=>[r.cx+ux*a+vx*b, r.cz+uz*a+vz*b];
+  const c=[P(-w,-d),P(w,-d),P(w,d),P(-w,d)];
+  c.push(c[0].slice());
+  return c;
+}
+// Fire vegger + flatt tak, vridd i planet.
+function boksBygg(ch,mat,hj,y0,y1,col,butikk,shopY){
+  for(let i=0;i<4;i++){
+    const a=hj[i],b=hj[i+1];
+    const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
+    if(L<0.2)continue;
+    const nx=dz/L,nz=-dx/L;
+    const ru=cl(Math.round(L/TEX_W),1,18);
+    if(butikk){
+      quad(ch[M_SHOP],a[0],y0,a[1],b[0],y0,b[1],b[0],shopY,b[1],a[0],shopY,a[1],
+           nx,0,nz,0,0,cl(Math.round(L/11),1,18),1,col);
+      quad(ch[mat],a[0],shopY,a[1],b[0],shopY,b[1],b[0],y1,b[1],a[0],y1,a[1],
+           nx,0,nz,0,0,ru,cl(Math.round((y1-shopY)/TEX_H),1,30),col);
+    }else{
+      quad(ch[mat],a[0],y0,a[1],b[0],y0,b[1],b[0],y1,b[1],a[0],y1,a[1],
+           nx,0,nz,0,0,ru,cl(Math.round((y1-y0)/TEX_H),1,30),col);
+    }
+  }
+  quad(ch[M_ROOF],hj[0][0],y1,hj[0][1],hj[3][0],y1,hj[3][1],
+                  hj[2][0],y1,hj[2][1],hj[1][0],y1,hj[1][1],
+       0,1,0,0,0,4,4,col);
+}
 function fotavtrykkBokser(ring,celle){
   celle=celle||1.5;
   let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
@@ -1120,7 +1176,7 @@ function generateSkien(scene,mats,gm){
   const vannB=Buf(),veiB=Buf(),gangB=Buf(),dashB=Buf(),kantB=Buf();
   const trees=[],lamps=[];
   const W=[1,1,1];
-  const H=(x,z)=>skienH(x,z);
+  const H=(x,z)=>terrainH(x,z);   // ma ga via terrainH, ellers ignoreres FLATT
 
   /* ---- VANN: hver flate pa sitt eget speil, hentet fra hoydemodellen ---- */
   for(const v of SK.vann){
@@ -1195,57 +1251,31 @@ function generateSkien(scene,mats,gm){
   /* ---- BYGG: ekte fotavtrykk, ekte hoyder ---- */
   for(const b of SK.bygg){
     if(b.p.length<4)continue;
-    const t=trianguler(b.p,b.hull);if(!t)continue;
+    const r=minsteRektangel(b.p);
+    if(!r||r.w<4||r.d<4)continue;
+    if(r.cx<-HW||r.cx>HW||r.cz<-HD||r.cz>HD)continue;
+    const hj=boksHjorner(r,0.8);
 
     let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,lav=1e9,hoy=-1e9;
-    for(const p of b.p){
+    for(const p of hj){
       x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);
       const h=H(p[0],p[1]);lav=Math.min(lav,h);hoy=Math.max(hoy,h);
     }
-    if(x1-x0<2||z1-z0<2)continue;
-    if(x1<-HW||x0>HW||z1<-HD||z0>HD)continue;
 
-    const grunn=hoy+0.15;                 // planert tomt, som ekte byggegrunn
-    // I bratt terreng holdt det ikke a grave 1,6 m: bygget ble hengende med
-    // luft under nedsiden. Fundamentet folger fallet over fotavtrykket.
-    const fot=lav-Math.max(1.6,(hoy-lav)*1.35+1.0);
-    const topp=grunn+b.h;
+    const grunn=hoy+0.15;
+    const fot=lav-Math.max(1.2,(hoy-lav)*1.35+0.8);
+    // hele etasjer gir like vindusrader og en roligere by
+    const etg=Math.max(1,Math.round(b.h/FH));
+    const topp=grunn+etg*FH;
     const mat=SK_MAT[b.k]!==undefined?SK_MAT[b.k]:(b.h>18?M_OFFICE:M_PLASTER);
     const butikk=SK_SHOP.has(b.k)&&b.h>GROUND_H+4;
     const tv=rnd(.82,1.14),hu=rnd(-.045,.045);
     const col=[cl(tv+hu,.5,1.4),cl(tv,.5,1.4),cl(tv-hu*.7,.5,1.4)];
     const ch=chunkOf((x0+x1)/2,(z0+z1)/2);
 
-    // vegger langs hver kant i fotavtrykket
-    const ring=b.p;
-    for(let i=0;i<ring.length-1;i++){
-      const a=ring[i],c=ring[i+1];
-      const dx=c[0]-a[0],dz=c[1]-a[1];
-      const L=Math.hypot(dx,dz);if(L<0.35)continue;
-      const nx=dz/L,nz=-dx/L;
-      const ru=cl(Math.round(L/TEX_W),1,20);
-      if(butikk){
-        const gy=grunn+GROUND_H;
-        quad(ch[M_SHOP],a[0],fot,a[1],c[0],fot,c[1],c[0],gy,c[1],a[0],gy,a[1],
-             nx,0,nz,0,0,cl(Math.round(L/11),1,20),1,col);
-        quad(ch[mat],a[0],gy,a[1],c[0],gy,c[1],c[0],topp,c[1],a[0],topp,a[1],
-             nx,0,nz,0,0,ru,cl(Math.round((topp-gy)/TEX_H),1,40),col);
-      }else{
-        quad(ch[mat],a[0],fot,a[1],c[0],fot,c[1],c[0],topp,c[1],a[0],topp,a[1],
-             nx,0,nz,0,0,ru,cl(Math.round(b.h/TEX_H),1,40),col);
-      }
-    }
-    // tak — trekantene fra triangulatoren kan komme i begge retninger, og et
-    // tak som vender ned er usynlig ovenfra. Snu det som peker feil vei.
-    for(const f of t.f){
-      let p=t.pts[f[0]],q=t.pts[f[1]],r=t.pts[f[2]];
-      if((q.x-p.x)*(r.y-p.y)-(r.x-p.x)*(q.y-p.y) > 0){const tmp=q;q=r;r=tmp;}
-      tri(ch[M_ROOF],p.x,topp,p.y,q.x,topp,q.y,r.x,topp,r.y,0,1,0,
-          p.x/7,p.y/7,q.x/7,q.y/7,r.x/7,r.y/7,col);
-    }
+    boksBygg(ch,mat,hj,fot,topp,col,butikk,grunn+GROUND_H);
     buildingCount++;
-    // tette bokser: bade for kollisjon og for platet spilleren star pa
-    const bokser=fotavtrykkBokser(b.p,1.5);
+    const bokser=fotavtrykkBokser(hj,1.5);
     for(const k of bokser){
       if(paaVei((k.x0+k.x1)/2,(k.z0+k.z1)/2))continue;   // veibanen vinner
       addCol({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,top:topp});
