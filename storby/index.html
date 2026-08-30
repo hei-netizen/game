@@ -514,6 +514,22 @@ function gable(b,x0,x1,y,z0,z1,h,col){
   tri(b,x1,y,z0,x1,y,z1,x1,y+h,mz, 1,0,0, 0,0,1,0,.5,1,col);
 }
 
+// Saltak med møne langs Z (gable() har møne langs X). Trengs for kvartals-
+// sidene som løper nord–sør.
+function gableZ(b,x0,x1,y,z0,z1,h,col){
+  const mx=(x0+x1)/2, dx=(x1-x0)/2, L=Math.sqrt(dx*dx+h*h);
+  const ru=cl(Math.round((z1-z0)/4),1,24), rv=cl(Math.round(L/4),1,10);
+  quad(b,x1,y,z0,x1,y,z1,mx,y+h,z1,mx,y+h,z0,  dx/L,h/L,0, 0,0,ru,rv,col);
+  quad(b,x0,y,z1,x0,y,z0,mx,y+h,z0,mx,y+h,z1, -dx/L,h/L,0, 0,0,ru,rv,col);
+  tri(b,x0,y,z0,x1,y,z0,mx,y+h,z0, 0,0,-1, 0,0,1,0,.5,1,col);
+  tri(b,x1,y,z1,x0,y,z1,mx,y+h,z1, 0,0, 1, 0,0,1,0,.5,1,col);
+}
+// Europeisk fasadepalett: oker, krem, terrakotta, dempet pastell.
+const EU_FASADE=[[.95,.88,.72],[.89,.79,.62],[.84,.76,.67],[.91,.85,.77],
+                 [.79,.71,.59],[.87,.81,.72],[.74,.68,.60],[.93,.89,.81],
+                 [.82,.78,.71],[.88,.73,.60],[.76,.78,.72],[.86,.84,.79]];
+const EU_TAK=[[.44,.23,.17],[.34,.31,.33],[.39,.27,.22],[.30,.28,.30],[.48,.28,.20]];
+
 /* ---------------------------- BY ---------------------------------------- */
 let streetsX=[],streetsZ=[],blocks=[],colliders=[],buildingCount=0;
 const GRID=50; let hash=new Map();
@@ -532,6 +548,41 @@ function nearby(x,z){
   }
   return out;
 }
+// Diagonale avenyer som skjærer gjennom rutenettet. Tomter som ligger i
+// korridoren fjernes, og veien legges som segmenter som følger terrenget.
+let diagonaler=[];
+function lagDiagonaler(){
+  diagonaler=[];
+  const n=rndi(2,3);
+  for(let i=0;i<n;i++){
+    const ang=rnd(.38,1.18)*(rand()<.5?1:-1);
+    diagonaler.push({c:Math.cos(ang),s:Math.sin(ang),
+                     off:rnd(-1,1)*620, w:rnd(17,26)});
+  }
+}
+function iDiagonal(x,z,slark){
+  for(const d of diagonaler){
+    if(Math.abs(x*d.s-(z-d.off)*d.c) < d.w/2+(slark||0)) return true;
+  }
+  return false;
+}
+function tegnDiagonaler(buf,W){
+  const L=Math.hypot(CITY_W,CITY_D);
+  for(const d of diagonaler){
+    const px=d.s, pz=-d.c, h=d.w/2;
+    for(let t=-L/2;t<L/2;t+=13){
+      const x0=d.c*t,        z0=d.off+d.s*t;
+      const x1=d.c*(t+13),   z1=d.off+d.s*(t+13);
+      if(Math.abs(x0)>HW-8&&Math.abs(x1)>HW-8)continue;
+      if(Math.abs(z0)>HD-8&&Math.abs(z1)>HD-8)continue;
+      const y0=terrainH(x0,z0)+0.06, y1=terrainH(x1,z1)+0.06;
+      quad(buf, x0+px*h,y0,z0+pz*h, x1+px*h,y1,z1+pz*h,
+                x1-px*h,y1,z1-pz*h, x0-px*h,y0,z0-pz*h,
+                0,1,0, 0,0, 13/7, d.w/7, W);
+    }
+  }
+}
+
 function makeStreets(len){
   const out=[];let p=-len/2,i=0;
   while(p<len/2){
@@ -563,6 +614,44 @@ function subdivide(x0,z0,x1,z1,maxW,out,depth){
   else{const t=z0+d*rnd(.38,.62);subdivide(x0,z0,x1,t,maxW,out,depth+1);subdivide(x0,t,x1,z1,maxW,out,depth+1);}
 }
 
+// Europeisk kvartal: sammenhengende gatevegg hele veien rundt, delt i smale
+// tomter med hver sin høyde, farge og takfarge, og et lukket gårdsrom inni.
+function perimeterKvartal(ch,x0,x1,z0,z1,pad,dist,gard){
+  const dyp=rnd(11.5,15.5);
+  if(x1-x0<dyp*2+10||z1-z0<dyp*2+10)return false;
+  const etg=()=> dist===D_DOWN?rndi(5,7):dist===D_MID?rndi(4,6):rndi(3,5);
+  const sider=[
+    {langsX:true, a:x0,b:x1, c0:z0,        c1:z0+dyp},
+    {langsX:true, a:x0,b:x1, c0:z1-dyp,    c1:z1},
+    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x0,        c1:x0+dyp},
+    {langsX:false,a:z0+dyp,b:z1-dyp, c0:x1-dyp,    c1:x1}
+  ];
+  for(const s of sider){
+    let t=s.a;
+    while(t<s.b-5){
+      const bredde=Math.min(rnd(7,12.5),s.b-t);
+      if(bredde<5)break;
+      const f=etg(), Y1=pad+f*FH;
+      const fc=EU_FASADE[rndi(0,EU_FASADE.length-1)];
+      const tc=EU_TAK[rndi(0,EU_TAK.length-1)];
+      const mat=rand()<.38?M_BRICK:M_PLASTER;
+      if(s.langsX){
+        volume(ch,mat,t,t+bredde-0.15,pad,Y1,s.c0,s.c1,fc,true,M_SHOP);
+        gable(ch[M_ROOF],t,t+bredde-0.15,Y1,s.c0,s.c1,rnd(2.4,3.8),tc);
+      }else{
+        volume(ch,mat,s.c0,s.c1,pad,Y1,t,t+bredde-0.15,fc,true,M_SHOP);
+        gableZ(ch[M_ROOF],s.c0,s.c1,Y1,t,t+bredde-0.15,rnd(2.4,3.8),tc);
+      }
+      addCol({x0:s.langsX?t:s.c0, x1:s.langsX?t+bredde:s.c1,
+              z0:s.langsX?s.c0:t, z1:s.langsX?s.c1:t+bredde, top:Y1});
+      buildingCount++;
+      t+=bredde;
+    }
+  }
+  slab(gard,x0+dyp,x1-dyp,pad+0.05,z0+dyp,z1-dyp,9,[1,1,1]);   // gårdsrom
+  return true;
+}
+
 // Ett bygningsvolum: gateplan + fasade + tak, med heltalls teksturrepetisjon
 function volume(ch,mw,x0,x1,y0,y1,z0,z1,col,useShop,shopMat){
   const w=x1-x0,d=z1-z0;
@@ -580,6 +669,7 @@ function volume(ch,mw,x0,x1,y0,y1,z0,z1,col,useShop,shopMat){
 
 function generateCity(scene,mats,gm){
   streetsX=makeStreets(CITY_W);streetsZ=makeStreets(CITY_D);
+  lagDiagonaler();
   blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
 
   const chunks=[];for(let i=0;i<CHX*CHZ;i++){const m=[];for(let k=0;k<NMAT;k++)m.push(Buf());chunks.push(m);}
@@ -587,6 +677,7 @@ function generateCity(scene,mats,gm){
     Math.min(CHZ-1,Math.max(0,Math.floor((z+HD)/CHD)))*CHX+
     Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
   const walk=Buf(),park=Buf(),curb=Buf(),cross=Buf();
+  const diag=Buf(),hage=Buf(),gjerde=Buf(),sti=Buf(),bensin=Buf(),kanopi=Buf();
   const trees=[],lamps=[],roofProps=[];
   const W=[1,1,1];
 
@@ -596,6 +687,7 @@ function generateCity(scene,mats,gm){
     if(bx1-bx0<14||bz1-bz0<14)continue;
     const mx=(bx0+bx1)/2,mz=(bz0+bz1)/2;
     if(Math.hypot(mx/1.30,mz)>880)continue;      // utenfor: villmark
+    if(iDiagonal(mx,mz,-6))continue;             // kvartalet ligger i avenyen
     const dist=isPark(mx,mz)?D_PARK:districtAt(mx,mz);
     // platået legges på snittet av hjørnene, og kantsteinen strekkes ned til
     // laveste terrengpunkt rundt kvartalet så det aldri blir hull
@@ -616,12 +708,28 @@ function generateCity(scene,mats,gm){
 
     if(dist===D_PARK){
       slab(park,bx0,bx1,pad,bz0,bz1,12,W);
+      // slynget sti gjennom parken
+      {
+        const px0=bx0+4,px1=bx1-4,steg=6;
+        let zz=(bz0+bz1)/2;
+        for(let xx=px0;xx<px1-steg;xx+=steg){
+          const z1s=(bz0+bz1)/2+(noise(xx/38+7.7,mz/38)-0.5)*(bz1-bz0)*0.55;
+          slab(sti,xx,xx+steg+0.4,pad+0.03,Math.min(zz,z1s)-1.1,Math.max(zz,z1s)+1.1,3,W);
+          zz=z1s;
+        }
+      }
       const n=Math.max(2,((bx1-bx0)*(bz1-bz0))/240|0);
       for(let t=0;t<n;t++)trees.push([rnd(bx0+4,bx1-4),rnd(bz0+4,bz1-4),rnd(.8,1.6),rand()*6.3,pad]);
       continue;
     }
     slab(walk,bx0,bx1,pad,bz0,bz1,4,W);
 
+    // Europeisk kvartal der det er plass; ellers eneboliger med hage.
+    const kjerne=Math.hypot(mx/1.30,mz)<620;
+    if(dist!==D_IND&&(kjerne||dist===D_MID||dist===D_DOWN)){
+      const ch0=chunkOf(mx,mz);
+      if(perimeterKvartal(ch0,bx0+2.5,bx1-2.5,bz0+2.5,bz1-2.5,pad,dist,hage))continue;
+    }
     const inset=dist===D_RES?5:4;
     const lx0=bx0+inset,lx1=bx1-inset,lz0=bz0+inset,lz1=bz1-inset;
     if(lx1-lx0<10||lz1-lz0<10)continue;
@@ -634,6 +742,7 @@ function generateCity(scene,mats,gm){
       const w=x1-x0,d=z1-z0;
       if(w<8||d<8)continue;
       if(dist===D_RES&&rand()<0.14)continue;
+      if(iDiagonal((x0+x1)/2,(z0+z1)/2,4))continue;   // tomta ligger i avenyen
 
       // per-bygg fargetone via vertex colors — variasjon uten flere teksturer
       const tv=rnd(.80,1.16), hu=rnd(-.05,.05);
@@ -641,9 +750,9 @@ function generateCity(scene,mats,gm){
       const ch=chunkOf((x0+x1)/2,(z0+z1)/2);
       let floors,mw,shopM=M_SHOP,useShop=true;
 
-      if(dist===D_DOWN){floors=rndi(14,52);mw=rand()<.62?M_GLASS:M_OFFICE;}
-      else if(dist===D_MID){floors=rndi(6,18);
-        const p=rand();mw=p<.28?M_GLASS:p<.66?M_OFFICE:M_PLASTER;}
+      if(dist===D_DOWN){floors=rndi(5,8);mw=rand()<.30?M_OFFICE:M_PLASTER;}
+      else if(dist===D_MID){floors=rndi(4,7);
+        mw=rand()<.35?M_BRICK:M_PLASTER;}
       else if(dist===D_RES){floors=rndi(2,5);
         mw=rand()<.62?M_BRICK:M_PLASTER;shopM=M_BASE;}
       else{floors=rndi(2,4);mw=M_IND;useShop=false;}
@@ -682,10 +791,45 @@ function generateCity(scene,mats,gm){
           parapet(ch[M_CONC],tx0,tx1,Y1,tz0,tz1,1.0,0.35,col);
         }
       }
-      else if(dist===D_RES&&form<0.62&&w>14&&d>12){       // hus med saltak
+      else if(dist===D_MID&&form<0.52&&w>34&&d>34){       // gårdsromkvartal
+        const t=Math.min(w,d)*rnd(.24,.32);
+        volume(ch,mw,x0,x1,Y0,Y1,z0,z0+t,col,useShop,shopM);
+        volume(ch,mw,x0,x1,Y0,Y1,z1-t,z1,col,useShop,shopM);
+        volume(ch,mw,x0,x0+t,Y0,Y1,z0+t,z1-t,col,useShop,shopM);
+        volume(ch,mw,x1-t,x1,Y0,Y1,z0+t,z1-t,col,useShop,shopM);
+        parapet(ch[M_CONC],x0,x1,Y1,z0,z1,0.8,0.3,col);
+        slab(hage,x0+t,x1-t,pad+0.05,z0+t,z1-t,9,W);      // indre grønt gårdsrom
+      }
+      else if(dist===D_RES&&form<0.40&&w>26&&d>11){       // rekkehus
+        const n=rndi(3,5), bw=w/n;
+        for(let u=0;u<n;u++){
+          const ux0=x0+u*bw+0.25, ux1=x0+(u+1)*bw-0.25;
+          const uh=Y0+Math.max(2,floors+rndi(-1,1))*FH;
+          const uc=[cl(col[0]*rnd(.86,1.14),.4,1.5),cl(col[1]*rnd(.86,1.14),.4,1.5),
+                    cl(col[2]*rnd(.86,1.14),.4,1.5)];
+          volume(ch,rand()<.5?M_BRICK:M_PLASTER,ux0,ux1,Y0,uh,z0,z1,uc,useShop,shopM);
+          gable(ch[M_ROOF],ux0,ux1,uh,z0,z1,rnd(1.9,3.2),[uc[0]*.6,uc[1]*.56,uc[2]*.54]);
+        }
+      }
+      else if(dist===D_RES&&form<0.66&&w>14&&d>12){       // hus med saltak + hage
         const eaves=Y1;
         volume(ch,mw,x0,x1,Y0,eaves,z0,z1,col,useShop,shopM);
         gable(ch[M_ROOF],x0,x1,eaves,z0,z1,rnd(2.6,4.6),[col[0]*.62,col[1]*.58,col[2]*.56]);
+        // hage på resten av tomta, med gjerde rundt
+        const hx0=L[0]+1,hx1=L[2]-1,hz0=L[1]+1,hz1=L[3]-1;
+        if(hx1-hx0>w+3||hz1-hz0>d+3){
+          slab(hage,hx0,hx1,pad+0.04,hz0,hz1,7,W);
+          const gh=1.05;
+          for(let gx=hx0;gx<hx1;gx+=1.5)
+            for(const gz of [hz0,hz1]) if(rand()<.85)
+              walls(gjerde,gx,gx+0.10,pad,pad+gh,gz-0.05,gz+0.05,1,1,1,W);
+          for(let gz=hz0;gz<hz1;gz+=1.5)
+            for(const gx of [hx0,hx1]) if(rand()<.85)
+              walls(gjerde,gx-0.05,gx+0.05,pad,pad+gh,gz,gz+0.10,1,1,1,W);
+          const nb=rndi(1,3);
+          for(let q=0;q<nb;q++)
+            trees.push([rnd(hx0+1.5,hx1-1.5),rnd(hz0+1.5,hz1-1.5),rnd(.35,.6),rand()*6.3,pad]);
+        }
       }
       else if(dist===D_RES&&form<0.80&&w>20&&d>20){       // L-form
         const sp=rnd(.42,.6);
@@ -704,6 +848,70 @@ function generateCity(scene,mats,gm){
         roofProps.push([rnd(x0+3,x1-3),Y1,rnd(z0+3,z1-3),rnd(1.6,4.4),rnd(1,2.9),rnd(1.6,4.4)]);
       addCol({x0:x0,x1:x1,z0:z0,z1:z1,top:Y1});
       buildingCount++;
+    }
+  }
+
+  // ---- sentralt torg med kirke ----
+  {
+    let torg=null,bd=1e9;
+    for(const b of blocks){
+      const d=Math.hypot((b.x0+b.x1)/2,(b.z0+b.z1)/2);
+      if(d<bd&&b.d!==D_PARK&&(b.x1-b.x0)>50&&(b.z1-b.z0)>45){bd=d;torg=b;}
+    }
+    if(torg){
+      const tx=(torg.x0+torg.x1)/2, tz=(torg.z0+torg.z1)/2, ty=torg.pad;
+      slab(sti,torg.x0+2,torg.x1-2,ty+0.06,torg.z0+2,torg.z1-2,4,W);   // brostein
+      const ch=chunkOf(tx,tz);
+      // skip: langhus + tårn med spir
+      const sw=13, sl=30, sy=ty;
+      volume(ch,M_PLASTER,tx-sw/2,tx+sw/2,sy,sy+13,tz-sl/2,tz+sl/2-9,[.90,.87,.80],false,M_SHOP);
+      gable(ch[M_ROOF],tx-sw/2,tx+sw/2,sy+13,tz-sl/2,tz+sl/2-9,5.5,[.36,.30,.30]);
+      const tw=9.5, th=34;
+      volume(ch,M_PLASTER,tx-tw/2,tx+tw/2,sy,sy+th,tz+sl/2-9,tz+sl/2,[.90,.87,.80],false,M_SHOP);
+      // spir
+      const spx0=tx-tw/2+0.6, spx1=tx+tw/2-0.6;
+      const spz0=tz+sl/2-9+0.6, spz1=tz+sl/2-0.6;
+      const mxx=(spx0+spx1)/2, mzz=(spz0+spz1)/2, sh=22;
+      const tc=[.30,.28,.31];
+      tri(ch[M_ROOF],spx0,sy+th,spz0,spx1,sy+th,spz0,mxx,sy+th+sh,mzz,0,.4,-.9,0,0,1,0,.5,1,tc);
+      tri(ch[M_ROOF],spx1,sy+th,spz1,spx0,sy+th,spz1,mxx,sy+th+sh,mzz,0,.4, .9,0,0,1,0,.5,1,tc);
+      tri(ch[M_ROOF],spx1,sy+th,spz0,spx1,sy+th,spz1,mxx,sy+th+sh,mzz,.9,.4,0,0,0,1,0,.5,1,tc);
+      tri(ch[M_ROOF],spx0,sy+th,spz1,spx0,sy+th,spz0,mxx,sy+th+sh,mzz,-.9,.4,0,0,0,1,0,.5,1,tc);
+      addCol({x0:tx-sw/2,x1:tx+sw/2,z0:tz-sl/2,z1:tz+sl/2,top:sy+th});
+      buildingCount++;
+    }
+  }
+
+  // ---- bensinstasjoner på hjørnetomter langs hovedårer ----
+  {
+    let satt=0;
+    for(const b of blocks){
+      if(satt>=5||b.d===D_PARK||b.d===D_DOWN)continue;
+      if(rand()>0.12)continue;
+      const bw=b.x1-b.x0, bd=b.z1-b.z0;
+      if(bw<34||bd<30)continue;
+      const gx=b.x0+4, gz=b.z0+4, gw=Math.min(30,bw-8), gd=Math.min(26,bd-8);
+      const y=b.pad;
+      slab(bensin,gx,gx+gw,y+0.05,gz,gz+gd,7,W);              // asfaltert forplass
+      // butikk bakerst
+      const sh=4.4;
+      volume(chunkOf(gx+gw/2,gz+gd-3),M_PLASTER,gx+gw*0.18,gx+gw*0.82,y,y+sh,
+             gz+gd-7,gz+gd,[1,1,1],true,M_SHOP);
+      parapet(chunkOf(gx+gw/2,gz+gd-3)[M_CONC],gx+gw*0.18,gx+gw*0.82,y+sh,
+              gz+gd-7,gz+gd,0.5,0.25,[1,1,1]);
+      // tak på fire søyler
+      const ky=y+5.6, kx0=gx+2, kx1=gx+gw-2, kz0=gz+1.5, kz1=gz+gd-9;
+      walls(kanopi,kx0,kx1,ky,ky+0.8,kz0,kz1,1,1,1,W);
+      slab(kanopi,kx0,kx1,ky+0.8,kz0,kz1,6,W);
+      for(const sx of [kx0+1.2,kx1-1.6])for(const sz of [kz0+1.2,kz1-1.6])
+        walls(kanopi,sx,sx+0.42,y,ky,sz,sz+0.42,1,1,1,W);
+      // pumper
+      for(let q=0;q<2;q++){
+        const px=kx0+(q+1)*(kx1-kx0)/3-0.5, pz=(kz0+kz1)/2-0.4;
+        walls(kanopi,px,px+1.0,y,y+1.5,pz,pz+0.8,1,1,1,W);
+      }
+      addCol({x0:gx+gw*0.18,x1:gx+gw*0.82,z0:gz+gd-7,z1:gz+gd,top:y+sh});
+      satt++;
     }
   }
 
@@ -730,6 +938,8 @@ function generateCity(scene,mats,gm){
     const m=new THREE.Mesh(bufGeo(b),mat);m.receiveShadow=true;
     if(shadow)m.castShadow=true;group.add(m);};
   add(walk,gm.walk);add(park,gm.grass);add(curb,gm.curb,true);add(cross,gm.cross);
+  add(diag,gm.diagvei);add(hage,gm.hage);add(gjerde,gm.gjerde,true);
+  add(sti,gm.sti);add(bensin,gm.walk);add(kanopi,gm.kanopi,true);
 
   // midtstriper som korte segmenter, hver lagt på terrenget
   const dash=Buf();
@@ -744,6 +954,8 @@ function generateCity(scene,mats,gm){
       slab(dash,x,x+4,y,s.p-0.28,s.p+0.28,1,W);
     }
   add(dash,gm.dashMat);
+
+  tegnDiagonaler(diag,W);
 
   const dm=new THREE.Object3D();
   if(trees.length){
@@ -1365,6 +1577,13 @@ const gm={
   walk :std(PV,{envMapIntensity:.60}),
   curb :std(plainTex('#adaaa2',.80,0,3000),{envMapIntensity:.35}),
   grass:std(plainTex('#4f7a45',.95,0,14000),{envMapIntensity:.25}),
+  diagvei:new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
+          roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,
+          envMapIntensity:.5,side:THREE.DoubleSide}),
+  hage :std(plainTex('#4c7342',.95,0,12000),{envMapIntensity:.25}),
+  sti  :std(plainTex('#9b8e78',.92,0,7000),{envMapIntensity:.3}),
+  gjerde:new THREE.MeshStandardMaterial({color:0x8a7a63,roughness:.9,vertexColors:true}),
+  kanopi:new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.55,metalness:.15,vertexColors:true}),
   cross:new THREE.MeshStandardMaterial({map:crosswalkTex(),transparent:true,roughness:.8,
          depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),
   bark :new THREE.MeshStandardMaterial({color:0x4a382a,roughness:.95}),
@@ -1478,9 +1697,9 @@ window.__dbg={
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
-  snap:()=>{renderer.render(scene,camera);
+  snap:()=>{update(0.016);renderer.render(scene,camera);   // oppdater kamera først
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'bilfiks-4',
+  ver:()=>'europa-6',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
@@ -2058,7 +2277,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build bilfiks-4';
+  document.getElementById('verline').textContent='build europa-6';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
