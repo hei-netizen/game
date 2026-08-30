@@ -1055,7 +1055,7 @@ const CAR_SCALE=1.75;            // modellen er ~2,55 m lang -> ~4,5 m
 const CAR_YAW=0;                 // korrigerer modellens egen frontretning
 let carGeo={},carMat=null,carSrc={},carMats={},carYoff={};
 let traffic=[],carData=[],parked=[];
-const drive={on:false,car:null,spd:0,vx:0,vy:0,yawrate:0,ax:0,slip:0,
+const drive={on:false,car:null,spd:0,vx:0,vy:0,yawrate:0,ax:0,slip:0,spinn:0,
               steer:0,head:0,spin:0,x:0,y:0,z:0,skade:0,rist:0};
 
 async function loadCars(){
@@ -1374,9 +1374,12 @@ const CARP={
   Cf:60000, Cr:56000,      // mykere bak = progressiv sladd i stedet for brå spinn
   mu:1.45,
   muHand:0.55,             // håndbrekk løsner bakenden, men slipper den ikke helt
-  gassLos:0.20,            // gass reduserer bakgrepet -> du doserer sladden med foten
+  effekt:135000, effektBoost:210000,   // W — trekkraften faller med farten
+  maksTrekk:13500,                     // N — nok til å spinne opp fra stillestående
+  sideGulv:0.30,                       // dekket beholder litt sidegrep selv når det spinner
+  hjulR:0.34,
   girDemp:2600,            // girdemping (N·m per rad/s) -> sladden er til å holde
-  girTak:1.5,              // maks girfart
+  girTak:1.95,             // maks girfart
   sladdDemp:1.25,          // hvor fort sidefarten dør ut uten håndbrekk
   sladdDempH:0.22,         // ... med håndbrekk (nesten fritt slipp)
   motor:10000, boost:15000, brems:13500, revers:3400,
@@ -1405,17 +1408,33 @@ function carStep(h,th,hand,boost){
   let Wr=(CARP.b/L)*W+(CARP.h/L)*CARP.M*(drive.ax||0);
   Wf=Math.max(Wf,W*0.12); Wr=Math.max(Wr,W*0.12);
 
-  // Gassen styrer bakgrepet: full gass løsner bakenden og forlenger sladden,
-  // letter du på gassen tar den grep igjen og retter seg opp. Det er dette som
-  // gjør at man kan velge mellom en myk kurve og en brå sving.
-  const gass=th>0?1:0;
-  const gripR=hand?CARP.muHand:CARP.mu*(1-CARP.gassLos*gass);
-  const Ff=cl(-CARP.Cf*aF,-CARP.mu*Wf, CARP.mu*Wf);   // kraften motvirker slippet
-  const Fr=cl(-CARP.Cr*aR,-gripR*Wr,   gripR*Wr  );
+  // --- BAKHJULSDRIFT ---
+  // Motoren trekker på BAKhjulene, og trekkraft og sidekraft deler samme
+  // friksjonsbudsjett. Bruker du hele budsjettet på å dra, har bakdekket
+  // ingenting igjen til å holde bakenden inne — og da går den rundt.
+  // Det er hele mekanikken bak en donut.
+  const gripR=hand?CARP.muHand:CARP.mu;
+  const maksBak=gripR*Wr, maksFor=CARP.mu*Wf;
 
-  let Ft=0;
-  if(th>0)Ft+=(boost?CARP.boost:CARP.motor)*(1-drive.skade/100*0.45);   // skade tar krefter
-  else if(th<0)Ft-=(vx>0.6)?CARP.brems:CARP.revers;
+  // Ekte biler har effekt, ikke konstant kraft: trekkraften faller med farten.
+  // Uten dette spant hjulene også i 90 km/t, og bilen spant ut av seg selv.
+  let Fdrag=0;
+  if(th>0){
+    const P=boost?CARP.effektBoost:CARP.effekt;
+    Fdrag=Math.min(CARP.maksTrekk,P/Math.max(Math.abs(vx),3.0))*(1-drive.skade/100*0.45);
+  } else if(th<0&&vx<=0.6) Fdrag=-CARP.revers;
+
+  const Fbak=cl(Fdrag,-maksBak,maksBak);               // det dekket faktisk overfører
+  drive.spinn=cl((Math.abs(Fdrag)-maksBak)/Math.max(1,maksBak),0,1);
+  // Rest av friksjonsbudsjettet til sidekraft. Gulvet gjør at et spinnende dekk
+  // ikke mister ALT sidegrep — ellers ble bilen ustyrlig på rett strekning.
+  const igjen=Math.sqrt(Math.max(0,maksBak*maksBak-Fbak*Fbak));
+  const takLat=Math.max(igjen,maksBak*CARP.sideGulv);
+  const Fr=cl(-CARP.Cr*aR,-takLat,takLat);
+  const Ff=cl(-CARP.Cf*aF,-maksFor,maksFor);           // forhjul styrer, drar ikke
+
+  let Ft=Fbak;
+  if(th<0&&vx>0.6)Ft-=CARP.brems;                      // bremsen tar alle fire
   if(hand)Ft-=Math.sign(vx)*CARP.brems*0.55;
   Ft-=CARP.cLuft*vx*Math.abs(vx);
   Ft-=CARP.cRull*vx;
@@ -1484,7 +1503,8 @@ function updateDrive(dt){
   else {drive.x=nx;drive.z=nz;}
   drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
 
-  drive.spin+=drive.spd*dt/0.34;   // hjulradius ~0,34 m
+  const hjulFart=drive.vx+(drive.spinn||0)*26;   // spinnende bakhjul går fortere enn bilen
+  drive.spin+=hjulFart*dt/CARP.hjulR;
   const o=drive.car.obj;
   drive.y=groundAt(drive.x,drive.z);
   o.position.set(drive.x,drive.y+(drive.car.yoff||0),drive.z);
@@ -1634,6 +1654,7 @@ const keys={};
 function showMode(){
   document.getElementById('mode').textContent =
     drive.on ? '🚗 '+Math.round(Math.abs(drive.vx)*3.6)+' km/t'+
+               (drive.spinn>0.05?'  ·  🔥 SPINN':'')+
                (drive.slip>0.22?'  ·  💨 SLADD':'')+
                (drive.skade>2?'  ·  🔧 '+Math.round(drive.skade)+' % skade':'')+
                '  ·  E ut  ·  Space håndbrekk  ·  Shift boost'
@@ -1699,11 +1720,25 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);renderer.render(scene,camera);   // oppdater kamera først
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'europa-6',
+  ver:()=>'bakhjul-7',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
   nocol:(v)=>{drive.nocol=!!v;},
+  donut:(steg)=>{
+    drive.vx=0;drive.vy=0;drive.yawrate=0;drive.steer=0;drive.head=0;drive.skade=0;
+    keys['KeyW']=true; keys['KeyA']=true;
+    let maksYaw=0,runder=0;
+    for(let i=0;i<(steg||220);i++){
+      updateDrive(0.016);
+      maksYaw=Math.max(maksYaw,Math.abs(drive.yawrate));
+      runder+=Math.abs(drive.yawrate)*0.016;
+    }
+    keys['KeyW']=false; keys['KeyA']=false;
+    return {kmt:Math.round(Math.abs(drive.vx)*3.6), girfart:+drive.yawrate.toFixed(2),
+            maksGirfart:+maksYaw.toFixed(2), omdreininger:+(runder/6.283).toFixed(2),
+            hjulspinn:+drive.spinn.toFixed(2), sladd_grader:+(drive.slip*180/Math.PI).toFixed(0)};
+  },
   krasjTest:()=>{
     const c=carData.find(q=>!q.dead&&q!==drive.car);
     if(!c)return {feil:'ingen trafikkbil'};
@@ -2277,7 +2312,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build europa-6';
+  document.getElementById('verline').textContent='build bakhjul-7';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet

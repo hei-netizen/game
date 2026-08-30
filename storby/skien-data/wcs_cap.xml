@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ows="http://www.opengis.net/ows/2.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:crs="http://www.opengis.net/wcs/service-extension/crs/1.0" xmlns:int="http://www.opengis.net/WCS_service-extension_interpolation/1.0" xmlns="http://www.opengis.net/ows/2.0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wcs/2.0 http://schemas.opengis.net/wcs/2.0/wcsAll.xsd" version="2.0.1">
+  <ServiceIdentification>
+    <Title>NHM_DTM_25833</Title>
+    <ServiceType>OGC WCS</ServiceType>
+    <ServiceTypeVersion>2.0.1</ServiceTypeVersion>
+    <ServiceTypeVersion>1.1.2</ServiceTypeVersion>
+    <ServiceTypeVersion>1.1.1</ServiceTypeVersion>
+    <ServiceTypeVersion>1.1.0</ServiceTypeVersion>
+    <ServiceTypeVersion>1.0.0</ServiceTypeVersion>
+    <Profile>http://www.opengis.net/spec/WCS/2.0/conf/core</Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_protocol-binding_get-kvp/1.0.1
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_protocol-binding_post-xml/1.0
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_crs/1.0/conf/crs-gridded-coverage
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_geotiff-coverages/1.0/conf/geotiff-coverage
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/GMLCOV/1.0/conf/gml
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/GMLCOV/1.0/conf/special-format
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/GMLCOV/1.0/conf/multipart
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_scaling/1.0/conf/scaling
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_crs/1.0/conf/crs
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_interpolation/1.0/conf/interpolation
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_interpolation/1.0/conf/nearest-neighbor
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_interpolation/1.0/conf/linear
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_interpolation/1.0/conf/cubic
+  </Profile>
+    <Profile>
+    http://www.opengis.net/spec/WCS_service-extension_range-subsetting/1.0/conf/record-subsetting
+  </Profile>
+    <Fees>free</Fees>
+    <AccessConstraints>None</AccessConstraints>
+  </ServiceIdentification>
+  <ServiceProvider>
+    <ProviderName>Kartverket</ProviderName>
+    <ProviderSite xlink:href="hoydedata.no" />
+    <ServiceContact>
+      <PositionName>hoydedata.no</PositionName>
+      <ContactInfo>
+        <Phone>
+          <Voice>+ 47 32 11 81 41</Voice>
+          <Facsimile>+4732118101</Facsimile>
+        </Phone>
+        <Address>
+          <DeliveryPoint>Postboks 600 Sentrum</DeliveryPoint>
+          <City>Hønefoss</City>
+          <PostalCode>3507</PostalCode>
+          <Country>Norway</Country>
+          <ElectronicMailAddress>hoydedata@kartverket.no</ElectronicMailAddress>
+        </Address>
+        <OnlineResource xlink:href="http://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25833?" />
+        <ContactInstructions>wms-drift@statkart.no</ContactInstructions>
+      </ContactInfo>
+    </ServiceContact>
+  </ServiceProvider>
+  <OperationsMetadata>
+    <Operation name="GetCapabilities">
+      <DCP>
+        <HTTP>
+          <Get xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+          <Post xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+        </HTTP>
+      </DCP>
+    </Operation>
+    <Operation name="DescribeCoverage">
+      <DCP>
+        <HTTP>
+          <Get xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+          <Post xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+        </HTTP>
+      </DCP>
+    </Operation>
+    <Operation name="GetCoverage">
+      <DCP>
+        <HTTP>
+          <Get xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+          <Post xlink:href="https://rin-ap2260.statkart.no/arcgis/services/NHM_DTM_25833/ImageServer/WCSServer" />
+        </HTTP>
+      </DCP>
+    </Operation>
+    <Constraint name="PostEncoding">
+      <AllowedValues>
+        <Value>XML</Value>
+      </AllowedValues>
+    </Constraint>
+  </OperationsMetadata>
+  <wcs:ServiceMetadata>
+    <wcs:formatSupported>image/tiff</wcs:formatSupported>
+    <wcs:formatSupported>image/netcdf</wcs:formatSupported>
+    <wcs:Extension>
+      <crs:CrsMetadata>
+        <crs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</crs:crsSupported>
+        <crs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/25833</crs:crsSupported>
+      </crs:CrsMetadata>
+      <int:InterpolationMetadata>
+        <int:InterpolationSupported>http://www.opengis.net/def/interpolation/OGC/1/nearest-neighbor</int:InterpolationSupported>
+        <int:InterpolationSupported>http://www.opengis.net/def/interpolation/OGC/1/linear</int:InterpolationSupported>
+        <int:InterpolationSupported>http://www.opengis.net/def/interpolation/OGC/1/cubic</int:InterpolationSupported>
+      </int:InterpolationMetadata>
+    </wcs:Extension>
+  </wcs:ServiceMetadata>
+  <wcs:Contents>
+    <wcs:CoverageSummary>
+      <WGS84BoundingBox>
+        <LowerCorner>-2.00756171816757245 57.2738836442695103</LowerCorner>
+        <UpperCorner>33.3365910058243742 72.1016879476356962</UpperCorner>
+      </WGS84BoundingBox>
+      <wcs:CoverageId>nhm_dtm_topo_25833</wcs:CoverageId>
+      <wcs:CoverageSubtype>RectifiedGridCoverage</wcs:CoverageSubtype>
+    </wcs:CoverageSummary>
+    <wcs:CoverageSummary>
+      <WGS84BoundingBox>
+        <LowerCorner>-2.00756171816757245 57.2738836442695103</LowerCorner>
+        <UpperCorner>33.3365910058243742 72.1016879476356962</UpperCorner>
+      </WGS84BoundingBox>
+      <wcs:CoverageId>nhm_dtm_topo_25833_skyggerelieff</wcs:CoverageId>
+      <wcs:CoverageSubtype>RectifiedGridCoverage</wcs:CoverageSubtype>
+    </wcs:CoverageSummary>
+  </wcs:Contents>
+</wcs:Capabilities>
