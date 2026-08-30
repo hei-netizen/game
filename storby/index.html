@@ -683,6 +683,8 @@ function generateCity(scene,mats,gm){
     Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
   const walk=Buf(),park=Buf(),curb=Buf(),cross=Buf();
   const diag=Buf(),hage=Buf(),gjerde=Buf(),sti=Buf(),bensin=Buf(),kanopi=Buf();
+  const klubbBuf=Buf(),klubbGulvBuf=Buf(),neonBuf=Buf();
+  klubb=null;
   const trees=[],lamps=[],roofProps=[];
   const W=[1,1,1];
 
@@ -728,6 +730,13 @@ function generateCity(scene,mats,gm){
       continue;
     }
     slab(walk,bx0,bx1,pad,bz0,bz1,4,W);
+
+    // Ett kvartal nær sentrum blir nattklubb. Sjekken må stå ETTER at pad er
+    // regnet ut — første forsøk lå før, og hadde krasjet om den hadde truffet.
+    if(!klubb&&Math.hypot(mx,mz)<560&&(bx1-bx0)>32&&(bz1-bz0)>26){
+      lagNattklubb(chunkOf,mx,mz,pad,klubbBuf,klubbGulvBuf,neonBuf);
+      continue;
+    }
 
     // Kvartal med sammenhengende gatevegg brukes nå bare som VARIASJON i
     // boligstrøket, ikke som hovedform — ellers blir hele byen en småby.
@@ -945,6 +954,7 @@ function generateCity(scene,mats,gm){
   add(walk,gm.walk);add(park,gm.grass);add(curb,gm.curb,true);add(cross,gm.cross);
   add(diag,gm.diagvei);add(hage,gm.hage);add(gjerde,gm.gjerde,true);
   add(sti,gm.sti);add(bensin,gm.walk);add(kanopi,gm.kanopi,true);
+  add(klubbBuf,gm.klubbVegg,true);add(klubbGulvBuf,gm.klubbGulv);add(neonBuf,gm.neon);
 
   // midtstriper som korte segmenter, hver lagt på terrenget
   const dash=Buf();
@@ -1002,6 +1012,106 @@ function generateCity(scene,mats,gm){
   return group;
 }
 
+// ---------------------------- NATTKLUBB -----------------------------------
+// Egen bygning med dør du kan gå gjennom. Veggene legges inn som fire
+// separate kollisjonsbokser med et hull i front, ellers ville hele klubben
+// vært en solid kloss. Innvendig: pulserende dansegulv, bar, DJ-pult og
+// fargede lys.
+const KLUBB={b:26,d:20,h:7,dor:3.6};
+let klubb=null, klubbFliser=null, klubbLys=[];
+
+function lagNattklubb(chunkOf,x,z,pad,vegg,gulv,neon){
+  const hb=KLUBB.b/2, hd=KLUBB.d/2, t=0.55, H=pad+KLUBB.h;
+  const x0=x-hb, x1=x+hb, z0=z-hd, z1=z+hd;
+  klubb={x:x,z:z,pad:pad,x0:x0,x1:x1,z0:z0,z1:z1,inne:false};
+
+  const V=[1,1,1];
+  // bakvegg + sidevegger
+  walls(vegg,x0,x1,pad,H,z1-t,z1, cl(Math.round(KLUBB.b/6),1,9),1,2,V);
+  walls(vegg,x0,x0+t,pad,H,z0,z1, 1,cl(Math.round(KLUBB.d/6),1,9),2,V);
+  walls(vegg,x1-t,x1,pad,H,z0,z1, 1,cl(Math.round(KLUBB.d/6),1,9),2,V);
+  // frontvegg med døråpning
+  const dh=KLUBB.dor/2;
+  walls(vegg,x0,x-dh,pad,H,z0,z0+t, 2,1,2,V);
+  walls(vegg,x+dh,x1,pad,H,z0,z0+t, 2,1,2,V);
+  walls(vegg,x-dh,x+dh,pad+3.0,H,z0,z0+t, 1,1,1,V);      // over døra
+  slab(vegg,x0,x1,H,z0,z1,6,V);                           // tak
+  slab(gulv,x0+t,x1-t,pad+0.04,z0+t,z1-t,5,V);            // gulv
+
+  // kollisjon: fire vegger med hull i front
+  addCol({x0:x0,x1:x1,z0:z1-t,z1:z1,top:H});
+  addCol({x0:x0,x1:x0+t,z0:z0,z1:z1,top:H});
+  addCol({x0:x1-t,x1:x1,z0:z0,z1:z1,top:H});
+  addCol({x0:x0,x1:x-dh,z0:z0,z1:z0+t,top:H});
+  addCol({x0:x+dh,x1:x1,z0:z0,z1:z0+t,top:H});
+
+  // bar langs venstre vegg
+  walls(vegg,x0+t+0.4,x0+t+2.2,pad,pad+1.15,z+1,z+hd-2.5,1,3,1,[.55,.42,.30]);
+  slab(vegg,x0+t+0.2,x0+t+2.5,pad+1.18,z+1,z+hd-2.5,3,[.72,.58,.42]);
+  addCol({x0:x0+t,x1:x0+t+2.5,z0:z+1,z1:z+hd-2.5,top:pad+1.2});
+  // DJ-pult bakerst
+  walls(vegg,x-3.2,x+3.2,pad,pad+1.05,z1-t-2.4,z1-t,3,1,1,[.22,.22,.26]);
+  addCol({x0:x-3.2,x1:x+3.2,z0:z1-t-2.4,z1:z1-t,top:pad+1.05});
+
+  // neonskilt over inngangen
+  slab(neon,x-4.2,x+4.2,pad+4.6,z0-0.35,z0-0.15,1,V);
+  quad(neon,x-4.2,pad+4.2,z0-0.2, x+4.2,pad+4.2,z0-0.2,
+            x+4.2,pad+5.4,z0-0.2, x-4.2,pad+5.4,z0-0.2, 0,0,-1, 0,0,1,1,V);
+
+  // to dansestenger, gulv til tak
+  for(const px of [x-5.5,x+5.5]){
+    walls(vegg,px-0.09,px+0.09,pad,H-0.6,z-1.6,z-1.42,1,1,3,[.85,.85,.9]);
+    slab(vegg,px-0.55,px+0.55,pad+0.30,z-2.1,z-0.9,2,[.30,.28,.34]);   // podium
+  }
+  klubb.stenger=[{x:x-5.5,z:z-1.5},{x:x+5.5,z:z-1.5}];
+
+  // dansegulv: fliser som pulserer
+  const FX=9,FZ=6, fw=(KLUBB.b-2*t-5)/FX, fd=(KLUBB.d-2*t-7)/FZ;
+  const g=new THREE.PlaneGeometry(fw*0.92,fd*0.92); g.rotateX(-Math.PI/2);
+  const m=new THREE.MeshBasicMaterial({color:0xffffff});
+  klubbFliser=new THREE.InstancedMesh(g,m,FX*FZ);
+  klubbFliser.frustumCulled=false;
+  klubbFliser.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(FX*FZ*3),3);
+  const dm=new THREE.Object3D(); let i=0;
+  for(let a=0;a<FX;a++)for(let b2=0;b2<FZ;b2++){
+    dm.position.set(x-hb+t+2.5+(a+0.5)*fw, pad+0.07, z-hd+t+3+(b2+0.5)*fd);
+    dm.rotation.set(0,0,0); dm.scale.set(1,1,1); dm.updateMatrix();
+    klubbFliser.setMatrixAt(i++,dm.matrix);
+  }
+  klubbFliser.instanceMatrix.needsUpdate=true;
+  scene.add(klubbFliser);
+  klubb.fx=FX; klubb.fz=FZ;
+
+  // fargede lys i taket
+  klubbLys=[];
+  const farger=[0xff2f6a,0x2f7bff,0x35e08a,0xffc12f];
+  for(let k=0;k<4;k++){
+    const L=new THREE.PointLight(farger[k],0,34,1.6);
+    L.position.set(x+(k%2?1:-1)*6.5, pad+5.6, z+(k<2?-1:1)*5.5);
+    scene.add(L); klubbLys.push({l:L,fase:k*1.55});
+  }
+  return klubb;
+}
+
+const _kf=new THREE.Color();
+function oppdaterKlubb(dt){
+  if(!klubb)return;
+  const sp=spillerPos();
+  klubb.inne = sp.x>klubb.x0&&sp.x<klubb.x1&&sp.z>klubb.z0&&sp.z<klubb.z1;
+  const t=performance.now()*0.001;
+  if(klubbFliser){
+    let i=0;
+    for(let a=0;a<klubb.fx;a++)for(let b=0;b<klubb.fz;b++){
+      const puls=0.5+0.5*Math.sin(t*3.1+a*0.7+b*0.5);
+      _kf.setHSL(((t*0.11+a*0.045+b*0.07)%1),0.85,0.18+puls*0.42);
+      klubbFliser.setColorAt(i++,_kf);
+    }
+    klubbFliser.instanceColor.needsUpdate=true;
+  }
+  for(const k of klubbLys)
+    k.l.intensity=(0.25+Math.max(0,Math.sin(t*2.6+k.fase))**2)*(klubb.inne?70:22);
+}
+
 // ---------------------------- FOLK ----------------------------------------
 // Mii-aktige figurer: stort rundt hode uten hals, oval kropp, korte lemmer,
 // flate farger. Hver kroppsdel er en egen InstancedMesh, så 320 personer
@@ -1037,6 +1147,24 @@ function lagFolk(scene){
       h:rnd(.88,1.10)});
   }
 
+  // dansere inne i klubben: to på podiene ved stengene, resten på gulvet
+  if(klubb){
+    const leggDanser=(dx,dz,podium)=>{
+      folkData.push({dans:true,x:dx,z:dz,pad:klubb.pad+(podium?0.34:0),
+        yaw0:rand()*6.283, t:0,L:1,w:1,d:1,x0:0,z0:0,x1:0,z1:0,dir:1,fart:0,
+        fase:rand()*6.283,
+        skin:HUD_SKIN[rndi(0,HUD_SKIN.length-1)],
+        haar:HUD_HAAR[rndi(0,HUD_HAAR.length-1)],
+        skjorte:HUD_SKJORTE[rndi(0,HUD_SKJORTE.length-1)],
+        bukse:HUD_BUKSE[rndi(0,HUD_BUKSE.length-1)],
+        h:rnd(.88,1.08), langtHaar:rand()<.5});
+    };
+    if(klubb.stenger)for(const st of klubb.stenger)leggDanser(st.x,st.z+0.75,true);
+    for(let i=0;i<14;i++)
+      leggDanser(klubb.x+rnd(-7.5,7.5), klubb.z+rnd(0.5,7.0), false);
+  }
+
+  const ANT=folkData.length;
   const G={
     hode : new THREE.SphereGeometry(.235,14,11),
     haar : new THREE.SphereGeometry(.252,14,10),
@@ -1056,10 +1184,10 @@ function lagFolk(scene){
   const geoFor={hode:G.hode,haar:G.haar,kropp:G.kropp,armV:G.arm,armH:G.arm,
                 benV:G.ben,benH:G.ben,oyeV:G.oye,oyeH:G.oye};
   for(const navn of deler){
-    const m=new THREE.InstancedMesh(geoFor[navn],flat(),FOLK_N);
+    const m=new THREE.InstancedMesh(geoFor[navn],flat(),ANT);
     m.castShadow=(navn!=='oyeV'&&navn!=='oyeH');
     m.frustumCulled=false;
-    m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(FOLK_N*3),3);
+    m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(ANT*3),3);
     folkM[navn]=m; scene.add(m);
   }
   const c=new THREE.Color();
@@ -1091,17 +1219,27 @@ function oppdaterFolk(dt){
   if(!folkData.length||!folkM.hode)return;
   for(let i=0;i<folkData.length;i++){
     const f=folkData[i];
-    f.t+=f.fart*f.dir*dt;
-    f.fase+=f.fart*dt*3.4;
-    const p=folkPos(f);
-    const yaw=p.yaw+(f.dir<0?Math.PI:0);
-    const sv=Math.sin(f.fase)*0.55;                 // gå-utslag
-    const bob=Math.abs(Math.sin(f.fase))*0.035;
+    let p,yaw,sv,bob,armEkstra=0;
+    if(f.dans){
+      f.fase+=dt*4.4;
+      p={x:f.x,z:f.z};
+      yaw=f.yaw0+Math.sin(f.fase*0.33)*1.05;        // vrir seg rundt
+      sv=Math.sin(f.fase)*0.42;
+      bob=Math.abs(Math.sin(f.fase))*0.085;
+      armEkstra=-1.95+Math.sin(f.fase*1.3)*0.45;    // armene i været
+    } else {
+      f.t+=f.fart*f.dir*dt;
+      f.fase+=f.fart*dt*3.4;
+      p=folkPos(f);
+      yaw=p.yaw+(f.dir<0?Math.PI:0);
+      sv=Math.sin(f.fase)*0.55;
+      bob=Math.abs(Math.sin(f.fase))*0.035;
+    }
     const y=f.pad+bob, S=f.h;
     const sh=Math.sin(yaw), ch=Math.cos(yaw);
-    const sett=(navn,lx,ly,lz,rx,sc)=>{
+    const sett=(navn,lx,ly,lz,rx,sc,rz)=>{
       _fd.position.set(p.x+(lx*ch+lz*sh), y+ly*S, p.z+(-lx*sh+lz*ch));
-      _fd.rotation.set(rx||0,yaw,0);
+      _fd.rotation.set(rx||0,yaw,rz||0);
       _fd.scale.setScalar(sc||S);
       _fd.updateMatrix();
       folkM[navn].setMatrixAt(i,_fd.matrix);
@@ -1110,10 +1248,11 @@ function oppdaterFolk(dt){
     sett('benV', -.105, .43, 0,  sv);      // hofte, slik at beinet møter kroppen
     sett('benH',  .105, .43, 0, -sv);
     sett('kropp', 0,    .78, 0,  0);
-    sett('armV', -.245, .92, 0, -sv*0.75);
-    sett('armH',  .245, .92, 0,  sv*0.75);
+    const armZ=f.dans?(2.05+Math.sin(f.fase*1.15)*0.45):0;   // ut og opp når man danser
+    sett('armV', -.245, .92, 0, f.dans?0:-sv*0.75, S,  armZ);
+    sett('armH',  .245, .92, 0, f.dans?0: sv*0.75, S, -armZ);
     sett('hode',  0,   1.30, 0,  0);
-    sett('haar',  0,   1.30, -.01, 0);
+    sett('haar',  0,   1.30, -.01, 0, f.langtHaar?S*1.16:S);   // noen med lengre hår
     sett('oyeV', -.085,1.32, .215, 0);
     sett('oyeH',  .085,1.32, .215, 0);
   }
@@ -1932,6 +2071,9 @@ const gm={
   diagvei:new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
           roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,
           envMapIntensity:.5,side:THREE.DoubleSide}),
+  klubbVegg:std(plainTex('#2b2330',.85,0,6000),{envMapIntensity:.2,side:THREE.DoubleSide}),
+  klubbGulv:std(plainTex('#15121a',.55,.1,4000),{envMapIntensity:.35}),
+  neon :new THREE.MeshBasicMaterial({color:0xff3d8b,vertexColors:true}),
   hage :std(plainTex('#4c7342',.95,0,12000),{envMapIntensity:.25}),
   sti  :std(plainTex('#9b8e78',.92,0,7000),{envMapIntensity:.3}),
   gjerde:new THREE.MeshStandardMaterial({color:0x8a7a63,roughness:.9,vertexColors:true}),
@@ -2051,9 +2193,10 @@ window.__dbg={
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
-  snap:()=>{update(0.016);oppdaterFolk(0.016);renderer.render(scene,camera);
+  snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'folk-13',
+  ver:()=>'klubb-16',
+  klubb:()=>klubb?{x:Math.round(klubb.x),z:Math.round(klubb.z),inne:klubb.inne}:null,
   folk:()=>folkData.length,
   folkPunkt:(i)=>{
     const f=folkData[i||0]; if(!f)return null;
@@ -2300,6 +2443,8 @@ function drawMinimap(){
   mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
   mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
   mc.arc(0,0,26,-Math.PI/2-.5,-Math.PI/2+.5);mc.closePath();mc.fill();
+  if(klubb){mc.fillStyle='#ff3d8b';
+    mc.fillRect((klubb.x+HW)*SX-3,(klubb.z+HD)*SZ-3,6,6);}
   mc.fillStyle='#ffe26a';mc.beginPath();mc.moveTo(0,-5);mc.lineTo(3.6,4);mc.lineTo(-3.6,4);
   mc.closePath();mc.fill();mc.restore();
 }
@@ -2635,7 +2780,7 @@ function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterFolk(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterFolk(dt);oppdaterKlubb(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -2644,6 +2789,7 @@ function loop(now){
     document.getElementById('pos').textContent=Math.round(P.pos.x)+', '+Math.round(P.pos.z);
     document.getElementById('alt').textContent=Math.round(P.pos.y);
     document.getElementById('district').textContent=
+      (klubb&&klubb.inne)?'NATTKLUBBEN':
       D_NAME[isPark(P.pos.x,P.pos.z)?D_PARK:districtAt(P.pos.x,P.pos.z)];
     if(drive.on){showMode();}
     else if(toastT<=0){
@@ -2663,7 +2809,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build folk-13';
+  document.getElementById('verline').textContent='build klubb-16';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
