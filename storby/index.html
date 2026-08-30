@@ -22,101 +22,24 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
-  /* ====================== LOGIN-SKJERM (2000-talls) ====================== */
   #overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
-    cursor:pointer;font-family:Tahoma,Verdana,Geneva,sans-serif;
-    background:
-      radial-gradient(ellipse 900px 620px at 50% 42%,rgba(84,120,180,.46) 0%,rgba(6,8,12,0) 70%),
-      linear-gradient(180deg,#0b0f17 0%,#04060a 100%)}
-  /* CRT-skannlinjer + vignett */
-  #overlay::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
-    background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.34) 2px 4px)}
-  #overlay::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
-    box-shadow:inset 0 0 190px 20px rgba(0,0,0,.6)}
-
-  /* --- dialogboksen: børstet stål med skarpe faser --- */
-  #overlay .box{position:relative;z-index:3;width:520px;max-width:93vw;text-align:left;
-    background:
-      repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,rgba(0,0,0,.022) 1px 3px),
-      linear-gradient(180deg,#3b4351 0%,#262c37 10%,#1c212a 60%,#171b23 100%);
-    border:1px solid #05070a;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.13),
-               inset 0 2px 0 rgba(255,255,255,.20),
-               inset 0 -2px 0 rgba(0,0,0,.65),
-               0 20px 70px rgba(0,0,0,.9),
-               0 0 0 5px rgba(0,0,0,.35),
-               0 0 90px 10px rgba(70,110,175,.20)}
-
-  /* --- tittellinje --- */
-  #tbar{display:flex;align-items:center;gap:9px;height:27px;padding:0 8px;
-    background:linear-gradient(180deg,#5477b2 0%,#33507e 46%,#263c60 54%,#1a2b47 100%);
-    border-bottom:1px solid #05070a;box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
-    font-size:11px;font-weight:bold;letter-spacing:.16em;text-transform:uppercase;
-    color:#e2ecff;text-shadow:0 1px 0 #0a1730}
-  #tbar .sp{flex:1}
-  #tbar .btns{display:flex;gap:3px}
-  #tbar .btns i{display:block;width:16px;height:14px;
-    background:linear-gradient(180deg,#cbd2dd,#8b93a3);border:1px solid #05070a;
-    box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #575e6b}
-
-  #overlay .body{padding:20px 24px 18px}
-
-  /* --- ordmerke --- */
-  #overlay h1{font-family:Impact,'Arial Black',Tahoma,sans-serif;font-size:56px;line-height:1;
-    letter-spacing:.16em;text-indent:.16em;text-align:center;font-weight:normal;color:#e9f0ff;
-    margin:6px 0 4px;
-    text-shadow:0 1px 0 #99b4e0,0 2px 0 #0d1017,0 3px 0 #0b0e14,0 5px 10px rgba(0,0,0,.9),
-                0 0 26px rgba(120,170,255,.32)}
-  #overlay .sub{text-align:center;color:#8ba0c4;font-size:10px;letter-spacing:.3em;
-    text-transform:uppercase;margin-bottom:6px}
-  #overlay .rule{height:2px;margin:15px 0 14px;
-    background:linear-gradient(180deg,#0b0e13 0 1px,rgba(255,255,255,.12) 1px 2px)}
-
-  /* --- felles innfelt panel (input / info / status) --- */
-  #overlay .inset{background:#080c12;border:1px solid #05070a;
-    box-shadow:inset 1px 1px 0 rgba(0,0,0,.95),inset -1px -1px 0 rgba(255,255,255,.08)}
-
-  #nameRow{display:flex;align-items:center;gap:10px;margin:0 0 9px}
-  #nameRow label{width:110px;flex:none;font-size:11px;font-weight:bold;letter-spacing:.1em;
-    text-transform:uppercase;color:#9db0d2;text-shadow:0 1px 0 #0a0d12}
-  #nameRow input{flex:1;min-width:0;padding:9px 11px;background:#080c12;color:#7fe6a0;
-    font-family:ui-monospace,Consolas,Menlo,monospace;font-size:14px;letter-spacing:.1em;
-    border:1px solid #05070a;outline:none;cursor:text;
-    box-shadow:inset 1px 1px 0 rgba(0,0,0,.95),inset -1px -1px 0 rgba(255,255,255,.08)}
-  #nameRow input::placeholder{color:#3d6a51}
-  #nameRow input:focus{color:#b6ffd1;
-    box-shadow:inset 1px 1px 0 rgba(0,0,0,.95),inset -1px -1px 0 rgba(255,255,255,.08),
-               0 0 0 1px #517fbe,0 0 14px rgba(80,140,220,.55)}
-
-  /* --- serverinfo i ravgul terminaltekst --- */
-  #overlay .stats{color:#e0a34a;font-size:11px;line-height:1.85;margin:0 0 12px;
-    font-family:ui-monospace,Consolas,Menlo,monospace;padding:8px 11px;
-    text-shadow:0 0 8px rgba(224,163,74,.35)}
-
-  /* --- status m/ LED --- */
-  #statusRow{display:flex;align-items:center;gap:9px;padding:8px 11px;margin-top:12px}
-  #led{width:9px;height:9px;flex:none;border-radius:50%;background:#d0a83f;
-    box-shadow:0 0 9px #d0a83f,inset 0 0 0 1px rgba(0,0,0,.55);
-    animation:blink 1s steps(1,end) infinite}
-  #led.ok{background:#5fe08a;box-shadow:0 0 9px #5fe08a,inset 0 0 0 1px rgba(0,0,0,.55);animation:none}
-  #led.bad{background:#ff6b6b;box-shadow:0 0 9px #ff6b6b,inset 0 0 0 1px rgba(0,0,0,.55);
-    animation:blink .45s steps(1,end) infinite}
-  #netStatus{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:11px;
-    letter-spacing:.06em;color:#8b9ab5}
+    background:radial-gradient(ellipse at 50% 40%,#151b28 0%,#080a0f 70%);cursor:pointer}
+  #overlay .box{text-align:center;max-width:600px;padding:0 30px}
+  #overlay h1{font-size:64px;letter-spacing:.3em;font-weight:800;margin-bottom:6px;
+    background:linear-gradient(180deg,#fff,#7d90b8);-webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;background-clip:text}
+  #overlay .sub{color:#7f8aa3;font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:30px}
+  #overlay .stats{color:#9fb0d0;font-size:12px;line-height:2;margin-bottom:22px}
+  #nameRow{margin-bottom:18px}
+  #nameRow input{width:230px;padding:11px 13px;background:#0b0d12;border:1px solid #4a5a76;
+    border-radius:4px;color:#e8eaf0;font-family:inherit;font-size:14px;outline:none;text-align:center}
+  #nameRow input:focus{border-color:#8fc7ff}
+  #netStatus{font-size:12px;color:#7f8aa3;margin-top:14px;letter-spacing:.06em}
   #netStatus .ok{color:#7fe6a0}#netStatus .bad{color:#ff8080}
-  @keyframes blink{50%{opacity:.2}}
-
-  #overlay .hint{margin-top:13px;text-align:center;font-size:10px;letter-spacing:.16em;
-    text-transform:uppercase;color:#6d7c96}
-  #overlay .hint b{color:#a6bde4;font-weight:bold}
-  #overlay .caret{color:#8fc7ff;animation:blink 1s steps(1,end) infinite}
-
-  /* --- bunnstripe --- */
-  #foot{display:flex;align-items:center;gap:8px;padding:6px 10px;
-    border-top:1px solid #05070a;box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
-    background:linear-gradient(180deg,#20252f,#171b23);
-    font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#67738b}
-  #foot .sp{flex:1}
+  #stjerner{position:fixed;left:50%;transform:translateX(-50%);top:16px;z-index:6;
+    font-size:30px;letter-spacing:6px;color:#ffcf3a;text-shadow:0 2px 8px #000,0 0 18px rgba(255,180,0,.6);
+    pointer-events:none;line-height:1}
+  #stjerner .av{color:#3a3f4e;text-shadow:none}
   #players{position:fixed;right:14px;top:224px;z-index:5;font-size:12px;line-height:1.9;
     text-align:right;text-shadow:0 1px 3px #000;pointer-events:none}
   #players .p{color:#cfd8ea}
@@ -129,46 +52,15 @@
     border:1px solid #3a4155;border-radius:3px;color:#8fc7ff;font-family:inherit}
   #shareCopy{padding:6px 12px;border:0;border-radius:3px;background:#3a5a86;color:#fff;
     font-size:11px;cursor:pointer;font-family:inherit}
-  /* --- stor 3D-knapp --- */
-  #overlay .cta{display:block;width:100%;padding:13px 0;text-align:center;cursor:pointer;
-    font-family:inherit;font-size:14px;font-weight:bold;letter-spacing:.24em;
-    text-transform:uppercase;color:#f2f6ff;text-shadow:0 1px 0 #0c1730;
-    background:linear-gradient(180deg,#6288bd 0%,#3d5b8d 46%,#2e4674 54%,#1f3157 100%);
-    border:1px solid #05070a;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 -2px 0 rgba(0,0,0,.55),
-               0 3px 0 #0b0f16,0 7px 16px rgba(0,0,0,.65)}
-  #overlay .cta:hover{background:linear-gradient(180deg,#79a0d6,#4c6ea6 46%,#3a5689 54%,#263c68);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.5),
-               0 3px 0 #0b0f16,0 8px 22px rgba(70,130,220,.35)}
-  #overlay .cta:active{transform:translateY(3px);
-    box-shadow:inset 0 2px 7px rgba(0,0,0,.75),inset 0 -1px 0 rgba(255,255,255,.10),
-               0 0 0 #0b0f16}
-
-  /* --- lasteskjerm i samme drakt --- */
-  #load{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;gap:18px;
-    align-items:center;justify-content:center;
-    background:radial-gradient(ellipse at 50% 45%,#131a27 0%,#04060a 72%);
-    font-family:Tahoma,Verdana,Geneva,sans-serif;color:#8fa0c0;font-size:11px;
-    letter-spacing:.26em;text-transform:uppercase}
-  #load .lw{font-family:Impact,'Arial Black',Tahoma,sans-serif;font-size:42px;
-    letter-spacing:.18em;text-indent:.18em;color:#dbe6ff;
-    text-shadow:0 1px 0 #8aa6d6,0 2px 0 #0d1017,0 4px 10px rgba(0,0,0,.9),
-                0 0 24px rgba(120,170,255,.3)}
-  #load .bar{width:290px;height:16px;padding:2px;overflow:hidden;background:#080c12;
-    border:1px solid #05070a;
-    box-shadow:inset 1px 1px 0 rgba(0,0,0,.95),inset -1px -1px 0 rgba(255,255,255,.08)}
-  #load .bar i{display:block;height:100%;width:34%;
-    background:repeating-linear-gradient(90deg,#2e4674 0 7px,#5477b2 7px 11px);
-    box-shadow:0 0 12px rgba(84,119,178,.6);animation:ldslide 1.15s linear infinite}
-  @keyframes ldslide{from{transform:translateX(-110%)}to{transform:translateX(300%)}}
+  #overlay .cta{display:inline-block;padding:13px 34px;border:1px solid #4a5a76;
+    border-radius:5px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;
+    background:#1b2231;color:#cfe0ff}
+  #load{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    background:#080a0f;color:#8fa0c0;font-size:13px;letter-spacing:.2em;text-transform:uppercase}
 </style>
 </head>
 <body>
-<div id="load">
-  <div class="lw">STORBY</div>
-  <div class="bar"><i></i></div>
-  <div>Genererer by&hellip;</div>
-</div>
+<div id="load">Genererer by&hellip;</div>
 
 <div id="hud">
   <div id="district">&nbsp;</div>
@@ -176,14 +68,12 @@
   <div><b id="fps">0</b> fps &nbsp;&middot;&nbsp; <b id="bcount">0</b> bygninger &middot; <b id="propcount">0</b> props</div>
   <div id="mode" style="color:#f0c674">&nbsp;</div>
   <div id="verline" style="color:#66708a;font-size:10px;letter-spacing:.12em"></div>
-  <div id="kildeline" style="color:#4d566e;font-size:9px;letter-spacing:.06em">&nbsp;</div>
   <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
-  <div id="wanted" style="color:#ffd23c;font-size:22px;letter-spacing:.22em;
-       text-shadow:0 0 12px rgba(255,150,20,.75);margin-top:6px">&nbsp;</div>
 </div>
 
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
+<div id="stjerner"></div>
 <div id="players"><div class="lbl">I byen</div><div id="plist"></div></div>
 <div id="share">
   <div class="lbl">Send denne til gutta</div>
@@ -200,35 +90,12 @@
 
 <div id="overlay" style="display:none">
   <div class="box">
-    <div id="tbar">
-      <span>Storby Online &mdash; Tilkobling</span>
-      <span class="sp"></span>
-      <span class="btns"><i></i><i></i><i></i></span>
-    </div>
-    <div class="body">
-      <h1>STORBY</h1>
-      <div class="sub" id="osub">3 &times; 2 km prosedural by</div>
-      <div class="rule"></div>
-
-      <div id="nameRow">
-        <label for="pname">Spillernavn</label>
-        <input id="pname" class="inset" maxlength="12" placeholder="skriv navn&hellip;" autocomplete="off" spellcheck="false">
-      </div>
-
-      <div class="stats inset" id="ostats"></div>
-
-      <div class="cta">Gå inn i byen</div>
-
-      <div id="statusRow" class="inset">
-        <span id="led"></span>
-        <div id="netStatus">kobler til &hellip;</div>
-      </div>
-
-      <div class="hint"><span class="caret">&#9654;</span> Klikk hvor som helst for å låse musa &nbsp;&middot;&nbsp; <b>Esc</b> slipper den</div>
-    </div>
-    <div id="foot">
-      <span id="roomLbl">Rom: &hellip;</span><span class="sp"></span><span id="verLbl">v2</span>
-    </div>
+    <h1>STORBY</h1>
+    <div class="sub">3 &times; 2 km prosedural by</div>
+    <div id="nameRow"><input id="pname" maxlength="12" placeholder="Navnet ditt" autocomplete="off"></div>
+    <div class="stats" id="ostats"></div>
+    <div class="cta">Klikk for å spille</div>
+    <div id="netStatus">kobler til &hellip;</div>
   </div>
 </div>
 
@@ -275,282 +142,11 @@ function noise(x,y){const xi=Math.floor(x),yi=Math.floor(y),fx=x-xi,fy=y-yi;
   const s=t=>t*t*(3-2*t),u=s(fx),v=s(fy);
   return h2(xi,yi)*(1-u)*(1-v)+h2(xi+1,yi)*u*(1-v)+h2(xi,yi+1)*(1-u)*v+h2(xi+1,yi+1)*u*v}
 
-/* ==========================================================================
-   SKIEN — ekte kartdata
-   OpenStreetMap (ODbL) + Kartverket DTM1 (NLOD), hentet for et 3x2 km utsnitt
-   sentrert 400 m sor for Skien torg. Verdensrammen er EPSG:25833 flyttet til
-   origo: x = ost, z = sor, 1 enhet = 1 meter. Det treffer CITY_W/CITY_D
-   eksakt, sa ingenting annet i motoren trenger a regnes om.
-   ========================================================================== */
-let SK=null;        // {meta, veier, bygg, vann, gronn}
-let SKT=null;       // hoydemodell: uint16-rutenett, 5 m per piksel
-let veinavnIdx=[];  // grovt rutenett for "hvilken gate star jeg i"
-
-// Av. Byen er den prosedurale igjen. Alt Skien-maskineriet star urort
-// under — sett SKIEN_PA=true for a hente det tilbake.
-const SKIEN_PA=false;
-async function lastSkien(){
-  if(!SKIEN_PA){SK=null;SKT=null;return false;}
-  try{
-    const [j,b]=await Promise.all([
-      fetch('skien-data/skien.json?v=skien-2').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),
-      fetch('skien-data/skien_terreng.bin?v=skien-2').then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()})
-    ]);
-    const t=j.meta.terreng;
-    SKT={u:new Uint16Array(b),W:t.bredde,H:t.hoyde,mps:t.meter_per_piksel,
-         lo:t.min_m,spenn:t.maks_m-t.min_m};
-    SK=j;
-    byggVeinavnIndeks();
-    return true;
-  }catch(e){
-    console.warn('Skien-data mangler, faller tilbake til prosedural by:',e.message);
-    SK=null;SKT=null;return false;
-  }
-}
-
-// Bilineaer opppslag i hoydemodellen. Rad 0 er nordkanten, kolonne 0 vestkanten.
-function skienH(x,z){
-  const W=SKT.W,H=SKT.H,u=SKT.u;
-  const fx=(x+HW)/SKT.mps-0.5, fz=(z+HD)/SKT.mps-0.5;
-  const x0=Math.floor(fx), z0=Math.floor(fz);
-  const tx=fx-x0, tz=fz-z0;
-  const cx=v=>v<0?0:(v>W-1?W-1:v), cz=v=>v<0?0:(v>H-1?H-1:v);
-  const g=(a,b)=>u[cz(b)*W+cx(a)];
-  const h=g(x0,z0)*(1-tx)*(1-tz)+g(x0+1,z0)*tx*(1-tz)
-         +g(x0,z0+1)*(1-tx)*tz+g(x0+1,z0+1)*tx*tz;
-  return SKT.lo+(h/65535)*SKT.spenn;
-}
-
-// Naermeste gatenavn — 200 m ruter, sa oppslaget i HUD-en er gratis.
-function byggVeinavnIndeks(){
-  veinavnIdx=new Map();
-  for(const v of SK.veier){
-    if(!v.n)continue;
-    for(const p of v.p){
-      const k=Math.floor(p[0]/200)+':'+Math.floor(p[1]/200);
-      let a=veinavnIdx.get(k); if(!a){a=[];veinavnIdx.set(k,a);}
-      a.push([p[0],p[1],v.n]);
-    }
-  }
-}
-function stedsnavn(x,z){
-  let best=null,bd=1e9;
-  const cx=Math.floor(x/200),cz=Math.floor(z/200);
-  for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){
-    const a=veinavnIdx.get((cx+i)+':'+(cz+j)); if(!a)continue;
-    for(const p of a){
-      const d=(p[0]-x)*(p[0]-x)+(p[1]-z)*(p[1]-z);
-      if(d<bd){bd=d;best=p[2];}
-    }
-  }
-  return best||'Skien';
-}
-
-// Polygon -> trekanter. OSM-ringer er lukket (forste punkt == siste); det
-// duplikatet ma vekk for triangulatoren.
-function trianguler(ring,holes){
-  let c=ring;
-  if(c.length>3&&Math.abs(c[0][0]-c[c.length-1][0])<1e-6&&Math.abs(c[0][1]-c[c.length-1][1])<1e-6)
-    c=c.slice(0,-1);
-  if(c.length<3)return null;
-  const cv=c.map(p=>new THREE.Vector2(p[0],p[1]));
-  const hv=(holes||[]).map(h=>{
-    let q=h;
-    if(q.length>3&&Math.abs(q[0][0]-q[q.length-1][0])<1e-6&&Math.abs(q[0][1]-q[q.length-1][1])<1e-6)
-      q=q.slice(0,-1);
-    return q.map(p=>new THREE.Vector2(p[0],p[1]));
-  }).filter(h=>h.length>=3);
-  try{
-    const f=THREE.ShapeUtils.triangulateShape(cv,hv);
-    const pts=cv.concat(...hv);
-    return {pts,f};
-  }catch(e){return null;}
-}
-// En AABB rundt et helt fotavtrykk er i snitt 1,64x for stor, og for hver
-// tredje bygning over 2x. Det er de usynlige veggene: L-formede og skra bygg
-// sperret halve gata. Her rasteriseres fotavtrykket i 1,5 m ruter og
-// rutene slas sammen grovt til fa, tette rektangler. Kollisjonskoden ellers
-// er uendret — den far bare bokser som faktisk foelger bygningen.
-// Vi bygger ikke fotavtrykket slik det er. Vi legger EN ren boks der
-// bygningen star, vridd slik bygningen faktisk ligger. Da folger husene
-// gatelopet uten a arve alle knekk og karnapper fra kartet — og de blir
-// like, ryddige og billige a tegne.
-function minsteRektangel(ring){
-  let best=null;
-  const N=Math.min(ring.length-1,24);
-  for(let e=0;e<N;e++){
-    const a=ring[e],b=ring[e+1];
-    const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
-    if(L<0.5)continue;
-    const ux=dx/L,uz=dz/L;                       // kandidatretning
-    let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9;
-    for(const p of ring){
-      const u=p[0]*ux+p[1]*uz, v=-p[0]*uz+p[1]*ux;
-      if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v;
-    }
-    const w=u1-u0, d=v1-v0, A=w*d;
-    if(!best||A<best.A){
-      const cu=(u0+u1)/2, cv=(v0+v1)/2;
-      best={A:A, w:w, d:d, ux:ux, uz:uz,
-            cx:cu*ux-cv*uz, cz:cu*uz+cv*ux};
-    }
-  }
-  return best;
-}
-function boksHjorner(r,krymp){
-  const w=Math.max(3,r.w-krymp*2)/2, d=Math.max(3,r.d-krymp*2)/2;
-  const ux=r.ux,uz=r.uz, vx=-uz,vz=ux;
-  const P=(a,b)=>[r.cx+ux*a+vx*b, r.cz+uz*a+vz*b];
-  const c=[P(-w,-d),P(w,-d),P(w,d),P(-w,d)];
-  c.push(c[0].slice());
-  return c;
-}
-// Fire vegger + flatt tak, vridd i planet.
-function boksBygg(ch,mat,hj,y0,y1,col,butikk,shopY){
-  for(let i=0;i<4;i++){
-    const a=hj[i],b=hj[i+1];
-    const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
-    if(L<0.2)continue;
-    const nx=dz/L,nz=-dx/L;
-    const ru=cl(Math.round(L/TEX_W),1,18);
-    if(butikk){
-      quad(ch[M_SHOP],a[0],y0,a[1],b[0],y0,b[1],b[0],shopY,b[1],a[0],shopY,a[1],
-           nx,0,nz,0,0,cl(Math.round(L/11),1,18),1,col);
-      quad(ch[mat],a[0],shopY,a[1],b[0],shopY,b[1],b[0],y1,b[1],a[0],y1,a[1],
-           nx,0,nz,0,0,ru,cl(Math.round((y1-shopY)/TEX_H),1,30),col);
-    }else{
-      quad(ch[mat],a[0],y0,a[1],b[0],y0,b[1],b[0],y1,b[1],a[0],y1,a[1],
-           nx,0,nz,0,0,ru,cl(Math.round((y1-y0)/TEX_H),1,30),col);
-    }
-  }
-  quad(ch[M_ROOF],hj[0][0],y1,hj[0][1],hj[3][0],y1,hj[3][1],
-                  hj[2][0],y1,hj[2][1],hj[1][0],y1,hj[1][1],
-       0,1,0,0,0,4,4,col);
-}
-function fotavtrykkBokser(ring,celle){
-  celle=celle||1.5;
-  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
-  for(const p of ring){
-    if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0];
-    if(p[1]<z0)z0=p[1]; if(p[1]>z1)z1=p[1];
-  }
-  const nx=Math.ceil((x1-x0)/celle), nz=Math.ceil((z1-z0)/celle);
-  if(nx<1||nz<1)return [{x0:x0,x1:x1,z0:z0,z1:z1}];
-  if(nx*nz>4000)return [{x0:x0,x1:x1,z0:z0,z1:z1}];   // absurd stort: behold AABB
-  const m=new Uint8Array(nx*nz);
-  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++)
-    if(pktIPolygon(x0+(i+0.5)*celle, z0+(j+0.5)*celle, ring)) m[j*nx+i]=1;
-  const ut=[];
-  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
-    if(!m[j*nx+i])continue;
-    let w=1; while(i+w<nx&&m[j*nx+i+w])w++;              // strekk mot hoyre
-    let h=1;                                            // sa nedover, hele bredden
-    outer: while(j+h<nz){
-      for(let k=0;k<w;k++) if(!m[(j+h)*nx+i+k]) break outer;
-      h++;
-    }
-    for(let b=0;b<h;b++)for(let a=0;a<w;a++) m[(j+b)*nx+i+a]=0;
-    const inn=0.42;                      // motvekt til rute-avrunding + kollisjonsmargin
-    const bx0=x0+i*celle, bx1=x0+(i+w)*celle;
-    const bz0=z0+j*celle, bz1=z0+(j+h)*celle;
-    ut.push({x0:bx0+Math.min(inn,(bx1-bx0)/3), x1:bx1-Math.min(inn,(bx1-bx0)/3),
-             z0:bz0+Math.min(inn,(bz1-bz0)/3), z1:bz1-Math.min(inn,(bz1-bz0)/3)});
-    i+=w-1;
-  }
-  return ut.length?ut:[{x0:x0,x1:x1,z0:z0,z1:z1}];
-}
-function pktIPolygon(x,z,ring){
-  let inne=false;
-  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-    const a=ring[i],b=ring[j];
-    if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])inne=!inne;
-  }
-  return inne;
-}
-
-/* ------------------- ELV, RUNDKJORINGER OG PARKER ----------------------- */
-// Elva slynger seg nord-sor gjennom byen. Terrenget senkes mot midten, sa
-// dalen finnes for vi legger vann i den, og hovedgatene som krysser far bro.
-let ELVE=null, RUNDK=[], EKSTRAPARK=[];
-const ELVE_Y=-6.5;                      // vannspeil
-function lagElv(){
-  ELVE={x0:rnd(-420,420), a1:rnd(120,240), b1:rnd(280,460), f1:rand()*6.3,
-        a2:rnd(40,110),  b2:rnd(90,170),  f2:rand()*6.3, w:rnd(52,88)};
-}
-function elveX(z){
-  return ELVE.x0+Math.sin(z/ELVE.b1+ELVE.f1)*ELVE.a1+Math.sin(z/ELVE.b2+ELVE.f2)*ELVE.a2;
-}
-function iElva(x,z,slark){
-  if(!ELVE)return false;
-  return Math.abs(x-elveX(z)) < ELVE.w/2+(slark||0);
-}
-function lagRundkjoringer(){
-  RUNDK=[];
-  const ax=streetsX.filter(s=>s.art), az=streetsZ.filter(s=>s.art);
-  if(!ax.length||!az.length)return;
-  const antall=rndi(3,6);
-  for(let i=0;i<antall;i++){
-    const sx=ax[rndi(0,ax.length-1)], sz=az[rndi(0,az.length-1)];
-    if(iElva(sx.p,sz.p,60))continue;
-    if(RUNDK.some(r=>Math.hypot(r.x-sx.p,r.z-sz.p)<260))continue;
-    RUNDK.push({x:sx.p, z:sz.p, oy:rnd(26,36), iy:rnd(11,16)});
-  }
-}
-function iRundkjoring(x,z,slark){
-  for(const r of RUNDK)
-    if(Math.hypot(x-r.x,z-r.z) < r.oy+(slark||0))return r;
-  return null;
-}
-let POLITI=null;
-function lagPolitistasjon(){
-  POLITI=null;
-  const ax=streetsX.filter(s=>s.art), az=streetsZ.filter(s=>s.art);
-  if(!ax.length||!az.length)return;
-  const sett=(sx,sz)=>{POLITI={x:sx.p+sx.w/2+34, z:sz.p+sz.w/2+30, w:58, d:44};};
-  // gar systematisk gjennom alle hovedkryss og tar det beste sentrale
-  let best=null,bd=1e9;
-  for(const sx of ax)for(const sz of az){
-    if(iElva(sx.p,sz.p,80))continue;
-    if(iRundkjoring(sx.p,sz.p,90))continue;
-    const d=Math.hypot(sx.p,sz.p);
-    if(d<bd){bd=d;best=[sx,sz];}
-  }
-  if(!best){                                   // reserve: dropp elv/rundkjoring
-    for(const sx of ax)for(const sz of az){
-      const d=Math.hypot(sx.p,sz.p);
-      if(d<bd){bd=d;best=[sx,sz];}
-    }
-  }
-  if(best)sett(best[0],best[1]);
-}
-function iPolitiTomt(x,z,slark){
-  if(!POLITI)return false;
-  return Math.abs(x-POLITI.x)<POLITI.w/2+(slark||0) &&
-         Math.abs(z-POLITI.z)<POLITI.d/2+(slark||0);
-}
-function lagEkstraParker(){
-  EKSTRAPARK=[];
-  const antall=rndi(3,6);
-  for(let i=0;i<antall;i++)
-    EKSTRAPARK.push({x:rnd(-1,1)*760, z:rnd(-1,1)*560, r:rnd(90,180)});
-}
-function iEkstrapark(x,z){
-  for(const p of EKSTRAPARK)
-    if(Math.hypot((x-p.x)/1.25, z-p.z) < p.r)return true;
-  return false;
-}
-
 /* ---------------------------- TERRENG ----------------------------------- */
 /* Kvartalene planeres som flate platåer (slik ekte byer gjør det), mens
    veiene følger terrenget. Kantsteinen blir da en støttemur der det er bratt. */
 let TER_AMP=1.0;                      // 0 = helt flatt
-// Flat verden. Kartet — gater, bygninger, elva — er det som gjor byen til
-// Skien; kupert terreng ga bare humper i veibanen, bygg som hang i lufta og
-// selvskygging som sa ut som hull i bakken. Sett FLATT=false for a fa
-// Kartverkets hoydemodell tilbake.
-const FLATT=true;
 function terrainH(x,z){
-  if(SKT)return FLATT?0:skienH(x,z);  // ekte Skien-terreng fra Kartverket DTM1
   if(TER_AMP<=0)return 0;
   // Bølgelengdene må være korte nok til at vi krysser MANGE støyceller over
   // byens 3 km. Med 1500 m krysset vi bare 2 celler og hele byen ble ett
@@ -565,15 +161,7 @@ function terrainH(x,z){
   const m1=noise(x/880+3.31, z/880+8.17);
   const m2=noise(x/340+21.7, z/340+5.53);
   const m3=noise(x/140+44.2, z/140+12.9);
-  let ut=(h+(Math.pow(m1,1.7)*250+m2*80+m3*22)*w2)*TER_AMP;
-  if(ELVE){                                  // dalen graves for vannet legges i
-    const d=Math.abs(x-elveX(z)), R=ELVE.w*1.9;
-    if(d<R){
-      const t=1-d/R, s=t*t*(3-2*t);
-      ut=ut*(1-s)+(ELVE_Y-3.2)*s;
-    }
-  }
-  return ut;
+  return (h+(Math.pow(m1,1.7)*250+m2*80+m3*22)*w2)*TER_AMP;
 }
 // kvartals-platåer i eget rutenett, så vi vet hva spilleren står på
 let padHash=new Map();
@@ -584,10 +172,6 @@ function addPad(b){
     }
 }
 function groundAt(x,z){
-  if(veimaske){                        // veibanen gar foran alt annet
-    const vy=veiH(x,z);
-    if(vy!==null)return vy;
-  }
   const a=padHash.get(Math.floor(x/GRID)+':'+Math.floor(z/GRID));
   if(a)for(const b of a)
     if(x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1)return b.pad;
@@ -1025,7 +609,6 @@ function districtAt(x,z){
 function isPark(x,z){
   if(Math.hypot((x+PKX)/1.25,z-PKZ)<250)return true;
   if(Math.hypot((x-880)/1.1,z+430)<130)return true;
-  if(iEkstrapark(x,z))return true;
   return noise(x/95+41.2+NOFF,z/95+17.9+NOFF)>0.80;
 }
 function subdivide(x0,z0,x1,z1,maxW,out,depth){
@@ -1089,482 +672,9 @@ function volume(ch,mw,x0,x1,y0,y1,z0,z1,col,useShop,shopMat){
   slab(ch[M_ROOF],x0,x1,y1,z0,z1,8,col);
 }
 
-/* ---------------------------- SKIEN: BYGG BYEN --------------------------- */
-// Materialvalg per OSM-bygningstype. Skien sentrum er mur og pussede fasader,
-// Klosteroya og Herkules er lager og industri, boligstrokene er tre.
-const SK_MAT={
-  house:M_BRICK,detached:M_BRICK,semidetached_house:M_BRICK,terrace:M_BRICK,
-  cabin:M_BRICK,hut:M_BRICK,farm:M_BRICK,barn:M_IND,
-  garage:M_CONC,garages:M_CONC,shed:M_CONC,carport:M_CONC,roof:M_CONC,
-  apartments:M_PLASTER,residential:M_PLASTER,dormitory:M_PLASTER,
-  office:M_OFFICE,commercial:M_OFFICE,hotel:M_OFFICE,
-  retail:M_PLASTER,supermarket:M_PLASTER,kiosk:M_PLASTER,
-  industrial:M_IND,warehouse:M_IND,manufacture:M_IND,service:M_IND,
-  church:M_PLASTER,chapel:M_PLASTER,cathedral:M_PLASTER,
-  school:M_BRICK,university:M_BRICK,kindergarten:M_PLASTER,
-  hospital:M_OFFICE,civic:M_PLASTER,public:M_PLASTER,train_station:M_BRICK,
-};
-// Bygg som far butikkfasade i forste etasje
-const SK_SHOP=new Set(['retail','supermarket','commercial','apartments','civic',
-                       'public','hotel','office','kiosk','mixed']);
-// Gatetyper som trafikken faktisk bruker
-const SK_KJORBAR=new Set(['motorway','trunk','primary','secondary','tertiary',
-                          'residential','unclassified','living_street',
-                          'primary_link','secondary_link','tertiary_link']);
-const SK_GANGVEI=new Set(['footway','path','cycleway','steps','track','pedestrian']);
-
-let skienRuter=[];   // kjorbare veier med buelengde, brukt av trafikken
-
-// Veibanen er hellig. OSM har steder der en bygning er tegnet over en vei, og
-// rasteriseringen runder uansett litt utover. Her males alle kjorbare gater
-// inn i et 1 m rutenett, og kollisjonsbokser med senter pa veien forkastes.
-// Da kan du alltid kjore gata — uansett hva kartet sier.
-let veimaske=null, veihoyde=null;
-const VG=2, VM_W=(CITY_W/VG)|0, VM_D=(CITY_D/VG)|0;
-
-// To kjorefelt overalt. OSM-bredden er den EKTE bredden, og en 4 m
-// boliggate er ikke kjorbar i et spill. Kjorbarhet slar noyaktighet:
-// hver kjorbar gate far minst 16 m asfalt, hovedgatene mer.
-const MIN_BREDDE={motorway:34,trunk:30,primary:28,secondary:24,tertiary:20,
-                  residential:16,unclassified:16,living_street:16,
-                  primary_link:16,secondary_link:16,tertiary_link:16,
-                  service:11,pedestrian:12};
-function settVeibredder(){
-  for(const v of SK.veier){
-    const m=MIN_BREDDE[v.k];
-    if(m&&v.w<m)v.w=m;
-  }
-}
-
-// Hoydemodellen er ra laserdata pa meternivå — fortauskanter, grofter og
-// stoy ligger i den. Legger man veien rett pa, blir hver kant en hump
-// bilen klatrer i, og det kjennes som en usynlig vegg. Derfor bygges
-// veien som sin EGEN flate: hver gate far en glattet lengdeprofil, og
-// bade asfalten, bakkehoyden og trafikken leser fra den. Veien vinner.
-function glattProfil(p,halv){
-  // Hoyeste terreng PA TVERS av hele veibredden, ikke bare i midten.
-  // Da kan bakken aldri stikke opp gjennom asfalten.
-  const topp=p.map((q,i)=>{
-    const a=p[Math.max(0,i-1)], b=p[Math.min(p.length-1,i+1)];
-    const dx=b[0]-a[0], dz=b[1]-a[1], L=Math.hypot(dx,dz)||1;
-    const nx=-dz/L, nz=dx/L;
-    let m=-1e9;
-    for(let o=-halv;o<=halv;o+=1.5){
-      const h=skienH(q[0]+nx*o, q[1]+nz*o);
-      if(h>m)m=h;
-    }
-    return m;
-  });
-  let h=topp.slice();
-  for(let runde=0;runde<4;runde++){
-    const ny=h.slice();
-    for(let i=1;i<h.length-1;i++) ny[i]=(h[i-1]+2*h[i]+h[i+1])/4;
-    h=ny;
-  }
-  // alltid litt OVER det hoyeste terrenget under veien
-  for(let i=0;i<h.length;i++) h[i]=Math.max(h[i],topp[i])+0.30;
-  return h;
-}
-function byggVeimaske(){
-  veimaske=new Uint8Array(VM_W*VM_D);
-  veihoyde=new Float32Array(VM_W*VM_D);
-  for(const v of SK.veier){
-    if(!SK_KJORBAR.has(v.k)&&v.k!=='service'&&v.k!=='pedestrian')continue;
-    const halv=Math.max(3,v.w/2-0.8);
-    v.h=FLATT?v.p.map(()=>0.12):glattProfil(v.p,halv+1.5);
-    for(let i=0;i<v.p.length-1;i++){
-      const a=v.p[i],b=v.p[i+1];
-      const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
-      if(L<1e-3)continue;
-      const ux=dx/L,uz=dz/L,nx=-uz,nz=ux;
-      const ya=v.h[i], yb=v.h[i+1];
-      for(let d=0;d<=L;d+=1){
-        const y=ya+(yb-ya)*(d/L);
-        for(let o=-halv;o<=halv;o+=1){
-          const gi=((a[0]+ux*d+nx*o+HW)/VG)|0, gj=((a[1]+uz*d+nz*o+HD)/VG)|0;
-          if(gi<0||gi>=VM_W||gj<0||gj>=VM_D)continue;
-          const k=gj*VM_W+gi;
-          // i kryss vinner den laveste flaten, sa ingen kant stikker opp
-          if(!veimaske[k]||y<veihoyde[k]){veimaske[k]=1;veihoyde[k]=y;}
-        }
-      }
-    }
-  }
-}
-// Bilineaer hoyde pa veibanen, sa kjoringen blir jevn og ikke trappetrinn.
-function veiH(x,z){
-  if(!veimaske)return null;
-  const fx=(x+HW)/VG-0.5, fz=(z+HD)/VG-0.5;
-  const i0=Math.floor(fx), j0=Math.floor(fz), tx=fx-i0, tz=fz-j0;
-  let sum=0,vekt=0;
-  for(let dj=0;dj<2;dj++)for(let di=0;di<2;di++){
-    const i=i0+di, j=j0+dj;
-    if(i<0||i>=VM_W||j<0||j>=VM_D)continue;
-    const k=j*VM_W+i; if(!veimaske[k])continue;
-    const w=(di?tx:1-tx)*(dj?tz:1-tz);
-    sum+=veihoyde[k]*w; vekt+=w;
-  }
-  return vekt>0.001?sum/vekt:null;
-}
-// Parker og skog la seg som egne flate polygoner OVER terrenget. Selv
-// oppdelt ble de et lappeteppe med egen skyggelegging og synlige sommer.
-// Her males de i stedet inn i en maske, og terrenget selv farges gronnere
-// der masken slar til. En sammenhengende bakke, ingen skjoter.
-let grontmaske=null;
-const GM=4, GM_W=(CITY_W/GM)|0, GM_D=(CITY_D/GM)|0;   // 4 m ruter holder:
-                                                     // bakkepunktene star 5 m fra hverandre
-function byggGrontmaske(){
-  grontmaske=new Uint8Array(GM_W*GM_D);
-  for(const g of SK.gronn){
-    const p=g.p; if(p.length<4)continue;
-    const skog=g.k==='forest'||g.k==='wood'||g.k==='scrub'?2:1;
-    let z0=1e9,z1=-1e9;
-    for(const q of p){ if(q[1]<z0)z0=q[1]; if(q[1]>z1)z1=q[1]; }
-    z0=Math.max(-HD,z0); z1=Math.min(HD,z1);
-    const kryss=[];
-    for(let z=Math.floor(z0/GM)*GM+GM/2; z<z1; z+=GM){
-      kryss.length=0;
-      for(let i=0;i<p.length-1;i++){
-        const a=p[i],b=p[i+1];
-        if((a[1]>z)!==(b[1]>z))kryss.push(a[0]+(z-a[1])/(b[1]-a[1])*(b[0]-a[0]));
-      }
-      if(kryss.length<2)continue;
-      kryss.sort((u,v)=>u-v);
-      const rad=(((z+HD)/GM)|0)*GM_W;
-      if(rad<0||rad>=grontmaske.length)continue;
-      for(let k=0;k+1<kryss.length;k+=2){
-        let ia=(((kryss[k]+HW)/GM)|0), ib=(((kryss[k+1]+HW)/GM)|0);
-        if(ia<0)ia=0; if(ib>GM_W-1)ib=GM_W-1;
-        for(let i=ia;i<=ib;i++)grontmaske[rad+i]=skog;
-      }
-    }
-  }
-}
-function grontVed(x,z){
-  if(!grontmaske)return 0;
-  const i=((x+HW)/GM)|0, j=((z+HD)/GM)|0;
-  return (i>=0&&i<GM_W&&j>=0&&j<GM_D)?grontmaske[j*GM_W+i]:0;
-}
-function paaVei(x,z){
-  if(!veimaske)return false;
-  const i=((x+HW)/VG)|0, j=((z+HD)/VG)|0;
-  return i>=0&&i<VM_W&&j>=0&&j<VM_D&&veimaske[j*VM_W+i]===1;
-}
-
-function generateSkien(scene,mats,gm){
-  blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
-  streetsX=[];streetsZ=[];diagonaler=[];
-
-  const chunks=[];for(let i=0;i<CHX*CHZ;i++){const m=[];for(let k=0;k<NMAT;k++)m.push(Buf());chunks.push(m);}
-  const chunkOf=(x,z)=>chunks[
-    Math.min(CHZ-1,Math.max(0,Math.floor((z+HD)/CHD)))*CHX+
-    Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
-
-  const vannB=Buf(),veiB=Buf(),gangB=Buf(),dashB=Buf(),kantB=Buf();
-  const trees=[],lamps=[];
-  const W=[1,1,1];
-  const H=(x,z)=>terrainH(x,z);   // ma ga via terrainH, ellers ignoreres FLATT
-
-  /* ---- VANN: hver flate pa sitt eget speil, hentet fra hoydemodellen ---- */
-  for(const v of SK.vann){
-    if(!v.flate||v.p.length<4)continue;
-    const t=trianguler(v.p);if(!t)continue;
-    const y=FLATT?-0.45:v.y+0.05;
-    for(const f of t.f){
-      const a=t.pts[f[0]],b=t.pts[f[1]],c=t.pts[f[2]];
-      // et vannspeil skal vaere flatt, men trekanter som ligger dypt under
-      // terrenget horer ikke til flaten — de kommer av lange triangulerings-
-      // vifter over land, og er nettopp de spissene som stakk ut av elva
-      const mx=(a.x+b.x+c.x)/3, mz=(a.y+b.y+c.y)/3;
-      if(!FLATT&&H(mx,mz)>y+1.2) continue;
-      tri(vannB,a.x,y,a.y,b.x,y,b.y,c.x,y,c.y,0,1,0,
-          a.x/26,a.y/26,b.x/26,b.y/26,c.x/26,c.y/26,W);
-    }
-  }
-  // Elveløp som ikke er tegnet som flate — legges som band
-  for(const v of SK.vann){
-    if(v.flate||!v.w)continue;
-    band(vannB,v.p,v.w,(x,z)=>v.y+0.05,W,1);
-  }
-
-  /* ---- GRONT: parker, skog, jorder ---- */
-  for(const g of SK.gronn){
-    if(g.p.length<4)continue;
-    const t=trianguler(g.p);if(!t)continue;
-    const skog=g.k==='forest'||g.k==='wood'||g.k==='scrub';
-    // trebeplantning: tettere i skog enn i park
-    const steg=skog?13:19;
-    let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
-    for(const p of g.p){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);}
-    if((x1-x0)*(z1-z0)>4e5)continue;                  // enorme flater: hopp over
-    for(let x=x0;x<x1;x+=steg)for(let z=z0;z<z1;z+=steg){
-      const jx=x+rnd(-steg*.4,steg*.4), jz=z+rnd(-steg*.4,steg*.4);
-      if(!pktIPolygon(jx,jz,g.p))continue;
-      if(!skog&&rand()<0.55)continue;
-      trees.push([jx,jz,rnd(.85,1.7),rand()*6.3,H(jx,jz)]);
-    }
-  }
-
-  /* ---- VEIER: ekte polylinjer, lagt pa terrenget ---- */
-  for(const v of SK.veier){
-    const gang=SK_GANGVEI.has(v.k);
-    const VY=(x,z)=>{const y=veiH(x,z); return y!==null?y:H(x,z);};
-    band(gang?gangB:veiB, v.p, v.w, (x,z)=>VY(x,z)+(gang?0.06:0.10), W, gang?2.5:6);
-    if(v.art){
-      band(kantB,v.p,v.w+3.2,(x,z)=>VY(x,z)+0.07,W,6);   // asfaltskulder
-      stiplet(dashB,v.p,(x,z)=>VY(x,z)+0.16);
-      // gatelys langs hovedgatene
-      let s=0;
-      for(let i=0;i<v.p.length-1;i++){
-        const a=v.p[i],b=v.p[i+1];
-        const L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L<1e-3)continue;
-        const nx=-(b[1]-a[1])/L, nz=(b[0]-a[0])/L;
-        for(let d=0;d<L;d++){
-          if(s++%44)continue;
-          const t=d/L, x=a[0]+(b[0]-a[0])*t, z=a[1]+(b[1]-a[1])*t;
-          lamps.push([x+nx*(v.w/2-1.6), z+nz*(v.w/2-1.6)]);
-        }
-      }
-    }
-    if(SK_KJORBAR.has(v.k)&&v.p.length>=2){
-      let L=0;const cum=[0];
-      for(let i=1;i<v.p.length;i++){
-        L+=Math.hypot(v.p[i][0]-v.p[i-1][0],v.p[i][1]-v.p[i-1][1]);cum.push(L);
-      }
-      if(L>40)skienRuter.push({p:v.p,cum:cum,len:L,w:v.w});
-    }
-  }
-
-  /* ---- BYGG: vare egne, satt langs gatene ---- */
-  // Kartet gir gatenettet. Bygningene lager vi selv: kvartalsvegger som
-  // folger gatelopet, med tomtebredde, dybde og etasjetall etter hvor i
-  // byen de star. Ingen fotavtrykk fra OSM i det hele tatt.
-  {
-  const opptatt=new Uint8Array(VM_W*VM_D);
-  const gridBoks=hj=>{
-    let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
-    for(const p of hj){
-      if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0];
-      if(p[1]<z0)z0=p[1]; if(p[1]>z1)z1=p[1];
-    }
-    return [((x0+HW)/VG)|0, ((x1+HW)/VG)|0, ((z0+HD)/VG)|0, ((z1+HD)/VG)|0];
-  };
-  const ledig=hj=>{
-    const [i0,i1,j0,j1]=gridBoks(hj);
-    if(i0<1||i1>=VM_W-1||j0<1||j1>=VM_D-1)return false;
-    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
-      const k=j*VM_W+i;
-      if(opptatt[k]||veimaske[k])return false;     // tomta ma vaere fri, og ikke gate
-    }
-    return true;
-  };
-  const merk=hj=>{
-    const [i0,i1,j0,j1]=gridBoks(hj);
-    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)opptatt[j*VM_W+i]=1;
-  };
-
-  for(const v of SK.veier){
-    if(!SK_KJORBAR.has(v.k))continue;
-    for(let i=0;i<v.p.length-1;i++){
-      const a=v.p[i],b=v.p[i+1];
-      const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
-      if(L<14)continue;
-      const ux=dx/L,uz=dz/L, nx=-uz,nz=ux;
-
-      for(const side of [-1,1]){
-        let d=rnd(2,7);
-        while(d<L-12){
-          // hvor i byen star vi? sentrum blir tettere og hoyere
-          const px=a[0]+ux*d, pz=a[1]+uz*d;
-          const r=Math.hypot(px/1.25,pz+380);
-          const sentrum=r<430, midt=r<820;
-
-          const bredde=sentrum?rnd(16,30):midt?rnd(13,24):rnd(10,17);
-          const dybde =sentrum?rnd(14,22):midt?rnd(11,17):rnd(9,13);
-          const glipe =sentrum?rnd(0.6,2.5):midt?rnd(2,6):rnd(4,11);
-          const tilbake=sentrum?rnd(2,4):midt?rnd(3,7):rnd(5,10);
-
-          if(d+bredde>L-4){d+=bredde+glipe;continue;}
-          const off=v.w/2+tilbake+dybde/2;
-          const cx=a[0]+ux*(d+bredde/2)+nx*off*side;
-          const cz=a[1]+uz*(d+bredde/2)+nz*off*side;
-          if(Math.abs(cx)>HW-20||Math.abs(cz)>HD-20){d+=bredde+glipe;continue;}
-          if(grontVed(cx,cz)){d+=bredde+glipe;continue;}       // parker holdes apne
-
-          const hw=bredde/2, hd=dybde/2;
-          const hj=[[cx-ux*hw-nx*hd, cz-uz*hw-nz*hd],
-                    [cx+ux*hw-nx*hd, cz+uz*hw-nz*hd],
-                    [cx+ux*hw+nx*hd, cz+uz*hw+nz*hd],
-                    [cx-ux*hw+nx*hd, cz-uz*hw+nz*hd]];
-          hj.push(hj[0].slice());
-
-          if(!ledig(hj)){d+=bredde*0.5+glipe;continue;}
-          merk(hj);
-
-          const etg=sentrum?rndi(4,7):midt?rndi(3,5):rndi(2,3);
-          const mat=sentrum?(rand()<.30?M_OFFICE:M_PLASTER)
-                   :midt?(rand()<.40?M_BRICK:M_PLASTER)
-                   :(rand()<.60?M_BRICK:M_PLASTER);
-          const butikk=sentrum||(midt&&rand()<.35);
-          const tv=rnd(.82,1.14),hu=rnd(-.045,.045);
-          const col=[cl(tv+hu,.5,1.4),cl(tv,.5,1.4),cl(tv-hu*.7,.5,1.4)];
-          const grunn=H(cx,cz)+0.1, topp=grunn+etg*FH;
-          const ch=chunkOf(cx,cz);
-
-          boksBygg(ch,mat,hj,grunn-1.2,topp,col,butikk,grunn+GROUND_H);
-          buildingCount++;
-          for(const k of fotavtrykkBokser(hj,1.5)){
-            if(paaVei((k.x0+k.x1)/2,(k.z0+k.z1)/2))continue;
-            addCol({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,top:topp});
-            addPad({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,pad:grunn});
-          }
-          blocks.push({x0:cx-hw-hd,z0:cz-hw-hd,x1:cx+hw+hd,z1:cz+hw+hd,
-                       d:sentrum?D_DOWN:midt?D_MID:D_RES,pad:grunn});
-          d+=bredde+glipe;
-        }
-      }
-    }
-  }
-  }
-
-  /* ---- monter alt ---- */
-  const group=new THREE.Group();
-  for(let i=0;i<chunks.length;i++)for(let k=0;k<NMAT;k++){
-    const b=chunks[i][k];if(!b.p.length)continue;
-    const m=new THREE.Mesh(bufGeo(b),mats[k]);
-    m.castShadow=true;m.receiveShadow=true;group.add(m);
-  }
-  const add=(b,mat,shadow)=>{if(!b.p.length)return;
-    const m=new THREE.Mesh(bufGeo(b),mat);m.receiveShadow=true;
-    if(shadow)m.castShadow=true;group.add(m);return m;};
-  add(kantB,gm.walk);add(veiB,gm.diagvei);add(gangB,gm.sti);
-  add(dashB,gm.dashMat);
-  add(vannB,gm.vann);
-
-  monterTrar(group,trees,gm);
-  monterLykter(group,lamps,gm);
-  scene.add(group);
-  return group;
-}
-
-// Deler en trekant rekursivt til ingen kant er lenger enn ~14 m, og legger
-// hvert hjorne pa terrenget. Uten dette henger store gronnflater som flate
-// plater over bakken og stikker gjennom den i skraningene.
-function drapertTrekant(buf,a,b,c,H,col,uv,dyp){
-  dyp=dyp||0;
-  const ab=Math.hypot(b.x-a.x,b.y-a.y), bc=Math.hypot(c.x-b.x,c.y-b.y),
-        ca=Math.hypot(a.x-c.x,a.y-c.y);
-  const maks=Math.max(ab,bc,ca);
-  if(maks>14&&dyp<5){
-    let p,q,r;                                  // del den lengste kanten
-    if(maks===ab){p=a;q=b;r=c;} else if(maks===bc){p=b;q=c;r=a;} else {p=c;q=a;r=b;}
-    const m={x:(p.x+q.x)/2,y:(p.y+q.y)/2};
-    drapertTrekant(buf,p,m,r,H,col,uv,dyp+1);
-    drapertTrekant(buf,m,q,r,H,col,uv,dyp+1);
-    return;
-  }
-  tri(buf,a.x,H(a.x,a.y)+0.06,a.y, b.x,H(b.x,b.y)+0.06,b.y, c.x,H(c.x,c.y)+0.06,c.y,
-      0,1,0, a.x/uv,a.y/uv,b.x/uv,b.y/uv,c.x/uv,c.y/uv,col);
-}
-
-// Legger et band langs en polylinje, drapert pa terrenget. Lange segmenter
-// deles opp sa veien folger bakken i stedet for a sveve over den.
-function band(buf,p,bredde,yAt,col,uSkala){
-  const h=bredde/2, MAKS=9;
-  for(let i=0;i<p.length-1;i++){
-    const a=p[i],b=p[i+1];
-    const dx=b[0]-a[0],dz=b[1]-a[1];
-    const L=Math.hypot(dx,dz);if(L<0.05)continue;
-    const nx=-dz/L*h, nz=dx/L*h;
-    const n=Math.max(1,Math.ceil(L/MAKS));
-    for(let s=0;s<n;s++){
-      const t0=s/n,t1=(s+1)/n;
-      const ax=a[0]+dx*t0, az=a[1]+dz*t0;
-      const bx=a[0]+dx*t1, bz=a[1]+dz*t1;
-      const y0=yAt(ax,az), y1=yAt(bx,bz);
-      const v=L/n/uSkala;
-      quad(buf, ax-nx,y0,az-nz, ax+nx,y0,az+nz, bx+nx,y1,bz+nz, bx-nx,y1,bz-nz,
-           0,1,0, 0,0, bredde/uSkala, v, col);
-    }
-  }
-}
-function stiplet(buf,p,yAt){
-  const W=[1,1,1];
-  for(let i=0;i<p.length-1;i++){
-    const a=p[i],b=p[i+1];
-    const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
-    if(L<6)continue;
-    const ux=dx/L,uz=dz/L,nx=-uz*0.3,nz=ux*0.3;
-    for(let d=2;d<L-4;d+=11){
-      const ax=a[0]+ux*d, az=a[1]+uz*d;
-      const bx=a[0]+ux*(d+4), bz=a[1]+uz*(d+4);
-      const y0=yAt(ax,az),y1=yAt(bx,bz);
-      quad(buf, ax-nx,y0,az-nz, ax+nx,y0,az+nz, bx+nx,y1,bz+nz, bx-nx,y1,bz-nz,
-           0,1,0, 0,0,1,1,W);
-    }
-  }
-}
-function monterTrar(group,trees,gm){
-  if(!trees.length)return;
-  const dm=new THREE.Object3D();
-  const tm=new THREE.InstancedMesh(new THREE.CylinderGeometry(.22,.36,4,7),gm.bark,trees.length);
-  const fm=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(2.5,1),gm.leaf,trees.length);
-  tm.castShadow=fm.castShadow=true;fm.receiveShadow=true;
-  const c=new THREE.Color();
-  fm.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(trees.length*3),3);
-  trees.forEach((t,i)=>{
-    const[x,z,s,r,py]=t;
-    dm.position.set(x,py+2*s,z);dm.scale.set(s,s,s);dm.rotation.set(0,r,0);
-    dm.updateMatrix();tm.setMatrixAt(i,dm.matrix);
-    dm.position.set(x,py+4.5*s,z);dm.scale.set(s*rnd(.85,1.25),s*rnd(.9,1.35),s*rnd(.85,1.25));
-    dm.updateMatrix();fm.setMatrixAt(i,dm.matrix);
-    c.setHSL(.23+rand()*.10,.42+rand()*.26,.38+rand()*.16);fm.setColorAt(i,c);
-  });
-  fm.instanceColor.needsUpdate=true;group.add(tm,fm);
-}
-function monterLykter(group,lamps,gm){
-  if(!lamps.length)return;
-  const dm=new THREE.Object3D();
-  const pm=new THREE.InstancedMesh(new THREE.CylinderGeometry(.10,.16,8,7),gm.metal,lamps.length);
-  const hm=new THREE.InstancedMesh(new THREE.BoxGeometry(1.6,.30,.5),gm.lamp,lamps.length);
-  pm.castShadow=true;
-  lamps.forEach((l,i)=>{
-    dm.scale.set(1,1,1);dm.rotation.set(0,0,0);
-    const ly=terrainH(l[0],l[1]);
-    dm.position.set(l[0],ly+4,l[1]);dm.updateMatrix();pm.setMatrixAt(i,dm.matrix);
-    dm.position.set(l[0],ly+7.95,l[1]);dm.updateMatrix();hm.setMatrixAt(i,dm.matrix);});
-  group.add(pm,hm);
-}
-
-/* ---------------------------- SKIEN: TRAFIKK ---------------------------- */
-// Trafikken folger ekte gateforlop i stedet for et rutenett. Hver bil har en
-// buelengde langs ruta, og posisjonen slas opp med binaersok.
-function langsRute(r,s){
-  const L=r.len;
-  s=s%L; if(s<0)s+=L;
-  let lo=0,hi=r.cum.length-1;
-  while(lo<hi-1){const m=(lo+hi)>>1; if(r.cum[m]<=s)lo=m; else hi=m;}
-  const a=r.p[lo],b=r.p[lo+1]||r.p[lo];
-  const seg=(r.cum[lo+1]-r.cum[lo])||1;
-  const t=(s-r.cum[lo])/seg;
-  const dx=b[0]-a[0],dz=b[1]-a[1];
-  const L2=Math.hypot(dx,dz)||1;
-  return {x:a[0]+dx*t, z:a[1]+dz*t, ux:dx/L2, uz:dz/L2};
-}
-// Felles oppslag av posisjon/retning, sa resten av motoren slipper a vite
-// hvilken trafikkmodell som er i bruk.
-function bilStat(c){
-  if(c.rute){
-    const q=langsRute(c.rute,c.s), d=c.dir;
-    return {x:q.x-q.uz*c.off*d, z:q.z+q.ux*c.off*d, yaw:Math.atan2(d*q.ux,d*q.uz)};
-  }
-  return {x:c.ax?c.off:c.pos, z:c.ax?c.pos:c.off,
-          yaw:c.ax?(c.dir>0?0:Math.PI):(c.dir>0?Math.PI/2:-Math.PI/2)};
-}
-
 function generateCity(scene,mats,gm){
   streetsX=makeStreets(CITY_W);streetsZ=makeStreets(CITY_D);
-  lagDiagonaler(); lagElv(); lagRundkjoringer(); lagPolitistasjon(); lagEkstraParker();
+  lagDiagonaler();
   blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
 
   const chunks=[];for(let i=0;i<CHX*CHZ;i++){const m=[];for(let k=0;k<NMAT;k++)m.push(Buf());chunks.push(m);}
@@ -1573,7 +683,6 @@ function generateCity(scene,mats,gm){
     Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
   const walk=Buf(),park=Buf(),curb=Buf(),cross=Buf();
   const diag=Buf(),hage=Buf(),gjerde=Buf(),sti=Buf(),bensin=Buf(),kanopi=Buf();
-  const skiltB=Buf();
   const trees=[],lamps=[],roofProps=[];
   const W=[1,1,1];
 
@@ -1584,9 +693,6 @@ function generateCity(scene,mats,gm){
     const mx=(bx0+bx1)/2,mz=(bz0+bz1)/2;
     if(Math.hypot(mx/1.30,mz)>880)continue;      // utenfor: villmark
     if(iDiagonal(mx,mz,-6))continue;             // kvartalet ligger i avenyen
-    if(iElva(mx,mz,26))continue;                 // kvartalet ligger i elva
-    if(iRundkjoring(mx,mz,14))continue;          // kvartalet ligger i rundkjoringen
-    if(iPolitiTomt(mx,mz,10))continue;           // tomta er politiets
     const dist=isPark(mx,mz)?D_PARK:districtAt(mx,mz);
     // platået legges på snittet av hjørnene, og kantsteinen strekkes ned til
     // laveste terrengpunkt rundt kvartalet så det aldri blir hull
@@ -1623,9 +729,9 @@ function generateCity(scene,mats,gm){
     }
     slab(walk,bx0,bx1,pad,bz0,bz1,4,W);
 
-    // Europeisk kvartal der det er plass; ellers eneboliger med hage.
-    const kjerne=Math.hypot(mx/1.30,mz)<620;
-    if(dist!==D_IND&&(kjerne||dist===D_MID||dist===D_DOWN)){
+    // Kvartal med sammenhengende gatevegg brukes nå bare som VARIASJON i
+    // boligstrøket, ikke som hovedform — ellers blir hele byen en småby.
+    if(dist===D_RES&&rand()<0.22){
       const ch0=chunkOf(mx,mz);
       if(perimeterKvartal(ch0,bx0+2.5,bx1-2.5,bz0+2.5,bz1-2.5,pad,dist,hage))continue;
     }
@@ -1649,9 +755,9 @@ function generateCity(scene,mats,gm){
       const ch=chunkOf((x0+x1)/2,(z0+z1)/2);
       let floors,mw,shopM=M_SHOP,useShop=true;
 
-      if(dist===D_DOWN){floors=rndi(5,8);mw=rand()<.30?M_OFFICE:M_PLASTER;}
-      else if(dist===D_MID){floors=rndi(4,7);
-        mw=rand()<.35?M_BRICK:M_PLASTER;}
+      if(dist===D_DOWN){floors=rndi(14,52);mw=rand()<.62?M_GLASS:M_OFFICE;}
+      else if(dist===D_MID){floors=rndi(6,18);
+        const p=rand();mw=p<.28?M_GLASS:p<.66?M_OFFICE:M_PLASTER;}
       else if(dist===D_RES){floors=rndi(2,5);
         mw=rand()<.62?M_BRICK:M_PLASTER;shopM=M_BASE;}
       else{floors=rndi(2,4);mw=M_IND;useShop=false;}
@@ -1827,86 +933,6 @@ function generateCity(scene,mats,gm){
   for(const s of streetsZ)if(s.art)for(let x=-HW+30;x<HW;x+=46){
     lamps.push([x,s.p-s.w/2+2]);lamps.push([x,s.p+s.w/2-2]);}
 
-  /* ---------------- ELV, BROER OG RUNDKJORINGER ---------------- */
-  const elvB=Buf(), bruB=Buf(), rekkB=Buf(), ringB=Buf(), oyB=Buf();
-
-  // vannspeil langs elveslyngen
-  for(let z=-HD;z<HD;z+=14){
-    const x0=elveX(z), x1=elveX(z+14), h=ELVE.w/2;
-    quad(elvB, x0-h,ELVE_Y,z, x0+h,ELVE_Y,z, x1+h,ELVE_Y,z+14, x1-h,ELVE_Y,z+14,
-         0,1,0, 0,0, ELVE.w/24, 14/24, W);
-  }
-
-  // broer der hovedgatene krysser elva
-  for(const s of streetsZ){
-    if(!s.art)continue;
-    const cx=elveX(s.p), spenn=ELVE.w/2+30;
-    const y=Math.max(terrainH(cx-spenn,s.p), terrainH(cx+spenn,s.p))+1.4;
-    const hz=s.w/2;
-    slab(bruB, cx-spenn, cx+spenn, y, s.p-hz, s.p+hz, 6, W);          // dekke
-    // undersiden, sa brua ikke er et papirark sett nedenfra
-    slab(bruB, cx-spenn, cx+spenn, y-1.1, s.p+hz, s.p-hz, 6, W);
-    for(const sz of [s.p-hz, s.p+hz-0.5]){                            // rekkverk
-      walls(rekkB, cx-spenn, cx+spenn, y, y+1.15, sz, sz+0.5,
-            cl(Math.round(spenn*2/4),1,40), 1, 1, W);
-    }
-    // brupilarer ned i vannet
-    for(const px of [cx-ELVE.w/4, cx+ELVE.w/4])
-      walls(bruB, px-1.6, px+1.6, ELVE_Y-3, y-1.1, s.p-1.6, s.p+1.6, 1,1,3, W);
-    addPad({x0:cx-spenn, x1:cx+spenn, z0:s.p-hz, z1:s.p+hz, pad:y});
-  }
-
-  // POLITISTASJON: lav murbygning med blatt skilt og oppstillingsplass
-  if(POLITI){
-    const P=POLITI, y=terrainH(P.x,P.z)+0.3;
-    const bx0=P.x-P.w/2, bx1=P.x+P.w/2, bz0=P.z-P.d/2, bz1=P.z+P.d/2;
-    slab(walk,bx0,bx1,y,bz0,bz1,4,W);                       // asfaltert tomt
-    const hx0=bx0+6, hx1=bx1-6, hz0=bz0+5, hz1=bz0+24, H1=y+9.2;
-    const ch=chunkOf(P.x,P.z), col=[.92,.94,1.0];
-    volume(ch,M_PLASTER,hx0,hx1,y,H1,hz0,hz1,col,true,M_SHOP);
-    parapet(ch[M_CONC],hx0,hx1,H1,hz0,hz1,1.1,0.4,col);
-    // blatt skiltband over inngangen
-    quad(skiltB,hx0+3,H1-2.2,hz1+0.12,hx1-3,H1-2.2,hz1+0.12,
-                hx1-3,H1-0.4,hz1+0.12,hx0+3,H1-0.4,hz1+0.12, 0,0,1, 0,0,1,1,W);
-    // oppstillingsplass foran
-    for(let i=0;i<4;i++){
-      const px=hx0+8+i*11;
-      slab(cross,px,px+6,y+0.04,hz1+5,hz1+16,5.5,W);
-    }
-    addCol({x0:hx0,x1:hx1,z0:hz0,z1:hz1,top:H1});
-    addPad({x0:bx0,x1:bx1,z0:bz0,z1:bz1,pad:y});
-    POLITI.y=y; POLITI.dorX=(hx0+hx1)/2; POLITI.dorZ=hz1+10;
-  }
-
-  // rundkjoringer: asfaltring med gronn oy i midten
-  for(const r of RUNDK){
-    const seg=28;
-    const y=terrainH(r.x,r.z);
-    for(let i=0;i<seg;i++){
-      const a0=i/seg*Math.PI*2, a1=(i+1)/seg*Math.PI*2;
-      const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
-      // ringen
-      quad(ringB,
-        r.x+c0*r.iy, terrainH(r.x+c0*r.iy,r.z+s0*r.iy)+0.06, r.z+s0*r.iy,
-        r.x+c0*r.oy, terrainH(r.x+c0*r.oy,r.z+s0*r.oy)+0.06, r.z+s0*r.oy,
-        r.x+c1*r.oy, terrainH(r.x+c1*r.oy,r.z+s1*r.oy)+0.06, r.z+s1*r.oy,
-        r.x+c1*r.iy, terrainH(r.x+c1*r.iy,r.z+s1*r.iy)+0.06, r.z+s1*r.iy,
-        0,1,0, 0,0, (r.oy-r.iy)/5, Math.PI*2*r.oy/seg/5, W);
-      // oya
-      tri(oyB, r.x,y+0.5,r.z,
-               r.x+c1*r.iy,y+0.45,r.z+s1*r.iy,
-               r.x+c0*r.iy,y+0.45,r.z+s0*r.iy,
-          0,1,0, .5,.5, .5+c1*.5,.5+s1*.5, .5+c0*.5,.5+s0*.5, W);
-    }
-    for(let t=0;t<4;t++){
-      const a=rand()*Math.PI*2, d=rand()*r.iy*0.6;
-      trees.push([r.x+Math.cos(a)*d, r.z+Math.sin(a)*d, rnd(.9,1.5), rand()*6.3, y+0.45]);
-    }
-    const k=r.iy*0.68;                       // kollisjon: firkant inne i oya
-    addCol({x0:r.x-k, x1:r.x+k, z0:r.z-k, z1:r.z+k, top:y+0.9});
-    addPad({x0:r.x-k, x1:r.x+k, z0:r.z-k, z1:r.z+k, pad:y+0.45});
-  }
-
   const group=new THREE.Group();
   for(let i=0;i<chunks.length;i++)for(let k=0;k<NMAT;k++){
     const b=chunks[i][k];if(!b.p.length)continue;
@@ -1933,9 +959,6 @@ function generateCity(scene,mats,gm){
       slab(dash,x,x+4,y,s.p-0.28,s.p+0.28,1,W);
     }
   add(dash,gm.dashMat);
-  add(skiltB,gm.politiskilt);
-  add(elvB,gm.vann); add(bruB,gm.walk,true); add(rekkB,gm.curb,true);
-  add(ringB,gm.diagvei); add(oyB,gm.grass);
 
   tegnDiagonaler(diag,W);
 
@@ -2094,9 +1117,9 @@ async function loadHeroCars(){
   if(el)el.textContent=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0).length?'· McLaren står ved startpunktet':'';
 }
 function placeHero(t,n){
-  const sx=SK?SK_START.x:(streetsX.find(s=>s.art&&s.p>-200)||streetsX[0]).p;
-  const sz=SK?SK_START.z:(streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0]).p;
-  spawnRealCar(t,sx+5.5,sz+11,0);                // én rett ved der du starter
+  const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
+  const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
+  spawnRealCar(t,ax.p+5.5,az.p+11,0);            // én rett ved der du starter
   let lagt=1,forsok=0;
   while(lagt<n&&forsok++<200){
     const b=blocks[rndi(0,blocks.length-1)];
@@ -2111,23 +1134,17 @@ function buildTraffic(){
   traffic=[];carData=[];
   const types=CAR_TYPES.filter(t=>carGeo[t]);
   if(!types.length)return;
-  const per=Math.ceil(230/types.length);
   const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
+  const per=Math.ceil(230/types.length);
   for(const t of types){
     const im=new THREE.InstancedMesh(carGeo[t],carMats[t]||carMat,per);
     im.castShadow=true;im.frustumCulled=false;
     for(let i=0;i<per;i++){
-      if(skienRuter.length){                       // ekte Skien-gater
-        const r=skienRuter[rndi(0,skienRuter.length-1)];
-        carData.push({m:im,i:i,rute:r,s:rand()*r.len,dir:rand()<.5?1:-1,
-          off:Math.max(2.2,r.w/4),type:t,dead:false,spd:rnd(8,19)});
-      }else{
-        const isX=rand()<.5;
-        const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
-        const dir=rand()<.5?1:-1;
-        carData.push({m:im,i:i,ax:isX,pos:rnd(-1,1)*(isX?HD:HW),type:t,dead:false,
-          off:line.p+(dir>0?4.8:-4.8),dir:dir,spd:rnd(9,20)});
-      }
+      const isX=rand()<.5;
+      const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
+      const dir=rand()<.5?1:-1;
+      carData.push({m:im,i:i,ax:isX,pos:rnd(-1,1)*(isX?HD:HW),type:t,dead:false,
+        off:line.p+(dir>0?4.8:-4.8),dir:dir,spd:rnd(9,20)});
     }
     traffic.push(im);scene.add(im);
   }
@@ -2221,7 +1238,7 @@ function nearestCar(){
   }
   for(const c of carData){
     if(c.dead)continue;
-    const st=bilStat(c), x=st.x, z=st.z;
+    const x=c.ax?c.off:c.pos, z=c.ax?c.pos:c.off;
     const d=(x-P.pos.x)*(x-P.pos.x)+(z-P.pos.z)*(z-P.pos.z);
     if(d<td){td=d;tr=c;}
   }
@@ -2236,15 +1253,13 @@ function updateCars(dt){
       _cd.position.set(0,-9999,0);_cd.scale.setScalar(0.0001);_cd.rotation.set(0,0,0);
       _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);continue;
     }
-    if(c.rute) c.s+=c.spd*c.dir*dt;
-    else{
-      c.pos+=c.spd*c.dir*dt;
-      const lim=c.ax?HD:HW;
-      if(c.pos>lim)c.pos=-lim; if(c.pos<-lim)c.pos=lim;
-    }
-    const st=bilStat(c);
-    _cd.position.set(st.x,groundAt(st.x,st.z),st.z);
-    _cd.rotation.set(0,st.yaw+CAR_YAW,0);
+    c.pos+=c.spd*c.dir*dt;
+    const lim=c.ax?HD:HW;
+    if(c.pos>lim)c.pos=-lim; if(c.pos<-lim)c.pos=lim;
+    let yaw;
+    if(c.ax){_cd.position.set(c.off,terrainH(c.off,c.pos),c.pos);yaw=c.dir>0?0:Math.PI;}
+    else    {_cd.position.set(c.pos,terrainH(c.pos,c.off),c.off);yaw=c.dir>0?Math.PI/2:-Math.PI/2;}
+    _cd.rotation.set(0,yaw+CAR_YAW,0);
     _cd.scale.setScalar(CAR_SCALE);
     _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);
   }
@@ -2307,12 +1322,12 @@ function sporEtterHjul(){
 // og spinner videre i stedet for å bare stå der.
 const KRASJ_R=2.7;                     // grov kollisjonsradius per bil
 function friPlass(x,z){
-  if(paaVei(x,z))return true;          // veibanen er alltid fri
   for(const b of nearby(x,z))
     if(x>b.x0-0.7&&x<b.x1+0.7&&z>b.z0-0.7&&z<b.z1+0.7)return false;
   return true;
 }
 function smell(kraft){
+  politiVarme(kraft*1.25);        // krasj tiltrekker seg oppmerksomhet
   drive.skade=cl(drive.skade+kraft*1.7,0,100);
   drive.rist=Math.min(1.4,drive.rist+kraft*0.10);
   if(kraft>4)showToast('💥 Smell — '+Math.round(drive.skade)+' % skade');
@@ -2348,13 +1363,13 @@ function sjekkBilkrasj(){
   // --- mot biler i trafikk: gjøres om til ekte objekter ved treff ---
   for(const c of carData){
     if(c.dead)continue;
-    const cs=bilStat(c), cx=cs.x, cz=cs.z;
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
     const dx=cx-drive.x, dz=cz-drive.z, d2=dx*dx+dz*dz;
     if(d2>D*D||d2<1e-6)continue;
     const d=Math.sqrt(d2), nx=dx/d, nz=dz/d;
     const vn=Math.max(0,wx*nx+wz*nz);
     if(vn<1.2&&d>D*0.82)continue;
-    const yaw=cs.yaw+CAR_YAW;
+    const yaw=(c.ax?(c.dir>0?0:Math.PI):(c.dir>0?Math.PI/2:-Math.PI/2))+CAR_YAW;
     c.dead=true;
     const p=spawnRealCar(c.type,cx,cz,yaw);
     p.vx=nx*c.spd*0.25; p.vz=nz*c.spd*0.25;
@@ -2365,6 +1380,7 @@ function sjekkBilkrasj(){
 function oppdaterLose(dt){
   for(const p of parked){
     if(drive.on&&drive.car===p)continue;
+    if(p.erPoliti)continue;            // styres av jakt-logikken
     if(!p.vx&&!p.vz&&!p.spin)continue;
     const fx=p.x,fz=p.z;
     p.x+=p.vx*dt; p.z+=p.vz*dt; p.yaw+=(p.spin||0)*dt;
@@ -2393,6 +1409,143 @@ function settBilRotasjon(obj,x,z,head,rull,stamp){
   obj.rotation.z=Math.atan(tvers)+(rull||0);
 }
 
+// ---------------------------- POLITI --------------------------------------
+// Stjernesystem: krasj og påkjørsler gir «varme». Varmen bestemmer antall
+// stjerner, stjernene bestemmer hvor mange politibiler som jakter og hvor
+// aggressivt de kjører. Slipper du unna langt nok lenge nok, kjøler det seg.
+const POLITI={
+  terskler:[6,22,44,70,94],        // varme som kreves for 1..5 stjerner
+  maksBiler:[0,2,3,5,7,9],
+  fart:[0,17,20,23,26,29],
+  synsvidde:150                     // innenfor denne holdes varmen ved like
+};
+const politi={varme:0,stjerner:0,biler:[],siden:0,spawnT:0};
+
+function politiVarme(k){
+  politi.varme=cl(politi.varme+k,0,110);
+}
+function stjernerAv(v){
+  let n=0; for(const t of POLITI.terskler) if(v>=t) n++;
+  return n;
+}
+function visStjerner(){
+  const el=document.getElementById('stjerner'); if(!el)return;
+  if(politi.stjerner<=0){el.innerHTML='';return;}
+  let h='';
+  for(let i=0;i<5;i++) h+= i<politi.stjerner ? '★' : '<span class="av">★</span>';
+  el.innerHTML=h;
+}
+
+function spillerPos(){
+  return drive.on?{x:drive.x,z:drive.z}:{x:P.pos.x,z:P.pos.z};
+}
+
+function spawnPolitibil(){
+  if(!carSrc['police'])return;
+  const sp=spillerPos();
+  for(let t=0;t<80;t++){
+    const a=rand()*6.283, r=rnd(95,190);
+    const x=sp.x+Math.cos(a)*r, z=sp.z+Math.sin(a)*r;
+    if(Math.abs(x)>HW-30||Math.abs(z)>HD-30)continue;
+    if(!friPlass(x,z))continue;
+    const kurs=Math.atan2(sp.x-x,sp.z-z);
+    const b=spawnRealCar('police',x,z,kurs+CAR_YAW);
+    b.erPoliti=true; b.kurs=kurs; b.fart=8;
+    // blålys på taket
+    const lysG=new THREE.BoxGeometry(0.30,0.16,0.42);
+    b.lys=[];
+    for(const side of [-1,1]){
+      const mat=new THREE.MeshStandardMaterial({
+        color:side<0?0x3a1010:0x101a3a, roughness:.4,
+        emissive:new THREE.Color(side<0?0xff2020:0x2050ff), emissiveIntensity:0});
+      const m=new THREE.Mesh(lysG,mat);
+      m.position.set(side*0.34,1.42,0.05);
+      b.obj.add(m); b.lys.push({m:m,mat:mat,fase:side<0?0:Math.PI});
+    }
+    politi.biler.push(b);
+    return b;
+  }
+}
+function fjernPolitibil(b){
+  scene.remove(b.obj);
+  const i=politi.biler.indexOf(b); if(i>=0)politi.biler.splice(i,1);
+  const j=parked.indexOf(b); if(j>=0)parked.splice(j,1);
+  if(drive.car===b){drive.on=false;drive.car=null;showMode();}
+}
+
+function oppdaterPoliti(dt){
+  const sp=spillerPos();
+  const forrige=politi.stjerner;
+  politi.stjerner=stjernerAv(politi.varme);
+  if(politi.stjerner!==forrige){
+    visStjerner();
+    if(politi.stjerner>forrige)showToast('🚨 '+politi.stjerner+' stjerne'+(politi.stjerner>1?'r':'')+' — politiet jakter');
+    else if(politi.stjerner===0)showToast('✅ Du slapp unna');
+  }
+
+  // --- avkjøling: bare når ingen politibil ser deg ---
+  let naerest=1e9;
+  for(const b of politi.biler){
+    const d=Math.hypot(b.x-sp.x,b.z-sp.z);
+    if(d<naerest)naerest=d;
+  }
+  if(politi.varme>0){
+    if(naerest>POLITI.synsvidde){ politi.siden+=dt; politi.varme-=dt*(2.2+politi.siden*0.35); }
+    else politi.siden=0;
+    if(politi.varme<0)politi.varme=0;
+  }
+
+  // --- bemanning ---
+  const vil=POLITI.maksBiler[politi.stjerner];
+  politi.spawnT-=dt;
+  if(politi.biler.length<vil&&politi.spawnT<=0){ spawnPolitibil(); politi.spawnT=1.6; }
+  while(politi.biler.length>vil){
+    // fjern den som er lengst unna
+    let verst=null,vd=-1;
+    for(const b of politi.biler){
+      const d=Math.hypot(b.x-sp.x,b.z-sp.z);
+      if(d>vd){vd=d;verst=b;}
+    }
+    if(!verst)break;
+    fjernPolitibil(verst);
+  }
+
+  // --- jakt ---
+  const maalFart=POLITI.fart[politi.stjerner];
+  for(const b of politi.biler){
+    if(drive.car===b)continue;                      // du har stjålet den
+    const dx=sp.x-b.x, dz=sp.z-b.z, d=Math.hypot(dx,dz);
+    const onsket=Math.atan2(dx,dz);
+    let da=onsket-b.kurs;
+    while(da>Math.PI)da-=6.283; while(da<-Math.PI)da+=6.283;
+    b.kurs+=cl(da,-2.4*dt,2.4*dt);
+    const mf=d>9?maalFart:0;
+    b.fart+=(mf-b.fart)*Math.min(1,dt*1.4);
+    // knuff fra kollisjon får virke først
+    if(b.vx||b.vz){
+      b.x+=b.vx*dt; b.z+=b.vz*dt;
+      const dmp=Math.max(0,1-3.0*dt); b.vx*=dmp; b.vz*=dmp;
+      if(Math.abs(b.vx)<0.1&&Math.abs(b.vz)<0.1){b.vx=0;b.vz=0;}
+    }
+    const nx=b.x+Math.sin(b.kurs)*b.fart*dt, nz=b.z+Math.cos(b.kurs)*b.fart*dt;
+    if(friPlass(nx,nz)){b.x=nx;b.z=nz;}
+    else { b.fart*=0.35; b.kurs+=(rand()<.5?-1:1)*1.6*dt; }
+    b.yaw=b.kurs+CAR_YAW;
+    b.obj.position.set(b.x,groundAt(b.x,b.z)+(b.yoff||0),b.z);
+    settBilRotasjon(b.obj,b.x,b.z,b.kurs,0,0);
+    // blålys
+    if(b.lys){
+      const t=performance.now()*0.006;
+      for(const l of b.lys) l.mat.emissiveIntensity=Math.max(0,Math.sin(t+l.fase))*4.2;
+    }
+    // rammer deg
+    if(drive.on&&d<4.2){
+      politiVarme(dt*6);
+      smell(Math.min(4,b.fart*0.10));
+    }
+  }
+}
+
 function enterExit(){
   if(drive.on){
     const ex=drive.x+Math.cos(drive.head)*2.6, ez=drive.z-Math.sin(drive.head)*2.6;
@@ -2404,8 +1557,8 @@ function enterExit(){
   const n=nearestCar();
   let best=n.p;
   if(n.tr){                       // kapre: ta bilen ut av trafikken
-    const ts=bilStat(n.tr), x=ts.x, z=ts.z;
-    const yaw=ts.yaw+CAR_YAW;
+    const x=n.tr.ax?n.tr.off:n.tr.pos, z=n.tr.ax?n.tr.pos:n.tr.off;
+    const yaw=(n.tr.ax?(n.tr.dir>0?0:Math.PI):(n.tr.dir>0?Math.PI/2:-Math.PI/2))+CAR_YAW;
     n.tr.dead=true;
     best=spawnRealCar(n.tr.type,x,z,yaw);
     showToast('Bil kapret');
@@ -2414,7 +1567,7 @@ function enterExit(){
   drive.on=true;drive.car=best;drive.x=best.x;drive.z=best.z;
   drive.head=best.yaw-CAR_YAW;drive.steer=0;drive.y=groundAt(best.x,best.z);
   drive.spd=drive.vx=drive.vy=drive.yawrate=drive.ax=drive.slip=0;
-  drive.skade=0;drive.rist=0;
+  drive.skade=0;drive.rist=0;drive.rull=0;drive.stamp=0;
   P.fly=false;showMode();
 }
 
@@ -2547,7 +1700,6 @@ function updateDrive(dt){
   let hit=false;
   if(!drive.nocol)for(const o of [-2.0,0,2.0]){
     const px=nx+fx*o,pz=nz+fz*o;
-    if(paaVei(px,pz))continue;         // veibanen er alltid fri
     for(const b of nearby(px,pz))
       if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
     if(hit)break;
@@ -2675,29 +1827,15 @@ const gm={
   metal:new THREE.MeshStandardMaterial({color:0x3f434a,roughness:.5,metalness:.75}),
   lamp :new THREE.MeshStandardMaterial({color:0x2a2d33,roughness:.5,emissive:0x000000}),
   dashMat:new THREE.MeshStandardMaterial({color:0xd9cb8d,roughness:.85,
-         polygonOffset:true,polygonOffsetFactor:-3}),
-  // Skienselva, Bryggevannet og Hjellevannet. Hver flate ligger pa sitt eget
-  // niva fra hoydemodellen — Hjellevannet ligger 5 m over Bryggevannet, slik
-  // slusene i Skien faktisk deler dem.
-  politiskilt:new THREE.MeshStandardMaterial({color:0x1746b8,roughness:.42,
-         emissive:0x0a2a80,emissiveIntensity:.55}),
-  vann :new THREE.MeshStandardMaterial({color:0x2c5c78,roughness:.12,metalness:.55,
-         envMapIntensity:1.5,transparent:true,opacity:.93})
+         polygonOffset:true,polygonOffsetFactor:-3})
 };
 gm.cross.map.repeat.set(1,1);
 
-const groundGeo=new THREE.PlaneGeometry(CITY_W,CITY_D,600,400);
+const groundGeo=new THREE.PlaneGeometry(CITY_W,CITY_D,300,200);
 groundGeo.rotateX(-Math.PI/2);
-const asfaltGrunn=new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
-    roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,envMapIntensity:.65});
-// Terrenggrunn for Skien: mark og berg, ikke asfalt. Uten dette blir hele
-// dalen et blankt metallspeil sa snart bakken faktisk er synlig.
-const markTex=plainTex('#6d8a52',.97,0,26000);
-markTex.map.repeat.set(CITY_W/26,CITY_D/26);markTex.map.needsUpdate=true;
-markTex.rmMap.repeat.set(CITY_W/26,CITY_D/26);markTex.rmMap.needsUpdate=true;
-const markGrunn=new THREE.MeshStandardMaterial({map:markTex.map,roughnessMap:markTex.rmMap,
-    roughness:1,metalness:0,envMapIntensity:.30,vertexColors:true});
-const ground=new THREE.Mesh(groundGeo,asfaltGrunn);
+const ground=new THREE.Mesh(groundGeo,
+  new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
+    roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,envMapIntensity:.65}));
 ground.receiveShadow=true;scene.add(ground);
 function reshapeGround(){
   const pos=groundGeo.attributes.position;
@@ -2705,31 +1843,6 @@ function reshapeGround(){
   pos.needsUpdate=true;
   groundGeo.computeVertexNormals();
   groundGeo.computeBoundingSphere();
-  if(!SK){ground.material=asfaltGrunn;return;}
-  ground.material=markGrunn;
-  // vertex-farge etter helning og hoyde — gress i dalen, berg i liene
-  const N=pos.count;
-  let c=groundGeo.getAttribute('color');
-  if(!c||c.count!==N){c=new THREE.BufferAttribute(new Float32Array(N*3),3);
-    groundGeo.setAttribute('color',c);}
-  const nrm=groundGeo.attributes.normal;
-  for(let i=0;i<N;i++){
-    const y=pos.getY(i);
-    const bratt=1-Math.min(1,Math.max(0,nrm.getY(i)));      // 0 flatt, 1 loddrett
-    const berg=Math.min(1,bratt*3.4);
-    const t=Math.min(1,Math.max(0,(y-6)/54));               // hoyere = mer lyng
-    let r=(0.24+t*0.20)*(1-berg)+0.58*berg;
-    let g=(0.78-t*0.12)*(1-berg)+0.57*berg;
-    let b=(0.26+t*0.12)*(1-berg)+0.55*berg;
-    // Park og skog skal ANES, ikke sta som paklistrede lapper. Svak dytt.
-    const gr=grontVed(pos.getX(i),pos.getZ(i));    // park = 1, skog = 2
-    if(gr){
-      const k=gr===2?0.34:0.20;
-      r=r*(1-k)+0.16*k; g=g*(1-k)+0.80*k; b=b*(1-k)+0.20*k;
-    }
-    c.setXYZ(i,r,g,b);
-  }
-  c.needsUpdate=true;
 }
 
 let city=null;
@@ -2737,30 +1850,15 @@ function build(){
   if(city)scene.remove(city);
   rand=mulberry32(SEED);
   NOFF=(SEED%977)*0.37; PKX=300+rand()*600; PKZ=-200+rand()*500;
-  if(SK){
-    settVeibredder();
-    const t0=performance.now(); byggVeimaske();
-    const t1=performance.now(); byggGrontmaske();
-    console.log('masker: vei '+Math.round(t1-t0)+' ms, gront '+Math.round(performance.now()-t1)+' ms');
-  }
   reshapeGround();
-  if(SK){
-    skienRuter=[];
-    city=generateSkien(scene,mats,gm);
-  }else{
-    city=generateCity(scene,mats,gm);
-    plantSkog(scene,gm);
-  }
-  buildTraffic();buildParked();initMerker();byggFotgjengere();
+  city=generateCity(scene,mats,gm);
+  const trar=plantSkog(scene,gm);
+  buildTraffic();buildParked();initMerker();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
-  document.getElementById('osub').textContent=
-    SK ? 'Skien sentrum \u00b7 ekte kartdata' : '3 \u00d7 2 km prosedural by';
-  document.getElementById('ostats').innerHTML= SK
-    ? buildingCount.toLocaleString('nb-NO')+' ekte bygninger &middot; '+
-      SK.veier.length.toLocaleString('nb-NO')+' gater &middot; Skien sentrum'
-    : buildingCount.toLocaleString('nb-NO')+' bygninger &middot; '+
-      (streetsX.length+streetsZ.length)+' gater &middot; '+blocks.length+' kvartaler';
+  document.getElementById('ostats').innerHTML=
+    buildingCount.toLocaleString('nb-NO')+' bygninger &middot; '+
+    (streetsX.length+streetsZ.length)+' gater &middot; '+blocks.length+' kvartaler';
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
@@ -2785,8 +1883,7 @@ addEventListener('keydown',e=>{
     scene.traverse(o=>{if(o.material)o.material.needsUpdate=true});}
   if(e.code==='KeyR'){
     // Ny by må gjelde ALLE, ellers står dere i hver deres verden.
-    if(SK)showToast('Byen er Skien — ingen ny by a lage');
-    else if(net.isHost||!net.live){SEED=(Math.random()*1e9)|0;build();spawn();}
+    if(net.isHost||!net.live){SEED=(Math.random()*1e9)|0;build();spawn();}
     else showToast('Bare verten kan lage ny by');
   }
   if(e.code==='Space')e.preventDefault();
@@ -2802,18 +1899,10 @@ document.addEventListener('mousemove',e=>{
   P.yaw-=e.movementX*.0022;P.pitch-=e.movementY*.0022;
   P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch));
 });
-// Startpunkt. I Skien-modus star du pa Torget: verdensrammen er lagt 400 m
-// sor for torget, sa torget selv ligger pa z = -400.
-const SK_START={x:0,z:-400};
 function spawn(){
-  let x,z;
-  if(SK){ x=SK_START.x; z=SK_START.z; }
-  else{
-    const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
-    const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
-    x=ax.p; z=az.p;
-  }
-  P.pos.set(x,groundAt(x,z)+1.75,z);P.vel.set(0,0,0);P.yaw=0;P.pitch=-.04;
+  const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
+  const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
+  P.pos.set(ax.p,groundAt(ax.p,az.p)+1.75,az.p);P.vel.set(0,0,0);P.yaw=0;P.pitch=-.04;
 }
 
 // utviklingskrok — lar meg flytte kamera fra testrigg/konsoll
@@ -2840,94 +1929,22 @@ window.__dbg={
     return ut;
   },
   gy:(x,z)=>groundAt(x,z),
-  etterlyst:()=>({heat:Math.round(etterlyst.heat),stjerner:etterlyst.stjerner,
-                  politibiler:etterlyst.biler.length, fotgjengere:npc.length,
-                  nede:npc.filter(p=>p.ned>0).length,
-                  hud:document.getElementById('wanted').textContent.trim()}),
-  forbryt:(m)=>{forbrytelse(m||70,'test');return etterlyst.heat;},
-  by:()=>({rundkjoringer:RUNDK.map(r=>({x:Math.round(r.x),z:Math.round(r.z),
-             ytre:+r.oy.toFixed(1),indre:+r.iy.toFixed(1)})),
-           elv:ELVE?{bredde:Math.round(ELVE.w),
-                     krysser_z:streetsZ.filter(s=>s.art).map(s=>Math.round(s.p))}:null,
-           ekstraparker:EKSTRAPARK.length, kvartaler:blocks.length,
-           politi:POLITI?{x:Math.round(POLITI.x),z:Math.round(POLITI.z),
-                          dorX:Math.round(POLITI.dorX||0),dorZ:Math.round(POLITI.dorZ||0)}:null}),
-  // Kjorer langs hver kjorbare gate og teller hvor mange punkter som er
-  // sperret av en kollisjonsboks. Alt over null er en usynlig vegg i veibanen.
-  // Veisjekk maler bare langs veimidten. Denne gar over HELE byen i 3 m
-  // rutenett og teller punkter som er sperret UTEN a ligge i en bygning —
-  // altsa akkurat det man kjenner som en usynlig vegg til fots.
-  gasjekk:()=>{
-    if(!SK)return {feil:'ikke Skien-modus'};
-    // fasit: hvilke punkter ligger faktisk inne i et bygg
-    let apne=0,falske=0; const verste=[];
-    const iBygg=(x,z)=>{
-      for(const b of SK.bygg){
-        if(x<b.p[0][0]-260||x>b.p[0][0]+260)continue;
-      }
-      return false;
-    };
-    // bruk padHash: et punkt inne i et bygg star pa et platå
-    for(let x=-HW+3;x<HW-3;x+=3)for(let z=-HD+3;z<HD-3;z+=3){
-      let sperret=false;
-      for(const b of nearby(x,z)){
-        const nx=Math.max(b.x0,Math.min(x,b.x1)), nz=Math.max(b.z0,Math.min(z,b.z1));
-        const dx=x-nx,dz=z-nz;
-        if(dx*dx+dz*dz < 0.36){sperret=true;break;}
-      }
-      if(!sperret){apne++;continue;}
-      // sperret: ligger punktet inne i et faktisk fotavtrykk?
-      let inne=false;
-      for(const b of SK.bygg){
-        const p=b.p;
-        if(p.length<4)continue;
-        let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
-        for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<z0)z0=q[1];if(q[1]>z1)z1=q[1];}
-        if(x<x0||x>x1||z<z0||z>z1)continue;
-        if(pktIPolygon(x,z,p)){inne=true;break;}
-      }
-      if(!inne){falske++; if(verste.length<6)verste.push([Math.round(x),Math.round(z)]);}
-    }
-    const tot=apne+falske;
-    return {apne_punkter:apne, falske_vegger:falske,
-            andel:+(100*falske/tot).toFixed(2)+' %', eksempler:verste};
-  },
-  veisjekk:()=>{
-    if(!SK)return {feil:'ikke Skien-modus'};
-    let n=0,sperret=0; const verste=[];
-    for(const v of SK.veier){
-      if(!SK_KJORBAR.has(v.k))continue;
-      for(let i=0;i<v.p.length-1;i++){
-        const a=v.p[i],b=v.p[i+1];
-        const L=Math.hypot(b[0]-a[0],b[1]-a[1]);
-        for(let d=0;d<L;d+=4){
-          const t=d/L, x=a[0]+(b[0]-a[0])*t, z=a[1]+(b[1]-a[1])*t;
-          n++;
-          if(!friPlass(x,z)){sperret++; if(verste.length<8)verste.push([Math.round(x),Math.round(z),v.n||v.k]);}
-        }
-      }
-    }
-    return {punkter:n, sperret:sperret, andel:+(100*sperret/n).toFixed(2)+' %',
-            kollisjonsbokser:colliders.length, eksempler:verste};
-  },
-  grunn:()=>{
-    const p=groundGeo.attributes.position;
-    let lo=1e9,hi=-1e9;
-    for(let i=0;i<p.count;i++){const y=p.getY(i);if(y<lo)lo=y;if(y>hi)hi=y;}
-    return {materiale:ground.material===markGrunn?'mark':'asfalt',
-            sk:!!SK, skt:!!SKT, synlig:ground.visible,
-            hoyde_min:+lo.toFixed(1), hoyde_maks:+hi.toFixed(1),
-            metalness:ground.material.metalness,
-            farger:!!groundGeo.getAttribute('color'),
-            taake:scene.fog?scene.fog.constructor.name+' '+
-                  (scene.fog.far!==undefined?('far='+scene.fog.far):('t='+scene.fog.density)):'ingen'};
-  },
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);renderer.render(scene,camera);   // oppdater kamera først
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'sladdespor-8',
+  ver:()=>'politi-10',
+  politi:()=>({stjerner:politi.stjerner,varme:+politi.varme.toFixed(1),
+               biler:politi.biler.length}),
+  ettersokt:(v)=>{politiVarme(v);},
+  politiSim:(steg,dt)=>{
+    const sp=spillerPos(); const start=[];
+    for(let i=0;i<(steg||60);i++)oppdaterPoliti(dt||0.05);
+    const av=politi.biler.map(b=>+Math.hypot(b.x-sp.x,b.z-sp.z).toFixed(0));
+    return {stjerner:politi.stjerner,varme:+politi.varme.toFixed(1),
+            biler:politi.biler.length,avstander:av.sort((a,b)=>a-b).slice(0,5)};
+  },
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
@@ -2951,9 +1968,9 @@ window.__dbg={
   krasjTest:()=>{
     const c=carData.find(q=>!q.dead&&q!==drive.car);
     if(!c)return {feil:'ingen trafikkbil'};
-    const ks=bilStat(c), cx=ks.x, cz=ks.z;
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
     // still bilen 14 m unna og kjør rett på
-    const h=ks.yaw;
+    const h=c.ax?0:Math.PI/2;
     drive.x=cx-Math.sin(h)*14; drive.z=cz-Math.cos(h)*14; drive.head=h;
     drive.vx=22; drive.vy=0; drive.yawrate=0; drive.skade=0; drive.rist=0;
     const for_=parked.length;
@@ -3065,8 +2082,7 @@ function update(dt){
     if(keys['Space']&&P.onGround){P.vel.y=8.2;P.onGround=false;}
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
-    const list=paaVei(P.pos.x,P.pos.z)?[]:nearby(P.pos.x,P.pos.z);
-    const feet=P.pos.y-P.h;
+    const list=nearby(P.pos.x,P.pos.z), feet=P.pos.y-P.h;
     for(const b of list){
       if(feet+.05>=b.top)continue;
       const nx=Math.max(b.x0,Math.min(P.pos.x,b.x1)),nz=Math.max(b.z0,Math.min(P.pos.z,b.z1));
@@ -3134,25 +2150,6 @@ const mb=document.createElement('canvas');mb.width=300;mb.height=200;
 function drawMinimapBase(){
   const g=mb.getContext('2d'),SX=300/CITY_W,SZ=200/CITY_D;
   g.fillStyle='#15181f';g.fillRect(0,0,300,200);
-  if(SK){
-    const P2=p=>p.map(q=>[(q[0]+HW)*SX,(q[1]+HD)*SZ]);
-    const fyll=(ring,col)=>{const q=P2(ring);g.fillStyle=col;g.beginPath();
-      g.moveTo(q[0][0],q[0][1]);for(let i=1;i<q.length;i++)g.lineTo(q[i][0],q[i][1]);
-      g.closePath();g.fill();};
-    for(const gr of SK.gronn)if(gr.p.length>3)fyll(gr.p,'#25402a');
-    for(const v of SK.vann)if(v.flate&&v.p.length>3)fyll(v.p,'#1d4a6b');
-    g.lineCap='round';
-    for(const v of SK.veier){
-      if(v.k==='footway'||v.k==='path'||v.k==='steps'||v.k==='cycleway')continue;
-      const q=P2(v.p);
-      g.strokeStyle=v.art?'rgba(255,225,150,.85)':'rgba(210,218,232,.34)';
-      g.lineWidth=v.art?1.5:0.7;
-      g.beginPath();g.moveTo(q[0][0],q[0][1]);
-      for(let i=1;i<q.length;i++)g.lineTo(q[i][0],q[i][1]);
-      g.stroke();
-    }
-    return;
-  }
   for(const b of blocks){g.fillStyle=D_COL[b.d];
     g.fillRect((b.x0+HW)*SX,(b.z0+HD)*SZ,(b.x1-b.x0)*SX,(b.z1-b.z0)*SZ);}
   g.strokeStyle='rgba(230,235,245,.30)';g.lineWidth=1.3;
@@ -3165,13 +2162,13 @@ function drawMinimap(){
   mc.fillStyle='rgba(140,185,255,.60)';                 // biler i trafikk
   for(const c of carData){
     if(c.dead)continue;
-    const cs=bilStat(c), cx=cs.x, cz=cs.z;
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
     mc.fillRect((cx+HW)*SX-1,(cz+HD)*SZ-1,2,2);
   }
   for(const p of parked){                                // parkerte — kan kjøres
     const hero=HERO_CARS.indexOf(p.type)>=0;
-    mc.fillStyle=hero?'#ff9a3c':'#6cf09a';
-    const r=hero?2.5:1.5;
+    mc.fillStyle=p.erPoliti?'#4d9dff':(hero?'#ff9a3c':'#6cf09a');
+    const r=p.erPoliti?2.6:(hero?2.5:1.5);
     mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
   }
   const x=(P.pos.x+HW)*300/CITY_W,y=(P.pos.z+HD)*200/CITY_D;
@@ -3310,8 +2307,7 @@ const net={peer:null,isHost:false,hostConn:null,conns:new Map(),
 const others=new Map();      // id -> {name,col,x,y,z,yaw,mesh,tx,ty,tz,tyaw,last}
 
 const $=id=>document.getElementById(id);
-function netSay(t,cls){ $('netStatus').innerHTML = cls?'<span class="'+cls+'">'+t+'</span>':t;
-  const l=$('led'); if(l) l.className = cls||''; }
+function netSay(t,cls){ $('netStatus').innerHTML = cls?'<span class="'+cls+'">'+t+'</span>':t; }
 let toastT=0;
 function showToast(t){ $('mode').textContent=t; toastT=2.2; }
 
@@ -3505,174 +2501,8 @@ $('pname').addEventListener('input',e=>{
   net.name=(e.target.value||'').trim().slice(0,12)||net.name;
   plist();
 });
-$('pname').addEventListener('keydown',e=>{
-  e.stopPropagation();
-  if(e.key==='Enter'){ e.preventDefault(); e.target.blur();
-    renderer.domElement.requestPointerLock(); }
-});
+$('pname').addEventListener('keydown',e=>{ e.stopPropagation(); });
 $('pname').addEventListener('click',e=>{ e.stopPropagation(); });
-
-/* ==========================================================================
-   FOTGJENGERE, WANTED LEVEL OG POLITI
-   Folk gar rundt kvartalene pa fortauet. Kjorer du dem ned stiger heat, og
-   heat gir stjerner 1-5. Politiet ruller ut fra stasjonen, en bil per
-   stjerne, og jager til du enten rister dem av deg eller blir tatt.
-   ========================================================================== */
-const NPC_ANT=240;
-let npc=[], npcKropp=null, npcHode=null;
-const etterlyst={heat:0, stjerner:0, sisteForbrytelse:-999, biler:[],
-                 kontakt:0, sisteUtrykning:0};
-
-function byggFotgjengere(){
-  for(const m of [npcKropp,npcHode])if(m){scene.remove(m);m.geometry.dispose();}
-  npc=[]; npcKropp=npcHode=null;
-  const gode=blocks.filter(b=>(b.x1-b.x0)>26&&(b.z1-b.z0)>26);
-  if(!gode.length)return;
-  npcKropp=new THREE.InstancedMesh(new THREE.CylinderGeometry(0.32,0.36,1.10,8),
-    new THREE.MeshLambertMaterial({color:0xffffff}),NPC_ANT);
-  npcHode=new THREE.InstancedMesh(new THREE.SphereGeometry(0.25,8,6),
-    new THREE.MeshLambertMaterial({color:0xf0c8a0}),NPC_ANT);
-  npcKropp.castShadow=true; npcKropp.frustumCulled=false; npcHode.frustumCulled=false;
-  npcKropp.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(NPC_ANT*3),3);
-  const c=new THREE.Color();
-  for(let i=0;i<NPC_ANT;i++){
-    const b=gode[rndi(0,gode.length-1)];
-    const w=b.x1-b.x0-3.2, d=b.z1-b.z0-3.2;
-    npc.push({b:b,w:w,d:d,P:2*(w+d),t:rand()*2*(w+d),
-              spd:rnd(1.0,1.7),dir:rand()<.5?1:-1,ned:0,x:0,z:0});
-    c.setHex(AV_COLS[i%AV_COLS.length]); npcKropp.setColorAt(i,c);
-  }
-  npcKropp.instanceColor.needsUpdate=true;
-  scene.add(npcKropp,npcHode);
-}
-function npcPos(p){
-  let t=p.t%p.P; if(t<0)t+=p.P;
-  const b=p.b, w=p.w, d=p.d;
-  if(t<w)          return [b.x0+1.6+t,      b.z0+1.6];
-  if(t<w+d)        return [b.x1-1.6,        b.z0+1.6+(t-w)];
-  if(t<2*w+d)      return [b.x1-1.6-(t-w-d),b.z1-1.6];
-  return                  [b.x0+1.6,        b.z1-1.6-(t-2*w-d)];
-}
-const _nd=new THREE.Object3D();
-function oppdaterFotgjengere(dt){
-  if(!npcKropp)return;
-  const kjorer=drive.on, fart=kjorer?Math.abs(drive.vx):0;
-  for(let i=0;i<npc.length;i++){
-    const p=npc[i];
-    if(p.ned>0){
-      p.ned-=dt;
-      if(p.ned<=0){                                  // reiser seg et annet sted
-        const gode=blocks;
-        p.b=gode[rndi(0,gode.length-1)];
-        p.w=p.b.x1-p.b.x0-3.2; p.d=p.b.z1-p.b.z0-3.2; p.P=2*(p.w+p.d);
-        p.t=rand()*p.P;
-      }
-    } else {
-      p.t+=p.spd*p.dir*dt;
-    }
-    const [x,z]=npcPos(p); p.x=x; p.z=z;
-    const y=p.b.pad;
-    if(p.ned>0){                                     // ligger nede
-      _nd.position.set(x,y+0.35,z); _nd.rotation.set(Math.PI/2,0,0);
-      _nd.updateMatrix(); npcKropp.setMatrixAt(i,_nd.matrix);
-      _nd.position.set(x,y+0.35,z); _nd.rotation.set(0,0,0);
-      _nd.updateMatrix(); npcHode.setMatrixAt(i,_nd.matrix);
-      continue;
-    }
-    const gange=Math.sin(performance.now()*0.006+i)*0.05;
-    _nd.rotation.set(0,0,0);
-    _nd.position.set(x,y+0.60+gange,z); _nd.updateMatrix(); npcKropp.setMatrixAt(i,_nd.matrix);
-    _nd.position.set(x,y+1.36+gange,z); _nd.updateMatrix(); npcHode.setMatrixAt(i,_nd.matrix);
-
-    if(kjorer&&fart>2.5){
-      const dx=x-drive.x, dz=z-drive.z;
-      if(dx*dx+dz*dz<3.6){
-        p.ned=rnd(5,9);
-        forbrytelse(fart>12?26:16, fart>12?'💥 Pakjort fotgjenger!':'💢 Du traff en fotgjenger');
-      }
-    }
-  }
-  npcKropp.instanceMatrix.needsUpdate=true;
-  npcHode.instanceMatrix.needsUpdate=true;
-}
-
-function forbrytelse(mengde,tekst){
-  etterlyst.heat=cl(etterlyst.heat+mengde,0,100);
-  etterlyst.sisteForbrytelse=performance.now()/1000;
-  if(tekst)showToast(tekst);
-}
-function visStjerner(){
-  const s=etterlyst.stjerner;
-  const el=document.getElementById('wanted');
-  el.textContent = s>0 ? '★'.repeat(s)+'☆'.repeat(5-s) : '\u00a0';
-}
-function politiUt(){
-  if(!carSrc['police'])return;
-  const vil=etterlyst.stjerner;
-  const na=performance.now()/1000;
-  if(etterlyst.biler.length>=vil)return;
-  if(na-etterlyst.sisteUtrykning<1.1)return;
-  etterlyst.sisteUtrykning=na;
-  const tx=drive.on?drive.x:P.pos.x, tz=drive.on?drive.z:P.pos.z;
-  let sx,sz;
-  const fraStasjon = POLITI&&POLITI.dorX!==undefined&&
-                     Math.hypot(POLITI.dorX-tx,POLITI.dorZ-tz)<420;
-  if(fraStasjon){ sx=POLITI.dorX+rnd(-14,14); sz=POLITI.dorZ+rnd(-4,8); }
-  else{                                  // patruljen rykker inn utenfra
-    const a=rand()*Math.PI*2;
-    sx=cl(tx+Math.cos(a)*rnd(130,190),-HW+20,HW-20);
-    sz=cl(tz+Math.sin(a)*rnd(130,190),-HD+20,HD-20);
-  }
-  const b=spawnRealCar('police', sx, sz, 0);
-  b.politi=true; b.blink=0; b.fodt=na;
-  parked.splice(parked.indexOf(b),1);      // ikke en parkert bil man kan kapre
-  scene.add(b.obj);
-  etterlyst.biler.push(b);
-}
-function politiInn(b){
-  scene.remove(b.obj);
-  const i=etterlyst.biler.indexOf(b); if(i>=0)etterlyst.biler.splice(i,1);
-}
-function oppdaterPoliti(dt){
-  const na=performance.now()/1000;
-  // heat kjoler seg ned nar du oppforer deg
-  if(na-etterlyst.sisteForbrytelse>7) etterlyst.heat=Math.max(0,etterlyst.heat-4.2*dt);
-  const nye=Math.min(5,Math.ceil(etterlyst.heat/20));
-  if(nye!==etterlyst.stjerner){
-    if(nye>etterlyst.stjerner&&nye===1)showToast('🚨 Politiet er varslet');
-    if(nye===0)showToast('✅ Du er ute av politiets sokelys');
-    etterlyst.stjerner=nye; visStjerner();
-  }
-  if(etterlyst.stjerner>0)politiUt();
-
-  const tx=drive.on?drive.x:P.pos.x, tz=drive.on?drive.z:P.pos.z;
-  let naerKontakt=false;
-  for(const b of etterlyst.biler.slice()){
-    if(etterlyst.stjerner===0){politiInn(b);continue;}
-    const dx=tx-b.x, dz=tz-b.z, d=Math.hypot(dx,dz);
-    // gi patruljen en aerlig sjanse for den gir opp
-    if(d>620&&na-(b.fodt||0)>10){politiInn(b);continue;}
-    let mal=Math.atan2(dx,dz), da=mal-b.yaw;
-    while(da>Math.PI)da-=Math.PI*2; while(da<-Math.PI)da+=Math.PI*2;
-    b.yaw+=cl(da,-2.4*dt,2.4*dt);
-    const fart=Math.min(30,13+etterlyst.stjerner*3.4);
-    const nx=b.x+Math.sin(b.yaw)*fart*dt, nz=b.z+Math.cos(b.yaw)*fart*dt;
-    if(friPlass(nx,nz)){b.x=nx;b.z=nz;} else {b.yaw+=1.9*dt;}
-    b.obj.position.set(b.x,groundAt(b.x,b.z)+b.yoff,b.z);
-    settBilRotasjon(b.obj,b.x,b.z,b.yaw-CAR_YAW,0,0);
-    b.blink=(b.blink||0)+dt;
-    if(d<4.5)naerKontakt=true;
-  }
-  if(naerKontakt&&etterlyst.stjerner>0){
-    etterlyst.kontakt+=dt;
-    if(etterlyst.kontakt>2.0){                        // tatt
-      etterlyst.kontakt=0; etterlyst.heat=0; etterlyst.stjerner=0; visStjerner();
-      for(const b of etterlyst.biler.slice())politiInn(b);
-      showToast('🚔 PAGREPET — du slipper med en advarsel');
-      if(drive.on){drive.vx=drive.vy=0;}
-    }
-  } else etterlyst.kontakt=Math.max(0,etterlyst.kontakt-dt*0.6);
-}
 
 /* ---------------------------- LOOP -------------------------------------- */
 let last=performance.now(),fa=0,fn=0,ht=0,FRAMES=0;
@@ -3680,7 +2510,7 @@ function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterFotgjengere(dt);oppdaterPoliti(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -3688,9 +2518,8 @@ function loop(now){
     document.getElementById('fps').textContent=Math.round(fa/fn);fa=0;fn=0;ht=0;
     document.getElementById('pos').textContent=Math.round(P.pos.x)+', '+Math.round(P.pos.z);
     document.getElementById('alt').textContent=Math.round(P.pos.y);
-    document.getElementById('district').textContent= SK
-      ? stedsnavn(P.pos.x,P.pos.z)
-      : D_NAME[isPark(P.pos.x,P.pos.z)?D_PARK:districtAt(P.pos.x,P.pos.z)];
+    document.getElementById('district').textContent=
+      D_NAME[isPark(P.pos.x,P.pos.z)?D_PARK:districtAt(P.pos.x,P.pos.z)];
     if(drive.on){showMode();}
     else if(toastT<=0){
       const n=nearestCar();
@@ -3705,15 +2534,11 @@ addEventListener('resize',()=>{
   renderer.setSize(innerWidth,innerHeight);});
 
 setTimeout(async ()=>{
-  await Promise.all([loadCars(), lastSkien()]);
+  await loadCars();
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent=SK?'build skien-1':'build sladdespor-8';
-  document.getElementById('kildeline').textContent=SK
-    ? 'kart: \u00a9 OpenStreetMap-bidragsytere (ODbL) \u00b7 terreng: Kartverket (NLOD)' : '';
-  document.getElementById('roomLbl').textContent='Rom: '+ROOM;
-  document.getElementById('verLbl').textContent=SK?'build sladdespor-8':'build sladdespor-8';
+  document.getElementById('verline').textContent='build politi-10';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
