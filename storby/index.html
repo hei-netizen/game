@@ -1215,7 +1215,7 @@ function spawnRealCar(type,x,z,yaw){
   const sc=(type==='mclaren')?1.0:CAR_SCALE;      // McLaren er allerede i ekte skala
   obj.scale.setScalar(sc);
   obj.position.set(x,groundAt(x,z)+(carYoff[type]||0)*sc,z);
-  obj.rotation.y=yaw;
+  settBilRotasjon(obj,x,z,yaw-CAR_YAW,0,0);
   obj.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
   scene.add(obj);
   const p={obj:obj,wheels:wheels,x:x,z:z,yaw:yaw,type:type,sc:sc,yoff:(carYoff[type]||0)*sc};
@@ -1259,6 +1259,56 @@ function updateCars(dt){
     _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);
   }
   for(const m of traffic)m.instanceMatrix.needsUpdate=true;
+}
+
+// ---------------------------- SLADDEMERKER --------------------------------
+// Ringbuffer av flate felter som legges under bakhjulene når de slipper.
+// Hvert felt spenner fra forrige hjulposisjon til denne, så sporet blir
+// sammenhengende i stedet for en rekke prikker.
+const MERKE_N=1400;
+let merker=null, merkeI=0, merkeSist=[null,null];
+const _mo=new THREE.Object3D();
+function initMerker(){
+  if(merker)return;
+  const g=new THREE.PlaneGeometry(1,1); g.rotateX(-Math.PI/2);
+  const m=new THREE.MeshBasicMaterial({color:0x0d0b09,transparent:true,opacity:.68,
+    depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4});
+  merker=new THREE.InstancedMesh(g,m,MERKE_N);
+  merker.frustumCulled=false;
+  _mo.scale.set(0,0,0);_mo.updateMatrix();
+  for(let i=0;i<MERKE_N;i++)merker.setMatrixAt(i,_mo.matrix);
+  merker.instanceMatrix.needsUpdate=true;
+  scene.add(merker);
+}
+function leggMerke(x,z,yaw,len,bredde){
+  if(!merker)return;
+  _mo.position.set(x,groundAt(x,z)+0.035,z);
+  _mo.rotation.set(0,yaw,0);
+  _mo.scale.set(bredde,1,len);
+  _mo.updateMatrix();
+  merker.setMatrixAt(merkeI,_mo.matrix);
+  merkeI=(merkeI+1)%MERKE_N;
+  merker.instanceMatrix.needsUpdate=true;
+}
+function sporEtterHjul(){
+  const fart=Math.hypot(drive.vx,drive.vy);
+  const sliper=(drive.spinn>0.10||drive.slip>0.28)&&fart>1.6;
+  if(!sliper){merkeSist[0]=merkeSist[1]=null;return;}
+  const sh=Math.sin(drive.head),ch=Math.cos(drive.head);
+  const bx=drive.x-sh*CARP.c, bz=drive.z-ch*CARP.c;      // bakakselen
+  const bredde=0.30+Math.min(0.22,drive.spinn*0.3);
+  for(let i=0;i<2;i++){
+    const side=i?1:-1;
+    const wx=bx+ch*side*1.22, wz=bz-sh*side*1.22;
+    const p=merkeSist[i];
+    if(p){
+      const dx=wx-p.x, dz=wz-p.z, d=Math.hypot(dx,dz);
+      if(d>0.22){
+        leggMerke((wx+p.x)/2,(wz+p.z)/2,Math.atan2(dx,dz),d*1.2,bredde);
+        merkeSist[i]={x:wx,z:wz};
+      }
+    } else merkeSist[i]={x:wx,z:wz};
+  }
 }
 
 // ---------------------------- KRASJ ---------------------------------------
@@ -1334,8 +1384,22 @@ function oppdaterLose(dt){
       p.vx=0;p.vz=0;p.spin=0;
     }
     p.obj.position.set(p.x,groundAt(p.x,p.z)+(p.yoff||0),p.z);
-    p.obj.rotation.y=p.yaw;
+    settBilRotasjon(p.obj,p.x,p.z,p.yaw-CAR_YAW,0,0);
   }
+}
+
+// Legger bilen ned på underlaget og lar karosseriet lene seg. Uten dette
+// står bilen vannrett i bratte bakker, og det ødelegger hele følelsen.
+function settBilRotasjon(obj,x,z,head,rull,stamp){
+  const e=1.7;
+  const gx=(groundAt(x-e,z)-groundAt(x+e,z))/(2*e);
+  const gz=(groundAt(x,z-e)-groundAt(x,z+e))/(2*e);
+  const sh=Math.sin(head),ch=Math.cos(head);
+  const langs=gx*sh+gz*ch, tvers=gx*ch-gz*sh;
+  obj.rotation.order='YXZ';
+  obj.rotation.y=head+CAR_YAW;
+  obj.rotation.x=Math.atan(langs)+(stamp||0);
+  obj.rotation.z=Math.atan(tvers)+(rull||0);
 }
 
 function enterExit(){
@@ -1441,7 +1505,7 @@ function carStep(h,th,hand,boost){
 
   const ax=Ft/CARP.M+yr*vy;
   const ay=(Math.cos(d)*Ff+Fr)/CARP.M-yr*vx;
-  drive.vx+=ax*h; drive.vy+=ay*h; drive.ax=ax;
+  drive.vx+=ax*h; drive.vy+=ay*h; drive.ax=ax; drive.ayL=ay;
 
   const moment=Math.cos(d)*Ff*CARP.b-Fr*CARP.c-CARP.girDemp*yr;   // demping = kontroll
   const dynYaw=drive.yawrate+(moment/CARP.I)*h;
@@ -1508,7 +1572,13 @@ function updateDrive(dt){
   const o=drive.car.obj;
   drive.y=groundAt(drive.x,drive.z);
   o.position.set(drive.x,drive.y+(drive.car.yoff||0),drive.z);
-  o.rotation.y=drive.head+CAR_YAW;
+  // fjæring: karosseriet ruller ut i svingen og stamper under gass/brems
+  const maalRull=cl(-(drive.ayL||0)/16,-0.15,0.15);
+  const maalStamp=cl((drive.ax||0)/26,-0.09,0.09);
+  drive.rull=(drive.rull||0)+(maalRull-(drive.rull||0))*Math.min(1,dt*7);
+  drive.stamp=(drive.stamp||0)+(maalStamp-(drive.stamp||0))*Math.min(1,dt*7);
+  settBilRotasjon(o,drive.x,drive.z,drive.head,drive.rull,drive.stamp);
+  sporEtterHjul();
   for(const w of drive.car.wheels){
     w.o.rotation.x=w.bx-drive.spin;
     if(w.front)w.o.rotation.y=w.by+drive.steer*.85;
@@ -1639,7 +1709,7 @@ function build(){
   reshapeGround();
   city=generateCity(scene,mats,gm);
   const trar=plantSkog(scene,gm);
-  buildTraffic();buildParked();
+  buildTraffic();buildParked();initMerker();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
   document.getElementById('ostats').innerHTML=
@@ -1720,11 +1790,13 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);renderer.render(scene,camera);   // oppdater kamera først
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'bakhjul-7',
+  ver:()=>'sladdespor-8',
   hero:()=>{const h=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0);
     return {antall:h.length, hjul:h[0]?h[0].wheels.length:0,
             pos:h[0]?[Math.round(h[0].x),Math.round(h[0].z)]:null};},
   nocol:(v)=>{drive.nocol=!!v;},
+  merkerN:()=>merkeI,
+  bilRot:()=>{const o=drive.car&&drive.car.obj;return o?{x:+o.rotation.x.toFixed(3),y:+o.rotation.y.toFixed(2),z:+o.rotation.z.toFixed(3)}:null;},
   donut:(steg)=>{
     drive.vx=0;drive.vy=0;drive.yawrate=0;drive.steer=0;drive.head=0;drive.skade=0;
     keys['KeyW']=true; keys['KeyA']=true;
@@ -2312,7 +2384,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build bakhjul-7';
+  document.getElementById('verline').textContent='build sladdespor-8';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet

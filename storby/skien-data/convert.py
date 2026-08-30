@@ -6,7 +6,7 @@ Verdensramme: EPSG:25833 (UTM33N), sentrert på Skien torg.
   spill-z = -(N - N0) (nord = -z)    z i [-1000, 1000]   -> CITY_D 2000
 Matcher three.js-konvensjonen i storby/index.html.
 """
-import json, math
+import json, math, struct
 from utm import ll2utm33
 from PIL import Image
 
@@ -37,9 +37,27 @@ def proj(geom):
         out.append((round(E-E0,1), round(-(N-N0),1)))
     return out
 
+def sy_ringer(biter, toler=1.0):
+    """Sy sammen linjebiter ende-mot-ende til lukkede ringer."""
+    rester=[list(b) for b in biter if len(b)>=2]
+    ringer=[]
+    while rester:
+        ring=rester.pop(0)
+        endret=True
+        while endret and not (len(ring)>=4 and math.dist(ring[0],ring[-1])<toler):
+            endret=False
+            for i,r in enumerate(rester):
+                if   math.dist(ring[-1], r[0])  < toler: ring+=r[1:];            rester.pop(i); endret=True; break
+                elif math.dist(ring[-1], r[-1]) < toler: ring+=r[::-1][1:];      rester.pop(i); endret=True; break
+                elif math.dist(ring[0],  r[-1]) < toler: ring=r[:-1]+ring;       rester.pop(i); endret=True; break
+                elif math.dist(ring[0],  r[0])  < toler: ring=r[::-1][:-1]+ring; rester.pop(i); endret=True; break
+        if len(ring)>=4: ringer.append(ring)
+    return ringer
+
 def innenfor(pts, slark=200):
     return any(abs(x)<=HW+slark and abs(z)<=HD+slark for x,z in pts)
 
+im = Image.open('skien_dtm.tif')
 d = json.load(open('skien.osm.json'))
 els = d['elements']
 byid = {e['id']:e for e in els if e['type']=='way'}
@@ -54,12 +72,14 @@ for e in els:
         pts = proj(g)
         if not innenfor(pts): continue
     elif e['type']=='relation':
-        deler=[]
-        for m in e.get('members',[]):
-            if m.get('type')=='way' and m.get('geometry'):
-                p=proj(m['geometry'])
-                if len(p)>=3: deler.append(p)
+        # Multipolygon-medlemmer er BITER av en ring, ikke ferdige ringer.
+        # Sys sammen ende-mot-ende, ellers blir en elv til 46 loerevne flater.
+        ytre=[m for m in e.get('members',[]) if m.get('geometry') and m.get('role')!='inner']
+        indre=[m for m in e.get('members',[]) if m.get('geometry') and m.get('role')=='inner']
+        deler=sy_ringer([proj(m['geometry']) for m in ytre]) + \
+              sy_ringer([proj(m['geometry']) for m in indre])
         if not deler: continue
+        if not any(innenfor(r) for r in deler): continue
         pts=None
     else:
         continue
@@ -86,10 +106,16 @@ for e in els:
         ringer = [pts] if pts else deler
         bygg.append({'n':tg.get('name'),'k':b,'h':round(hoy,1),'p':ringer[0],
                      'hull':ringer[1:] if len(ringer)>1 else None})
-    elif tg.get('natural')=='water' or tg.get('waterway') in ('riverbank','river','stream','canal'):
+    elif tg.get('natural')=='water' or 'waterway' in tg:
+        art = tg.get('natural') or tg.get('waterway')
         ringer = [pts] if pts else deler
         for r in ringer:
-            vann.append({'n':tg.get('name'),'k':tg.get('natural') or tg.get('waterway'),'p':r})
+            lukket = len(r)>=4 and abs(r[0][0]-r[-1][0])<0.5 and abs(r[0][1]-r[-1][1])<0.5
+            if art in ('water','riverbank') or lukket:
+                vann.append({'n':tg.get('name'),'k':art,'flate':True,'p':r})
+            elif art in ('river','stream','canal','ditch'):
+                vann.append({'n':tg.get('name'),'k':art,'flate':False,
+                             'w':{'river':28,'canal':14,'stream':5,'ditch':3}[art],'p':r})
     elif tg.get('leisure') in ('park','garden','pitch','playground') or \
          tg.get('landuse') in ('grass','forest','meadow','recreation_ground','cemetery','allotments') or \
          tg.get('natural') in ('wood','scrub','grassland'):
@@ -98,22 +124,32 @@ for e in els:
             gronn.append({'n':tg.get('name'),
                           'k':tg.get('leisure') or tg.get('landuse') or tg.get('natural'),'p':r})
 
-# ---- terreng: 600x400 DTM -> 16-bit PNG heightmap, 5 m/piksel
-im = Image.open('skien_dtm.tif')
+# ---- terreng: DTM -> uint16 binaerfil, 5 m/piksel, radvis fra nord-vest
 px = list(im.getdata())
 lo, hi = min(px), max(px)
-hm = Image.new('I;16', im.size)
-hm.putdata([int(round((v-lo)/(hi-lo)*65535)) for v in px])
-hm.save('skien_terreng.png')
+with open('skien_terreng.bin','wb') as fh:
+    fh.write(b''.join(struct.pack('<H', int(round((v-lo)/(hi-lo)*65535))) for v in px))
+
+# ---- vannspeil: hver vannflate far sitt eget niva fra DTM langs kanten
+import struct
+_px=list(im.getdata()); _W,_H=im.size
+def _dtm(x,z):
+    c=int((x+HW)/5); r=int((z+HD)/5)
+    c=max(0,min(_W-1,c)); r=max(0,min(_H-1,r))
+    return _px[r*_W+c]
+for v in vann:
+    hs=sorted(_dtm(x,z) for x,z in v['p'])
+    v['y']=round(hs[len(hs)//2],2) if hs else 0.0
 
 meta = {
   'kilde': 'OpenStreetMap (ODbL) + Kartverket DTM1 (NLOD)',
   'crs': 'EPSG:25833', 'senter_utm': [E0, N0], 'senter_wgs84': [59.2085, 9.6090],
   'verden': {'bredde': 3000, 'dybde': 2000, 'x': [-HW, HW], 'z': [-HD, HD]},
   'akser': 'x = ost (+), z = sor (+), nord = -z. 1 enhet = 1 meter.',
-  'terreng': {'fil':'skien_terreng.png','bredde':im.size[0],'hoyde':im.size[1],
-              'meter_per_piksel':5, 'min_m':round(lo,2), 'maks_m':round(hi,2),
-              'formel':'h = min_m + (piksel/65535)*(maks_m-min_m)'},
+  'terreng': {'fil':'skien_terreng.bin','format':'uint16 little-endian, radvis fra nord-vest',
+              'bredde':im.size[0],'hoyde':im.size[1],
+              'meter_per_piksel':5, 'min_m':round(lo,3), 'maks_m':round(hi,3),
+              'formel':'h = min_m + (u16/65535)*(maks_m-min_m)'},
   'antall': {'veier':len(veier),'bygg':len(bygg),'vann':len(vann),'gronn':len(gronn)},
 }
 json.dump({'meta':meta,'veier':veier,'bygg':bygg,'vann':vann,'gronn':gronn},
