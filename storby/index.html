@@ -2354,6 +2354,18 @@ window.__dbg={
     return ut;
   },
   gy:(x,z)=>groundAt(x,z),
+  grunn:()=>{
+    const p=groundGeo.attributes.position;
+    let lo=1e9,hi=-1e9;
+    for(let i=0;i<p.count;i++){const y=p.getY(i);if(y<lo)lo=y;if(y>hi)hi=y;}
+    return {materiale:ground.material===markGrunn?'mark':'asfalt',
+            sk:!!SK, skt:!!SKT, synlig:ground.visible,
+            hoyde_min:+lo.toFixed(1), hoyde_maks:+hi.toFixed(1),
+            metalness:ground.material.metalness,
+            farger:!!groundGeo.getAttribute('color'),
+            taake:scene.fog?scene.fog.constructor.name+' '+
+                  (scene.fog.far!==undefined?('far='+scene.fog.far):('t='+scene.fog.density)):'ingen'};
+  },
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
