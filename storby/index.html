@@ -284,7 +284,11 @@ let SK=null;        // {meta, veier, bygg, vann, gronn}
 let SKT=null;       // hoydemodell: uint16-rutenett, 5 m per piksel
 let veinavnIdx=[];  // grovt rutenett for "hvilken gate star jeg i"
 
+// Av. Byen er den prosedurale igjen. Alt Skien-maskineriet star urort
+// under — sett SKIEN_PA=true for a hente det tilbake.
+const SKIEN_PA=false;
 async function lastSkien(){
+  if(!SKIEN_PA){SK=null;SKT=null;return false;}
   try{
     const [j,b]=await Promise.all([
       fetch('skien-data/skien.json?v=skien-2').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),
@@ -462,6 +466,51 @@ function pktIPolygon(x,z,ring){
   return inne;
 }
 
+/* ------------------- ELV, RUNDKJORINGER OG PARKER ----------------------- */
+// Elva slynger seg nord-sor gjennom byen. Terrenget senkes mot midten, sa
+// dalen finnes for vi legger vann i den, og hovedgatene som krysser far bro.
+let ELVE=null, RUNDK=[], EKSTRAPARK=[];
+const ELVE_Y=-6.5;                      // vannspeil
+function lagElv(){
+  ELVE={x0:rnd(-420,420), a1:rnd(120,240), b1:rnd(280,460), f1:rand()*6.3,
+        a2:rnd(40,110),  b2:rnd(90,170),  f2:rand()*6.3, w:rnd(52,88)};
+}
+function elveX(z){
+  return ELVE.x0+Math.sin(z/ELVE.b1+ELVE.f1)*ELVE.a1+Math.sin(z/ELVE.b2+ELVE.f2)*ELVE.a2;
+}
+function iElva(x,z,slark){
+  if(!ELVE)return false;
+  return Math.abs(x-elveX(z)) < ELVE.w/2+(slark||0);
+}
+function lagRundkjoringer(){
+  RUNDK=[];
+  const ax=streetsX.filter(s=>s.art), az=streetsZ.filter(s=>s.art);
+  if(!ax.length||!az.length)return;
+  const antall=rndi(3,6);
+  for(let i=0;i<antall;i++){
+    const sx=ax[rndi(0,ax.length-1)], sz=az[rndi(0,az.length-1)];
+    if(iElva(sx.p,sz.p,60))continue;
+    if(RUNDK.some(r=>Math.hypot(r.x-sx.p,r.z-sz.p)<260))continue;
+    RUNDK.push({x:sx.p, z:sz.p, oy:rnd(26,36), iy:rnd(11,16)});
+  }
+}
+function iRundkjoring(x,z,slark){
+  for(const r of RUNDK)
+    if(Math.hypot(x-r.x,z-r.z) < r.oy+(slark||0))return r;
+  return null;
+}
+function lagEkstraParker(){
+  EKSTRAPARK=[];
+  const antall=rndi(3,6);
+  for(let i=0;i<antall;i++)
+    EKSTRAPARK.push({x:rnd(-1,1)*760, z:rnd(-1,1)*560, r:rnd(90,180)});
+}
+function iEkstrapark(x,z){
+  for(const p of EKSTRAPARK)
+    if(Math.hypot((x-p.x)/1.25, z-p.z) < p.r)return true;
+  return false;
+}
+
 /* ---------------------------- TERRENG ----------------------------------- */
 /* Kvartalene planeres som flate platåer (slik ekte byer gjør det), mens
    veiene følger terrenget. Kantsteinen blir da en støttemur der det er bratt. */
@@ -487,7 +536,15 @@ function terrainH(x,z){
   const m1=noise(x/880+3.31, z/880+8.17);
   const m2=noise(x/340+21.7, z/340+5.53);
   const m3=noise(x/140+44.2, z/140+12.9);
-  return (h+(Math.pow(m1,1.7)*250+m2*80+m3*22)*w2)*TER_AMP;
+  let ut=(h+(Math.pow(m1,1.7)*250+m2*80+m3*22)*w2)*TER_AMP;
+  if(ELVE){                                  // dalen graves for vannet legges i
+    const d=Math.abs(x-elveX(z)), R=ELVE.w*1.9;
+    if(d<R){
+      const t=1-d/R, s=t*t*(3-2*t);
+      ut=ut*(1-s)+(ELVE_Y-3.2)*s;
+    }
+  }
+  return ut;
 }
 // kvartals-platåer i eget rutenett, så vi vet hva spilleren står på
 let padHash=new Map();
@@ -939,6 +996,7 @@ function districtAt(x,z){
 function isPark(x,z){
   if(Math.hypot((x+PKX)/1.25,z-PKZ)<250)return true;
   if(Math.hypot((x-880)/1.1,z+430)<130)return true;
+  if(iEkstrapark(x,z))return true;
   return noise(x/95+41.2+NOFF,z/95+17.9+NOFF)>0.80;
 }
 function subdivide(x0,z0,x1,z1,maxW,out,depth){
@@ -1248,41 +1306,96 @@ function generateSkien(scene,mats,gm){
     }
   }
 
-  /* ---- BYGG: ekte fotavtrykk, ekte hoyder ---- */
-  for(const b of SK.bygg){
-    if(b.p.length<4)continue;
-    const r=minsteRektangel(b.p);
-    if(!r||r.w<4||r.d<4)continue;
-    if(r.cx<-HW||r.cx>HW||r.cz<-HD||r.cz>HD)continue;
-    const hj=boksHjorner(r,0.8);
-
-    let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,lav=1e9,hoy=-1e9;
+  /* ---- BYGG: vare egne, satt langs gatene ---- */
+  // Kartet gir gatenettet. Bygningene lager vi selv: kvartalsvegger som
+  // folger gatelopet, med tomtebredde, dybde og etasjetall etter hvor i
+  // byen de star. Ingen fotavtrykk fra OSM i det hele tatt.
+  {
+  const opptatt=new Uint8Array(VM_W*VM_D);
+  const gridBoks=hj=>{
+    let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
     for(const p of hj){
-      x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);
-      const h=H(p[0],p[1]);lav=Math.min(lav,h);hoy=Math.max(hoy,h);
+      if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0];
+      if(p[1]<z0)z0=p[1]; if(p[1]>z1)z1=p[1];
     }
-
-    const grunn=hoy+0.15;
-    const fot=lav-Math.max(1.2,(hoy-lav)*1.35+0.8);
-    // hele etasjer gir like vindusrader og en roligere by
-    const etg=Math.max(1,Math.round(b.h/FH));
-    const topp=grunn+etg*FH;
-    const mat=SK_MAT[b.k]!==undefined?SK_MAT[b.k]:(b.h>18?M_OFFICE:M_PLASTER);
-    const butikk=SK_SHOP.has(b.k)&&b.h>GROUND_H+4;
-    const tv=rnd(.82,1.14),hu=rnd(-.045,.045);
-    const col=[cl(tv+hu,.5,1.4),cl(tv,.5,1.4),cl(tv-hu*.7,.5,1.4)];
-    const ch=chunkOf((x0+x1)/2,(z0+z1)/2);
-
-    boksBygg(ch,mat,hj,fot,topp,col,butikk,grunn+GROUND_H);
-    buildingCount++;
-    const bokser=fotavtrykkBokser(hj,1.5);
-    for(const k of bokser){
-      if(paaVei((k.x0+k.x1)/2,(k.z0+k.z1)/2))continue;   // veibanen vinner
-      addCol({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,top:topp});
-      addPad({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,pad:grunn});
+    return [((x0+HW)/VG)|0, ((x1+HW)/VG)|0, ((z0+HD)/VG)|0, ((z1+HD)/VG)|0];
+  };
+  const ledig=hj=>{
+    const [i0,i1,j0,j1]=gridBoks(hj);
+    if(i0<1||i1>=VM_W-1||j0<1||j1>=VM_D-1)return false;
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
+      const k=j*VM_W+i;
+      if(opptatt[k]||veimaske[k])return false;     // tomta ma vaere fri, og ikke gate
     }
-    blocks.push({x0:x0,z0:z0,x1:x1,z1:z1,
-                 d:b.h>18?D_DOWN:(b.h>10?D_MID:D_RES),pad:grunn});
+    return true;
+  };
+  const merk=hj=>{
+    const [i0,i1,j0,j1]=gridBoks(hj);
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)opptatt[j*VM_W+i]=1;
+  };
+
+  for(const v of SK.veier){
+    if(!SK_KJORBAR.has(v.k))continue;
+    for(let i=0;i<v.p.length-1;i++){
+      const a=v.p[i],b=v.p[i+1];
+      const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
+      if(L<14)continue;
+      const ux=dx/L,uz=dz/L, nx=-uz,nz=ux;
+
+      for(const side of [-1,1]){
+        let d=rnd(2,7);
+        while(d<L-12){
+          // hvor i byen star vi? sentrum blir tettere og hoyere
+          const px=a[0]+ux*d, pz=a[1]+uz*d;
+          const r=Math.hypot(px/1.25,pz+380);
+          const sentrum=r<430, midt=r<820;
+
+          const bredde=sentrum?rnd(16,30):midt?rnd(13,24):rnd(10,17);
+          const dybde =sentrum?rnd(14,22):midt?rnd(11,17):rnd(9,13);
+          const glipe =sentrum?rnd(0.6,2.5):midt?rnd(2,6):rnd(4,11);
+          const tilbake=sentrum?rnd(2,4):midt?rnd(3,7):rnd(5,10);
+
+          if(d+bredde>L-4){d+=bredde+glipe;continue;}
+          const off=v.w/2+tilbake+dybde/2;
+          const cx=a[0]+ux*(d+bredde/2)+nx*off*side;
+          const cz=a[1]+uz*(d+bredde/2)+nz*off*side;
+          if(Math.abs(cx)>HW-20||Math.abs(cz)>HD-20){d+=bredde+glipe;continue;}
+          if(grontVed(cx,cz)){d+=bredde+glipe;continue;}       // parker holdes apne
+
+          const hw=bredde/2, hd=dybde/2;
+          const hj=[[cx-ux*hw-nx*hd, cz-uz*hw-nz*hd],
+                    [cx+ux*hw-nx*hd, cz+uz*hw-nz*hd],
+                    [cx+ux*hw+nx*hd, cz+uz*hw+nz*hd],
+                    [cx-ux*hw+nx*hd, cz-uz*hw+nz*hd]];
+          hj.push(hj[0].slice());
+
+          if(!ledig(hj)){d+=bredde*0.5+glipe;continue;}
+          merk(hj);
+
+          const etg=sentrum?rndi(4,7):midt?rndi(3,5):rndi(2,3);
+          const mat=sentrum?(rand()<.30?M_OFFICE:M_PLASTER)
+                   :midt?(rand()<.40?M_BRICK:M_PLASTER)
+                   :(rand()<.60?M_BRICK:M_PLASTER);
+          const butikk=sentrum||(midt&&rand()<.35);
+          const tv=rnd(.82,1.14),hu=rnd(-.045,.045);
+          const col=[cl(tv+hu,.5,1.4),cl(tv,.5,1.4),cl(tv-hu*.7,.5,1.4)];
+          const grunn=H(cx,cz)+0.1, topp=grunn+etg*FH;
+          const ch=chunkOf(cx,cz);
+
+          boksBygg(ch,mat,hj,grunn-1.2,topp,col,butikk,grunn+GROUND_H);
+          buildingCount++;
+          for(const k of fotavtrykkBokser(hj,1.5)){
+            if(paaVei((k.x0+k.x1)/2,(k.z0+k.z1)/2))continue;
+            addCol({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,top:topp});
+            addPad({x0:k.x0,x1:k.x1,z0:k.z0,z1:k.z1,pad:grunn});
+          }
+          blocks.push({x0:cx-hw-hd,z0:cz-hw-hd,x1:cx+hw+hd,z1:cz+hw+hd,
+                       d:sentrum?D_DOWN:midt?D_MID:D_RES,pad:grunn});
+          d+=bredde+glipe;
+        }
+      }
+    }
+  }
   }
 
   /* ---- monter alt ---- */
@@ -1422,7 +1535,7 @@ function bilStat(c){
 
 function generateCity(scene,mats,gm){
   streetsX=makeStreets(CITY_W);streetsZ=makeStreets(CITY_D);
-  lagDiagonaler();
+  lagDiagonaler(); lagElv(); lagRundkjoringer(); lagEkstraParker();
   blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
 
   const chunks=[];for(let i=0;i<CHX*CHZ;i++){const m=[];for(let k=0;k<NMAT;k++)m.push(Buf());chunks.push(m);}
@@ -1441,6 +1554,8 @@ function generateCity(scene,mats,gm){
     const mx=(bx0+bx1)/2,mz=(bz0+bz1)/2;
     if(Math.hypot(mx/1.30,mz)>880)continue;      // utenfor: villmark
     if(iDiagonal(mx,mz,-6))continue;             // kvartalet ligger i avenyen
+    if(iElva(mx,mz,26))continue;                 // kvartalet ligger i elva
+    if(iRundkjoring(mx,mz,14))continue;          // kvartalet ligger i rundkjoringen
     const dist=isPark(mx,mz)?D_PARK:districtAt(mx,mz);
     // platået legges på snittet av hjørnene, og kantsteinen strekkes ned til
     // laveste terrengpunkt rundt kvartalet så det aldri blir hull
@@ -1681,6 +1796,64 @@ function generateCity(scene,mats,gm){
   for(const s of streetsZ)if(s.art)for(let x=-HW+30;x<HW;x+=46){
     lamps.push([x,s.p-s.w/2+2]);lamps.push([x,s.p+s.w/2-2]);}
 
+  /* ---------------- ELV, BROER OG RUNDKJORINGER ---------------- */
+  const elvB=Buf(), bruB=Buf(), rekkB=Buf(), ringB=Buf(), oyB=Buf();
+
+  // vannspeil langs elveslyngen
+  for(let z=-HD;z<HD;z+=14){
+    const x0=elveX(z), x1=elveX(z+14), h=ELVE.w/2;
+    quad(elvB, x0-h,ELVE_Y,z, x0+h,ELVE_Y,z, x1+h,ELVE_Y,z+14, x1-h,ELVE_Y,z+14,
+         0,1,0, 0,0, ELVE.w/24, 14/24, W);
+  }
+
+  // broer der hovedgatene krysser elva
+  for(const s of streetsZ){
+    if(!s.art)continue;
+    const cx=elveX(s.p), spenn=ELVE.w/2+30;
+    const y=Math.max(terrainH(cx-spenn,s.p), terrainH(cx+spenn,s.p))+1.4;
+    const hz=s.w/2;
+    slab(bruB, cx-spenn, cx+spenn, y, s.p-hz, s.p+hz, 6, W);          // dekke
+    // undersiden, sa brua ikke er et papirark sett nedenfra
+    slab(bruB, cx-spenn, cx+spenn, y-1.1, s.p+hz, s.p-hz, 6, W);
+    for(const sz of [s.p-hz, s.p+hz-0.5]){                            // rekkverk
+      walls(rekkB, cx-spenn, cx+spenn, y, y+1.15, sz, sz+0.5,
+            cl(Math.round(spenn*2/4),1,40), 1, 1, W);
+    }
+    // brupilarer ned i vannet
+    for(const px of [cx-ELVE.w/4, cx+ELVE.w/4])
+      walls(bruB, px-1.6, px+1.6, ELVE_Y-3, y-1.1, s.p-1.6, s.p+1.6, 1,1,3, W);
+    addPad({x0:cx-spenn, x1:cx+spenn, z0:s.p-hz, z1:s.p+hz, pad:y});
+  }
+
+  // rundkjoringer: asfaltring med gronn oy i midten
+  for(const r of RUNDK){
+    const seg=28;
+    const y=terrainH(r.x,r.z);
+    for(let i=0;i<seg;i++){
+      const a0=i/seg*Math.PI*2, a1=(i+1)/seg*Math.PI*2;
+      const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
+      // ringen
+      quad(ringB,
+        r.x+c0*r.iy, terrainH(r.x+c0*r.iy,r.z+s0*r.iy)+0.06, r.z+s0*r.iy,
+        r.x+c0*r.oy, terrainH(r.x+c0*r.oy,r.z+s0*r.oy)+0.06, r.z+s0*r.oy,
+        r.x+c1*r.oy, terrainH(r.x+c1*r.oy,r.z+s1*r.oy)+0.06, r.z+s1*r.oy,
+        r.x+c1*r.iy, terrainH(r.x+c1*r.iy,r.z+s1*r.iy)+0.06, r.z+s1*r.iy,
+        0,1,0, 0,0, (r.oy-r.iy)/5, Math.PI*2*r.oy/seg/5, W);
+      // oya
+      tri(oyB, r.x,y+0.5,r.z,
+               r.x+c1*r.iy,y+0.45,r.z+s1*r.iy,
+               r.x+c0*r.iy,y+0.45,r.z+s0*r.iy,
+          0,1,0, .5,.5, .5+c1*.5,.5+s1*.5, .5+c0*.5,.5+s0*.5, W);
+    }
+    for(let t=0;t<4;t++){
+      const a=rand()*Math.PI*2, d=rand()*r.iy*0.6;
+      trees.push([r.x+Math.cos(a)*d, r.z+Math.sin(a)*d, rnd(.9,1.5), rand()*6.3, y+0.45]);
+    }
+    const k=r.iy*0.68;                       // kollisjon: firkant inne i oya
+    addCol({x0:r.x-k, x1:r.x+k, z0:r.z-k, z1:r.z+k, top:y+0.9});
+    addPad({x0:r.x-k, x1:r.x+k, z0:r.z-k, z1:r.z+k, pad:y+0.45});
+  }
+
   const group=new THREE.Group();
   for(let i=0;i<chunks.length;i++)for(let k=0;k<NMAT;k++){
     const b=chunks[i][k];if(!b.p.length)continue;
@@ -1707,6 +1880,8 @@ function generateCity(scene,mats,gm){
       slab(dash,x,x+4,y,s.p-0.28,s.p+0.28,1,W);
     }
   add(dash,gm.dashMat);
+  add(elvB,gm.vann); add(bruB,gm.walk,true); add(rekkB,gm.curb,true);
+  add(ringB,gm.diagvei); add(oyB,gm.grass);
 
   tegnDiagonaler(diag,W);
 
