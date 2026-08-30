@@ -287,8 +287,8 @@ let veinavnIdx=[];  // grovt rutenett for "hvilken gate star jeg i"
 async function lastSkien(){
   try{
     const [j,b]=await Promise.all([
-      fetch('skien-data/skien.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),
-      fetch('skien-data/skien_terreng.bin').then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()})
+      fetch('skien-data/skien.json?v=skien-2').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}),
+      fetch('skien-data/skien_terreng.bin?v=skien-2').then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()})
     ]);
     const t=j.meta.terreng;
     SKT={u:new Uint16Array(b),W:t.bredde,H:t.hoyde,mps:t.meter_per_piksel,
@@ -437,6 +437,10 @@ function addPad(b){
     }
 }
 function groundAt(x,z){
+  if(veimaske){                        // veibanen gar foran alt annet
+    const vy=veiH(x,z);
+    if(vy!==null)return vy;
+  }
   const a=padHash.get(Math.floor(x/GRID)+':'+Math.floor(z/GRID));
   if(a)for(const b of a)
     if(x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1)return b.pad;
@@ -967,27 +971,92 @@ let skienRuter=[];   // kjorbare veier med buelengde, brukt av trafikken
 // rasteriseringen runder uansett litt utover. Her males alle kjorbare gater
 // inn i et 1 m rutenett, og kollisjonsbokser med senter pa veien forkastes.
 // Da kan du alltid kjore gata — uansett hva kartet sier.
-let veimaske=null;
-const VM_W=CITY_W|0, VM_D=CITY_D|0;
+let veimaske=null, veihoyde=null;
+const VG=2, VM_W=(CITY_W/VG)|0, VM_D=(CITY_D/VG)|0;
+
+// To kjorefelt overalt. OSM-bredden er den EKTE bredden, og en 4 m
+// boliggate er ikke kjorbar i et spill. Kjorbarhet slar noyaktighet:
+// hver kjorbar gate far minst 16 m asfalt, hovedgatene mer.
+const MIN_BREDDE={motorway:34,trunk:30,primary:28,secondary:24,tertiary:20,
+                  residential:16,unclassified:16,living_street:16,
+                  primary_link:16,secondary_link:16,tertiary_link:16,
+                  service:11,pedestrian:12};
+function settVeibredder(){
+  for(const v of SK.veier){
+    const m=MIN_BREDDE[v.k];
+    if(m&&v.w<m)v.w=m;
+  }
+}
+
+// Hoydemodellen er ra laserdata pa meternivå — fortauskanter, grofter og
+// stoy ligger i den. Legger man veien rett pa, blir hver kant en hump
+// bilen klatrer i, og det kjennes som en usynlig vegg. Derfor bygges
+// veien som sin EGEN flate: hver gate far en glattet lengdeprofil, og
+// bade asfalten, bakkehoyden og trafikken leser fra den. Veien vinner.
+function glattProfil(p,halv){
+  // Hoyeste terreng PA TVERS av hele veibredden, ikke bare i midten.
+  // Da kan bakken aldri stikke opp gjennom asfalten.
+  const topp=p.map((q,i)=>{
+    const a=p[Math.max(0,i-1)], b=p[Math.min(p.length-1,i+1)];
+    const dx=b[0]-a[0], dz=b[1]-a[1], L=Math.hypot(dx,dz)||1;
+    const nx=-dz/L, nz=dx/L;
+    let m=-1e9;
+    for(let o=-halv;o<=halv;o+=1.5){
+      const h=skienH(q[0]+nx*o, q[1]+nz*o);
+      if(h>m)m=h;
+    }
+    return m;
+  });
+  let h=topp.slice();
+  for(let runde=0;runde<4;runde++){
+    const ny=h.slice();
+    for(let i=1;i<h.length-1;i++) ny[i]=(h[i-1]+2*h[i]+h[i+1])/4;
+    h=ny;
+  }
+  // alltid litt OVER det hoyeste terrenget under veien
+  for(let i=0;i<h.length;i++) h[i]=Math.max(h[i],topp[i])+0.30;
+  return h;
+}
 function byggVeimaske(){
   veimaske=new Uint8Array(VM_W*VM_D);
-  const mrk=(x,z)=>{
-    const i=(x+HW)|0, j=(z+HD)|0;
-    if(i>=0&&i<VM_W&&j>=0&&j<VM_D)veimaske[j*VM_W+i]=1;
-  };
+  veihoyde=new Float32Array(VM_W*VM_D);
   for(const v of SK.veier){
     if(!SK_KJORBAR.has(v.k)&&v.k!=='service'&&v.k!=='pedestrian')continue;
-    const h=Math.max(2.5,v.w/2-0.6);          // litt smalere enn asfalten
+    const halv=Math.max(3,v.w/2-0.8);
+    v.h=glattProfil(v.p,halv+1.5);
     for(let i=0;i<v.p.length-1;i++){
       const a=v.p[i],b=v.p[i+1];
       const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
       if(L<1e-3)continue;
       const ux=dx/L,uz=dz/L,nx=-uz,nz=ux;
-      for(let d=0;d<=L;d+=0.8)
-        for(let o=-h;o<=h;o+=0.8)
-          mrk(a[0]+ux*d+nx*o, a[1]+uz*d+nz*o);
+      const ya=v.h[i], yb=v.h[i+1];
+      for(let d=0;d<=L;d+=1){
+        const y=ya+(yb-ya)*(d/L);
+        for(let o=-halv;o<=halv;o+=1){
+          const gi=((a[0]+ux*d+nx*o+HW)/VG)|0, gj=((a[1]+uz*d+nz*o+HD)/VG)|0;
+          if(gi<0||gi>=VM_W||gj<0||gj>=VM_D)continue;
+          const k=gj*VM_W+gi;
+          // i kryss vinner den laveste flaten, sa ingen kant stikker opp
+          if(!veimaske[k]||y<veihoyde[k]){veimaske[k]=1;veihoyde[k]=y;}
+        }
+      }
     }
   }
+}
+// Bilineaer hoyde pa veibanen, sa kjoringen blir jevn og ikke trappetrinn.
+function veiH(x,z){
+  if(!veimaske)return null;
+  const fx=(x+HW)/VG-0.5, fz=(z+HD)/VG-0.5;
+  const i0=Math.floor(fx), j0=Math.floor(fz), tx=fx-i0, tz=fz-j0;
+  let sum=0,vekt=0;
+  for(let dj=0;dj<2;dj++)for(let di=0;di<2;di++){
+    const i=i0+di, j=j0+dj;
+    if(i<0||i>=VM_W||j<0||j>=VM_D)continue;
+    const k=j*VM_W+i; if(!veimaske[k])continue;
+    const w=(di?tx:1-tx)*(dj?tz:1-tz);
+    sum+=veihoyde[k]*w; vekt+=w;
+  }
+  return vekt>0.001?sum/vekt:null;
 }
 // Parker og skog la seg som egne flate polygoner OVER terrenget. Selv
 // oppdelt ble de et lappeteppe med egen skyggelegging og synlige sommer.
@@ -1030,7 +1099,7 @@ function grontVed(x,z){
 }
 function paaVei(x,z){
   if(!veimaske)return false;
-  const i=(x+HW)|0, j=(z+HD)|0;
+  const i=((x+HW)/VG)|0, j=((z+HD)/VG)|0;
   return i>=0&&i<VM_W&&j>=0&&j<VM_D&&veimaske[j*VM_W+i]===1;
 }
 
@@ -1091,10 +1160,11 @@ function generateSkien(scene,mats,gm){
   /* ---- VEIER: ekte polylinjer, lagt pa terrenget ---- */
   for(const v of SK.veier){
     const gang=SK_GANGVEI.has(v.k);
-    band(gang?gangB:veiB, v.p, v.w, (x,z)=>H(x,z)+(gang?0.06:0.10), W, gang?2.5:6);
+    const VY=(x,z)=>{const y=veiH(x,z); return y!==null?y:H(x,z);};
+    band(gang?gangB:veiB, v.p, v.w, (x,z)=>VY(x,z)+(gang?0.06:0.10), W, gang?2.5:6);
     if(v.art){
-      band(kantB,v.p,v.w+2.6,(x,z)=>H(x,z)+0.07,W,6);    // asfaltskulder
-      stiplet(dashB,v.p,(x,z)=>H(x,z)+0.16);
+      band(kantB,v.p,v.w+3.2,(x,z)=>VY(x,z)+0.07,W,6);   // asfaltskulder
+      stiplet(dashB,v.p,(x,z)=>VY(x,z)+0.16);
       // gatelys langs hovedgatene
       let s=0;
       for(let i=0;i<v.p.length-1;i++){
@@ -1909,7 +1979,7 @@ function updateCars(dt){
       if(c.pos>lim)c.pos=-lim; if(c.pos<-lim)c.pos=lim;
     }
     const st=bilStat(c);
-    _cd.position.set(st.x,terrainH(st.x,st.z),st.z);
+    _cd.position.set(st.x,groundAt(st.x,st.z),st.z);
     _cd.rotation.set(0,st.yaw+CAR_YAW,0);
     _cd.scale.setScalar(CAR_SCALE);
     _cd.updateMatrix();c.m.setMatrixAt(c.i,_cd.matrix);
@@ -2402,6 +2472,7 @@ function build(){
   rand=mulberry32(SEED);
   NOFF=(SEED%977)*0.37; PKX=300+rand()*600; PKZ=-200+rand()*500;
   if(SK){
+    settVeibredder();
     const t0=performance.now(); byggVeimaske();
     const t1=performance.now(); byggGrontmaske();
     console.log('masker: vei '+Math.round(t1-t0)+' ms, gront '+Math.round(performance.now()-t1)+' ms');
@@ -2505,6 +2576,44 @@ window.__dbg={
   gy:(x,z)=>groundAt(x,z),
   // Kjorer langs hver kjorbare gate og teller hvor mange punkter som er
   // sperret av en kollisjonsboks. Alt over null er en usynlig vegg i veibanen.
+  // Veisjekk maler bare langs veimidten. Denne gar over HELE byen i 3 m
+  // rutenett og teller punkter som er sperret UTEN a ligge i en bygning —
+  // altsa akkurat det man kjenner som en usynlig vegg til fots.
+  gasjekk:()=>{
+    if(!SK)return {feil:'ikke Skien-modus'};
+    // fasit: hvilke punkter ligger faktisk inne i et bygg
+    let apne=0,falske=0; const verste=[];
+    const iBygg=(x,z)=>{
+      for(const b of SK.bygg){
+        if(x<b.p[0][0]-260||x>b.p[0][0]+260)continue;
+      }
+      return false;
+    };
+    // bruk padHash: et punkt inne i et bygg star pa et platå
+    for(let x=-HW+3;x<HW-3;x+=3)for(let z=-HD+3;z<HD-3;z+=3){
+      let sperret=false;
+      for(const b of nearby(x,z)){
+        const nx=Math.max(b.x0,Math.min(x,b.x1)), nz=Math.max(b.z0,Math.min(z,b.z1));
+        const dx=x-nx,dz=z-nz;
+        if(dx*dx+dz*dz < 0.36){sperret=true;break;}
+      }
+      if(!sperret){apne++;continue;}
+      // sperret: ligger punktet inne i et faktisk fotavtrykk?
+      let inne=false;
+      for(const b of SK.bygg){
+        const p=b.p;
+        if(p.length<4)continue;
+        let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;
+        for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<z0)z0=q[1];if(q[1]>z1)z1=q[1];}
+        if(x<x0||x>x1||z<z0||z>z1)continue;
+        if(pktIPolygon(x,z,p)){inne=true;break;}
+      }
+      if(!inne){falske++; if(verste.length<6)verste.push([Math.round(x),Math.round(z)]);}
+    }
+    const tot=apne+falske;
+    return {apne_punkter:apne, falske_vegger:falske,
+            andel:+(100*falske/tot).toFixed(2)+' %', eksempler:verste};
+  },
   veisjekk:()=>{
     if(!SK)return {feil:'ikke Skien-modus'};
     let n=0,sperret=0; const verste=[];
