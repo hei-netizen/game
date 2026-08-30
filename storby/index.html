@@ -178,6 +178,8 @@
   <div id="verline" style="color:#66708a;font-size:10px;letter-spacing:.12em"></div>
   <div id="kildeline" style="color:#4d566e;font-size:9px;letter-spacing:.06em">&nbsp;</div>
   <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
+  <div id="wanted" style="color:#ffd23c;font-size:22px;letter-spacing:.22em;
+       text-shadow:0 0 12px rgba(255,150,20,.75);margin-top:6px">&nbsp;</div>
 </div>
 
 <canvas id="minimap" width="300" height="200"></canvas>
@@ -498,6 +500,33 @@ function iRundkjoring(x,z,slark){
   for(const r of RUNDK)
     if(Math.hypot(x-r.x,z-r.z) < r.oy+(slark||0))return r;
   return null;
+}
+let POLITI=null;
+function lagPolitistasjon(){
+  POLITI=null;
+  const ax=streetsX.filter(s=>s.art), az=streetsZ.filter(s=>s.art);
+  if(!ax.length||!az.length)return;
+  const sett=(sx,sz)=>{POLITI={x:sx.p+sx.w/2+34, z:sz.p+sz.w/2+30, w:58, d:44};};
+  // gar systematisk gjennom alle hovedkryss og tar det beste sentrale
+  let best=null,bd=1e9;
+  for(const sx of ax)for(const sz of az){
+    if(iElva(sx.p,sz.p,80))continue;
+    if(iRundkjoring(sx.p,sz.p,90))continue;
+    const d=Math.hypot(sx.p,sz.p);
+    if(d<bd){bd=d;best=[sx,sz];}
+  }
+  if(!best){                                   // reserve: dropp elv/rundkjoring
+    for(const sx of ax)for(const sz of az){
+      const d=Math.hypot(sx.p,sz.p);
+      if(d<bd){bd=d;best=[sx,sz];}
+    }
+  }
+  if(best)sett(best[0],best[1]);
+}
+function iPolitiTomt(x,z,slark){
+  if(!POLITI)return false;
+  return Math.abs(x-POLITI.x)<POLITI.w/2+(slark||0) &&
+         Math.abs(z-POLITI.z)<POLITI.d/2+(slark||0);
 }
 function lagEkstraParker(){
   EKSTRAPARK=[];
@@ -1535,7 +1564,7 @@ function bilStat(c){
 
 function generateCity(scene,mats,gm){
   streetsX=makeStreets(CITY_W);streetsZ=makeStreets(CITY_D);
-  lagDiagonaler(); lagElv(); lagRundkjoringer(); lagEkstraParker();
+  lagDiagonaler(); lagElv(); lagRundkjoringer(); lagPolitistasjon(); lagEkstraParker();
   blocks=[];colliders=[];hash=new Map();padHash=new Map();buildingCount=0;
 
   const chunks=[];for(let i=0;i<CHX*CHZ;i++){const m=[];for(let k=0;k<NMAT;k++)m.push(Buf());chunks.push(m);}
@@ -1544,6 +1573,7 @@ function generateCity(scene,mats,gm){
     Math.min(CHX-1,Math.max(0,Math.floor((x+HW)/CHW)))];
   const walk=Buf(),park=Buf(),curb=Buf(),cross=Buf();
   const diag=Buf(),hage=Buf(),gjerde=Buf(),sti=Buf(),bensin=Buf(),kanopi=Buf();
+  const skiltB=Buf();
   const trees=[],lamps=[],roofProps=[];
   const W=[1,1,1];
 
@@ -1556,6 +1586,7 @@ function generateCity(scene,mats,gm){
     if(iDiagonal(mx,mz,-6))continue;             // kvartalet ligger i avenyen
     if(iElva(mx,mz,26))continue;                 // kvartalet ligger i elva
     if(iRundkjoring(mx,mz,14))continue;          // kvartalet ligger i rundkjoringen
+    if(iPolitiTomt(mx,mz,10))continue;           // tomta er politiets
     const dist=isPark(mx,mz)?D_PARK:districtAt(mx,mz);
     // platået legges på snittet av hjørnene, og kantsteinen strekkes ned til
     // laveste terrengpunkt rundt kvartalet så det aldri blir hull
@@ -1825,6 +1856,28 @@ function generateCity(scene,mats,gm){
     addPad({x0:cx-spenn, x1:cx+spenn, z0:s.p-hz, z1:s.p+hz, pad:y});
   }
 
+  // POLITISTASJON: lav murbygning med blatt skilt og oppstillingsplass
+  if(POLITI){
+    const P=POLITI, y=terrainH(P.x,P.z)+0.3;
+    const bx0=P.x-P.w/2, bx1=P.x+P.w/2, bz0=P.z-P.d/2, bz1=P.z+P.d/2;
+    slab(walk,bx0,bx1,y,bz0,bz1,4,W);                       // asfaltert tomt
+    const hx0=bx0+6, hx1=bx1-6, hz0=bz0+5, hz1=bz0+24, H1=y+9.2;
+    const ch=chunkOf(P.x,P.z), col=[.92,.94,1.0];
+    volume(ch,M_PLASTER,hx0,hx1,y,H1,hz0,hz1,col,true,M_SHOP);
+    parapet(ch[M_CONC],hx0,hx1,H1,hz0,hz1,1.1,0.4,col);
+    // blatt skiltband over inngangen
+    quad(skiltB,hx0+3,H1-2.2,hz1+0.12,hx1-3,H1-2.2,hz1+0.12,
+                hx1-3,H1-0.4,hz1+0.12,hx0+3,H1-0.4,hz1+0.12, 0,0,1, 0,0,1,1,W);
+    // oppstillingsplass foran
+    for(let i=0;i<4;i++){
+      const px=hx0+8+i*11;
+      slab(cross,px,px+6,y+0.04,hz1+5,hz1+16,5.5,W);
+    }
+    addCol({x0:hx0,x1:hx1,z0:hz0,z1:hz1,top:H1});
+    addPad({x0:bx0,x1:bx1,z0:bz0,z1:bz1,pad:y});
+    POLITI.y=y; POLITI.dorX=(hx0+hx1)/2; POLITI.dorZ=hz1+10;
+  }
+
   // rundkjoringer: asfaltring med gronn oy i midten
   for(const r of RUNDK){
     const seg=28;
@@ -1880,6 +1933,7 @@ function generateCity(scene,mats,gm){
       slab(dash,x,x+4,y,s.p-0.28,s.p+0.28,1,W);
     }
   add(dash,gm.dashMat);
+  add(skiltB,gm.politiskilt);
   add(elvB,gm.vann); add(bruB,gm.walk,true); add(rekkB,gm.curb,true);
   add(ringB,gm.diagvei); add(oyB,gm.grass);
 
@@ -2625,6 +2679,8 @@ const gm={
   // Skienselva, Bryggevannet og Hjellevannet. Hver flate ligger pa sitt eget
   // niva fra hoydemodellen — Hjellevannet ligger 5 m over Bryggevannet, slik
   // slusene i Skien faktisk deler dem.
+  politiskilt:new THREE.MeshStandardMaterial({color:0x1746b8,roughness:.42,
+         emissive:0x0a2a80,emissiveIntensity:.55}),
   vann :new THREE.MeshStandardMaterial({color:0x2c5c78,roughness:.12,metalness:.55,
          envMapIntensity:1.5,transparent:true,opacity:.93})
 };
@@ -2695,7 +2751,7 @@ function build(){
     city=generateCity(scene,mats,gm);
     plantSkog(scene,gm);
   }
-  buildTraffic();buildParked();initMerker();
+  buildTraffic();buildParked();initMerker();byggFotgjengere();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
   document.getElementById('osub').textContent=
@@ -2784,6 +2840,18 @@ window.__dbg={
     return ut;
   },
   gy:(x,z)=>groundAt(x,z),
+  etterlyst:()=>({heat:Math.round(etterlyst.heat),stjerner:etterlyst.stjerner,
+                  politibiler:etterlyst.biler.length, fotgjengere:npc.length,
+                  nede:npc.filter(p=>p.ned>0).length,
+                  hud:document.getElementById('wanted').textContent.trim()}),
+  forbryt:(m)=>{forbrytelse(m||70,'test');return etterlyst.heat;},
+  by:()=>({rundkjoringer:RUNDK.map(r=>({x:Math.round(r.x),z:Math.round(r.z),
+             ytre:+r.oy.toFixed(1),indre:+r.iy.toFixed(1)})),
+           elv:ELVE?{bredde:Math.round(ELVE.w),
+                     krysser_z:streetsZ.filter(s=>s.art).map(s=>Math.round(s.p))}:null,
+           ekstraparker:EKSTRAPARK.length, kvartaler:blocks.length,
+           politi:POLITI?{x:Math.round(POLITI.x),z:Math.round(POLITI.z),
+                          dorX:Math.round(POLITI.dorX||0),dorZ:Math.round(POLITI.dorZ||0)}:null}),
   // Kjorer langs hver kjorbare gate og teller hvor mange punkter som er
   // sperret av en kollisjonsboks. Alt over null er en usynlig vegg i veibanen.
   // Veisjekk maler bare langs veimidten. Denne gar over HELE byen i 3 m
@@ -3444,13 +3512,175 @@ $('pname').addEventListener('keydown',e=>{
 });
 $('pname').addEventListener('click',e=>{ e.stopPropagation(); });
 
+/* ==========================================================================
+   FOTGJENGERE, WANTED LEVEL OG POLITI
+   Folk gar rundt kvartalene pa fortauet. Kjorer du dem ned stiger heat, og
+   heat gir stjerner 1-5. Politiet ruller ut fra stasjonen, en bil per
+   stjerne, og jager til du enten rister dem av deg eller blir tatt.
+   ========================================================================== */
+const NPC_ANT=240;
+let npc=[], npcKropp=null, npcHode=null;
+const etterlyst={heat:0, stjerner:0, sisteForbrytelse:-999, biler:[],
+                 kontakt:0, sisteUtrykning:0};
+
+function byggFotgjengere(){
+  for(const m of [npcKropp,npcHode])if(m){scene.remove(m);m.geometry.dispose();}
+  npc=[]; npcKropp=npcHode=null;
+  const gode=blocks.filter(b=>(b.x1-b.x0)>26&&(b.z1-b.z0)>26);
+  if(!gode.length)return;
+  npcKropp=new THREE.InstancedMesh(new THREE.CylinderGeometry(0.32,0.36,1.10,8),
+    new THREE.MeshLambertMaterial({color:0xffffff}),NPC_ANT);
+  npcHode=new THREE.InstancedMesh(new THREE.SphereGeometry(0.25,8,6),
+    new THREE.MeshLambertMaterial({color:0xf0c8a0}),NPC_ANT);
+  npcKropp.castShadow=true; npcKropp.frustumCulled=false; npcHode.frustumCulled=false;
+  npcKropp.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(NPC_ANT*3),3);
+  const c=new THREE.Color();
+  for(let i=0;i<NPC_ANT;i++){
+    const b=gode[rndi(0,gode.length-1)];
+    const w=b.x1-b.x0-3.2, d=b.z1-b.z0-3.2;
+    npc.push({b:b,w:w,d:d,P:2*(w+d),t:rand()*2*(w+d),
+              spd:rnd(1.0,1.7),dir:rand()<.5?1:-1,ned:0,x:0,z:0});
+    c.setHex(AV_COLS[i%AV_COLS.length]); npcKropp.setColorAt(i,c);
+  }
+  npcKropp.instanceColor.needsUpdate=true;
+  scene.add(npcKropp,npcHode);
+}
+function npcPos(p){
+  let t=p.t%p.P; if(t<0)t+=p.P;
+  const b=p.b, w=p.w, d=p.d;
+  if(t<w)          return [b.x0+1.6+t,      b.z0+1.6];
+  if(t<w+d)        return [b.x1-1.6,        b.z0+1.6+(t-w)];
+  if(t<2*w+d)      return [b.x1-1.6-(t-w-d),b.z1-1.6];
+  return                  [b.x0+1.6,        b.z1-1.6-(t-2*w-d)];
+}
+const _nd=new THREE.Object3D();
+function oppdaterFotgjengere(dt){
+  if(!npcKropp)return;
+  const kjorer=drive.on, fart=kjorer?Math.abs(drive.vx):0;
+  for(let i=0;i<npc.length;i++){
+    const p=npc[i];
+    if(p.ned>0){
+      p.ned-=dt;
+      if(p.ned<=0){                                  // reiser seg et annet sted
+        const gode=blocks;
+        p.b=gode[rndi(0,gode.length-1)];
+        p.w=p.b.x1-p.b.x0-3.2; p.d=p.b.z1-p.b.z0-3.2; p.P=2*(p.w+p.d);
+        p.t=rand()*p.P;
+      }
+    } else {
+      p.t+=p.spd*p.dir*dt;
+    }
+    const [x,z]=npcPos(p); p.x=x; p.z=z;
+    const y=p.b.pad;
+    if(p.ned>0){                                     // ligger nede
+      _nd.position.set(x,y+0.35,z); _nd.rotation.set(Math.PI/2,0,0);
+      _nd.updateMatrix(); npcKropp.setMatrixAt(i,_nd.matrix);
+      _nd.position.set(x,y+0.35,z); _nd.rotation.set(0,0,0);
+      _nd.updateMatrix(); npcHode.setMatrixAt(i,_nd.matrix);
+      continue;
+    }
+    const gange=Math.sin(performance.now()*0.006+i)*0.05;
+    _nd.rotation.set(0,0,0);
+    _nd.position.set(x,y+0.60+gange,z); _nd.updateMatrix(); npcKropp.setMatrixAt(i,_nd.matrix);
+    _nd.position.set(x,y+1.36+gange,z); _nd.updateMatrix(); npcHode.setMatrixAt(i,_nd.matrix);
+
+    if(kjorer&&fart>2.5){
+      const dx=x-drive.x, dz=z-drive.z;
+      if(dx*dx+dz*dz<3.6){
+        p.ned=rnd(5,9);
+        forbrytelse(fart>12?26:16, fart>12?'💥 Pakjort fotgjenger!':'💢 Du traff en fotgjenger');
+      }
+    }
+  }
+  npcKropp.instanceMatrix.needsUpdate=true;
+  npcHode.instanceMatrix.needsUpdate=true;
+}
+
+function forbrytelse(mengde,tekst){
+  etterlyst.heat=cl(etterlyst.heat+mengde,0,100);
+  etterlyst.sisteForbrytelse=performance.now()/1000;
+  if(tekst)showToast(tekst);
+}
+function visStjerner(){
+  const s=etterlyst.stjerner;
+  const el=document.getElementById('wanted');
+  el.textContent = s>0 ? '★'.repeat(s)+'☆'.repeat(5-s) : '\u00a0';
+}
+function politiUt(){
+  if(!carSrc['police'])return;
+  const vil=etterlyst.stjerner;
+  const na=performance.now()/1000;
+  if(etterlyst.biler.length>=vil)return;
+  if(na-etterlyst.sisteUtrykning<1.1)return;
+  etterlyst.sisteUtrykning=na;
+  const tx=drive.on?drive.x:P.pos.x, tz=drive.on?drive.z:P.pos.z;
+  let sx,sz;
+  const fraStasjon = POLITI&&POLITI.dorX!==undefined&&
+                     Math.hypot(POLITI.dorX-tx,POLITI.dorZ-tz)<420;
+  if(fraStasjon){ sx=POLITI.dorX+rnd(-14,14); sz=POLITI.dorZ+rnd(-4,8); }
+  else{                                  // patruljen rykker inn utenfra
+    const a=rand()*Math.PI*2;
+    sx=cl(tx+Math.cos(a)*rnd(130,190),-HW+20,HW-20);
+    sz=cl(tz+Math.sin(a)*rnd(130,190),-HD+20,HD-20);
+  }
+  const b=spawnRealCar('police', sx, sz, 0);
+  b.politi=true; b.blink=0; b.fodt=na;
+  parked.splice(parked.indexOf(b),1);      // ikke en parkert bil man kan kapre
+  scene.add(b.obj);
+  etterlyst.biler.push(b);
+}
+function politiInn(b){
+  scene.remove(b.obj);
+  const i=etterlyst.biler.indexOf(b); if(i>=0)etterlyst.biler.splice(i,1);
+}
+function oppdaterPoliti(dt){
+  const na=performance.now()/1000;
+  // heat kjoler seg ned nar du oppforer deg
+  if(na-etterlyst.sisteForbrytelse>7) etterlyst.heat=Math.max(0,etterlyst.heat-4.2*dt);
+  const nye=Math.min(5,Math.ceil(etterlyst.heat/20));
+  if(nye!==etterlyst.stjerner){
+    if(nye>etterlyst.stjerner&&nye===1)showToast('🚨 Politiet er varslet');
+    if(nye===0)showToast('✅ Du er ute av politiets sokelys');
+    etterlyst.stjerner=nye; visStjerner();
+  }
+  if(etterlyst.stjerner>0)politiUt();
+
+  const tx=drive.on?drive.x:P.pos.x, tz=drive.on?drive.z:P.pos.z;
+  let naerKontakt=false;
+  for(const b of etterlyst.biler.slice()){
+    if(etterlyst.stjerner===0){politiInn(b);continue;}
+    const dx=tx-b.x, dz=tz-b.z, d=Math.hypot(dx,dz);
+    // gi patruljen en aerlig sjanse for den gir opp
+    if(d>620&&na-(b.fodt||0)>10){politiInn(b);continue;}
+    let mal=Math.atan2(dx,dz), da=mal-b.yaw;
+    while(da>Math.PI)da-=Math.PI*2; while(da<-Math.PI)da+=Math.PI*2;
+    b.yaw+=cl(da,-2.4*dt,2.4*dt);
+    const fart=Math.min(30,13+etterlyst.stjerner*3.4);
+    const nx=b.x+Math.sin(b.yaw)*fart*dt, nz=b.z+Math.cos(b.yaw)*fart*dt;
+    if(friPlass(nx,nz)){b.x=nx;b.z=nz;} else {b.yaw+=1.9*dt;}
+    b.obj.position.set(b.x,groundAt(b.x,b.z)+b.yoff,b.z);
+    settBilRotasjon(b.obj,b.x,b.z,b.yaw-CAR_YAW,0,0);
+    b.blink=(b.blink||0)+dt;
+    if(d<4.5)naerKontakt=true;
+  }
+  if(naerKontakt&&etterlyst.stjerner>0){
+    etterlyst.kontakt+=dt;
+    if(etterlyst.kontakt>2.0){                        // tatt
+      etterlyst.kontakt=0; etterlyst.heat=0; etterlyst.stjerner=0; visStjerner();
+      for(const b of etterlyst.biler.slice())politiInn(b);
+      showToast('🚔 PAGREPET — du slipper med en advarsel');
+      if(drive.on){drive.vx=drive.vy=0;}
+    }
+  } else etterlyst.kontakt=Math.max(0,etterlyst.kontakt-dt*0.6);
+}
+
 /* ---------------------------- LOOP -------------------------------------- */
 let last=performance.now(),fa=0,fn=0,ht=0,FRAMES=0;
 function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);oppdaterLose(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterFotgjengere(dt);oppdaterPoliti(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
