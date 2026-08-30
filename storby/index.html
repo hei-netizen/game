@@ -1002,6 +1002,124 @@ function generateCity(scene,mats,gm){
   return group;
 }
 
+// ---------------------------- FOLK ----------------------------------------
+// Mii-aktige figurer: stort rundt hode uten hals, oval kropp, korte lemmer,
+// flate farger. Hver kroppsdel er en egen InstancedMesh, så 320 personer
+// koster 8 tegnekall. Lemmene har pivot i hofte/skulder, ikke i midten, så
+// rotasjonen ser ut som gange.
+const FOLK_N=320;
+let folkData=[], folkM={};
+const HUD_SKIN=[0xf2c9a0,0xe0a97b,0xc78d5e,0x9b6640,0xf7d9bb,0x7a4b2a];
+const HUD_HAAR=[0x2a2018,0x4a3020,0x1a1a1e,0x6b4a2a,0xa8752e,0x8a8a92,0xc23a2a];
+const HUD_SKJORTE=[0xd8443a,0x2f6fb5,0x3f9a56,0xe0a52c,0x8a4fb0,0xe07a34,
+                   0x2fa8a0,0xd85f9c,0xe8e4dc,0x36414f];
+const HUD_BUKSE=[0x2b3550,0x3a3a42,0x4a3f34,0x24303f,0x5a5148];
+
+function lagFolk(scene){
+  for(const k in folkM){ scene.remove(folkM[k]); }
+  folkM={}; folkData=[];
+  if(!blocks.length)return 0;
+
+  // ruter langs fortauskanten rundt kvartalene
+  const kand=blocks.filter(b=>b.d!==D_PARK&&(b.x1-b.x0)>26&&(b.z1-b.z0)>24);
+  if(!kand.length)return 0;
+  for(let i=0;i<FOLK_N;i++){
+    const b=kand[rndi(0,kand.length-1)];
+    const inn=2.6;
+    const x0=b.x0+inn,x1=b.x1-inn,z0=b.z0+inn,z1=b.z1-inn;
+    const w=x1-x0,d=z1-z0,L=2*(w+d);
+    folkData.push({x0,z0,x1,z1,w,d,L,pad:b.pad,
+      t:rand()*L, dir:rand()<.5?1:-1, fart:rnd(.85,1.7), fase:rand()*6.283,
+      skin:HUD_SKIN[rndi(0,HUD_SKIN.length-1)],
+      haar:HUD_HAAR[rndi(0,HUD_HAAR.length-1)],
+      skjorte:HUD_SKJORTE[rndi(0,HUD_SKJORTE.length-1)],
+      bukse:HUD_BUKSE[rndi(0,HUD_BUKSE.length-1)],
+      h:rnd(.88,1.10)});
+  }
+
+  const G={
+    hode : new THREE.SphereGeometry(.235,14,11),
+    haar : new THREE.SphereGeometry(.252,14,10),
+    kropp: new THREE.CapsuleGeometry(.175,.30,4,10),
+    arm  : new THREE.CapsuleGeometry(.058,.22,3,7),
+    ben  : new THREE.CapsuleGeometry(.072,.26,3,7),
+    oye  : new THREE.SphereGeometry(.036,7,6)
+  };
+  G.arm.translate(0,-.14,0);          // pivot i skulderen
+  G.ben.translate(0,-.17,0);          // pivot i hoften
+  G.haar.scale(1,.72,1); G.haar.translate(0,.075,0);
+
+  // instanceColor gir fargen. vertexColors ville krevd et color-attributt på
+  // geometrien, og uten det blir alt svart.
+  const flat=()=>new THREE.MeshLambertMaterial({color:0xffffff});
+  const deler=['hode','haar','kropp','armV','armH','benV','benH','oyeV','oyeH'];
+  const geoFor={hode:G.hode,haar:G.haar,kropp:G.kropp,armV:G.arm,armH:G.arm,
+                benV:G.ben,benH:G.ben,oyeV:G.oye,oyeH:G.oye};
+  for(const navn of deler){
+    const m=new THREE.InstancedMesh(geoFor[navn],flat(),FOLK_N);
+    m.castShadow=(navn!=='oyeV'&&navn!=='oyeH');
+    m.frustumCulled=false;
+    m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(FOLK_N*3),3);
+    folkM[navn]=m; scene.add(m);
+  }
+  const c=new THREE.Color();
+  folkData.forEach((f,i)=>{
+    const sett=(navn,hex)=>{c.setHex(hex);folkM[navn].setColorAt(i,c);};
+    sett('hode',f.skin); sett('haar',f.haar); sett('kropp',f.skjorte);
+    sett('armV',f.skin); sett('armH',f.skin);
+    sett('benV',f.bukse);sett('benH',f.bukse);
+    sett('oyeV',0x241c16);sett('oyeH',0x241c16);
+  });
+  for(const navn of deler) folkM[navn].instanceColor.needsUpdate=true;
+  return folkData.length;
+}
+
+// t langs kvartalets omkrets -> posisjon og retning
+function folkPos(f){
+  let t=f.t%f.L; if(t<0)t+=f.L;
+  if(t<f.w)              return {x:f.x0+t,        z:f.z0, yaw:Math.PI/2};
+  t-=f.w;
+  if(t<f.d)              return {x:f.x1,          z:f.z0+t, yaw:0};
+  t-=f.d;
+  if(t<f.w)              return {x:f.x1-t,        z:f.z1, yaw:-Math.PI/2};
+  t-=f.w;
+  return {x:f.x0, z:f.z1-t, yaw:Math.PI};
+}
+
+const _fd=new THREE.Object3D();
+function oppdaterFolk(dt){
+  if(!folkData.length||!folkM.hode)return;
+  for(let i=0;i<folkData.length;i++){
+    const f=folkData[i];
+    f.t+=f.fart*f.dir*dt;
+    f.fase+=f.fart*dt*3.4;
+    const p=folkPos(f);
+    const yaw=p.yaw+(f.dir<0?Math.PI:0);
+    const sv=Math.sin(f.fase)*0.55;                 // gå-utslag
+    const bob=Math.abs(Math.sin(f.fase))*0.035;
+    const y=f.pad+bob, S=f.h;
+    const sh=Math.sin(yaw), ch=Math.cos(yaw);
+    const sett=(navn,lx,ly,lz,rx,sc)=>{
+      _fd.position.set(p.x+(lx*ch+lz*sh), y+ly*S, p.z+(-lx*sh+lz*ch));
+      _fd.rotation.set(rx||0,yaw,0);
+      _fd.scale.setScalar(sc||S);
+      _fd.updateMatrix();
+      folkM[navn].setMatrixAt(i,_fd.matrix);
+    };
+    // kroppsdeler i lokale koordinater (x = sideveis, z = framover)
+    sett('benV', -.105, .43, 0,  sv);      // hofte, slik at beinet møter kroppen
+    sett('benH',  .105, .43, 0, -sv);
+    sett('kropp', 0,    .78, 0,  0);
+    sett('armV', -.245, .92, 0, -sv*0.75);
+    sett('armH',  .245, .92, 0,  sv*0.75);
+    sett('hode',  0,   1.30, 0,  0);
+    sett('haar',  0,   1.30, -.01, 0);
+    sett('oyeV', -.085,1.32, .215, 0);
+    sett('oyeH',  .085,1.32, .215, 0);
+  }
+  for(const k in folkM) folkM[k].instanceMatrix.needsUpdate=true;
+}
+
 // ---------------------------- SKOG ---------------------------------------
 // Furuskog utenfor byen. Tettheten styres av støy så det blir lysninger, og
 // bratte sider hoppes over slik at trærne ikke står ut av en klippe.
@@ -1821,8 +1939,8 @@ const gm={
   cross:new THREE.MeshStandardMaterial({map:crosswalkTex(),transparent:true,roughness:.8,
          depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),
   bark :new THREE.MeshStandardMaterial({color:0x4a382a,roughness:.95}),
-  gran :new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,vertexColors:true,flatShading:true}),
-  leaf :new THREE.MeshStandardMaterial({color:0xffffff,roughness:.88,vertexColors:true,flatShading:true}),
+  gran :new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,flatShading:true}),
+  leaf :new THREE.MeshStandardMaterial({color:0xffffff,roughness:.88,flatShading:true}),
   prop :new THREE.MeshStandardMaterial({color:0x74777b,roughness:.72,metalness:.35}),
   metal:new THREE.MeshStandardMaterial({color:0x3f434a,roughness:.5,metalness:.75}),
   lamp :new THREE.MeshStandardMaterial({color:0x2a2d33,roughness:.5,emissive:0x000000}),
@@ -1853,6 +1971,7 @@ function build(){
   reshapeGround();
   city=generateCity(scene,mats,gm);
   const trar=plantSkog(scene,gm);
+  lagFolk(scene);
   buildTraffic();buildParked();initMerker();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
@@ -1932,9 +2051,15 @@ window.__dbg={
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
-  snap:()=>{update(0.016);renderer.render(scene,camera);   // oppdater kamera først
+  snap:()=>{update(0.016);oppdaterFolk(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'politi-10',
+  ver:()=>'folk-13',
+  folk:()=>folkData.length,
+  folkPunkt:(i)=>{
+    const f=folkData[i||0]; if(!f)return null;
+    const p=folkPos(f);
+    return {x:+p.x.toFixed(1),z:+p.z.toFixed(1),y:+f.pad.toFixed(1)};
+  },
   politi:()=>({stjerner:politi.stjerner,varme:+politi.varme.toFixed(1),
                biler:politi.biler.length}),
   ettersokt:(v)=>{politiVarme(v);},
@@ -2510,7 +2635,7 @@ function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterFolk(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -2538,7 +2663,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build politi-10';
+  document.getElementById('verline').textContent='build folk-13';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
