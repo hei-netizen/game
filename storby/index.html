@@ -745,7 +745,7 @@ function generateCity(scene,mats,gm){
       lagNattklubb(chunkOf,mx,mz,pad,klubbBuf,klubbGulvBuf,neonBuf);
       continue;
     }
-    if(!fengsel&&Math.hypot(mx,mz)>700&&(bx1-bx0)>66&&(bz1-bz0)>50){
+    if(!fengsel&&Math.hypot(mx,mz)>300&&Math.hypot(mx,mz)<720&&(bx1-bx0)>58&&(bz1-bz0)>44){
       lagFengsel(chunkOf,mx,mz,pad,fengselBuf,fengselBuf);   // betong, ikke klubbgulv
       continue;
     }
@@ -1029,7 +1029,7 @@ function generateCity(scene,mats,gm){
 // Ekte bygning: ringmur, gårdsplass, cellefløy med tre celler. Blir du
 // pågrepet havner du i midtcella med sperret dør. Døra åpnes ved vaktrunde
 // etter en stund, og da må du komme deg over ringmuren via kassestabelen.
-const FENGSEL={b:62,d:46,mur:5.2,t:1.0};
+const FENGSEL={b:54,d:40,mur:5.2,t:1.0};
 let fengsel=null;
 
 function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
@@ -1049,7 +1049,7 @@ function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
   slab(gulv,x0+t,x1-t,pad+0.05,z0+t,z1-t,6,V);
 
   // cellefløy langs bakveggen: tre celler, åpne mot gården
-  const cw=11, cd=9, cy=pad+3.6;
+  const cw=9.5, cd=8.5, cy=pad+3.6;
   const cz0=z1-t-cd, cz1=z1-t;
   fengsel.celler=[];
   for(let i=0;i<3;i++){
@@ -1090,6 +1090,7 @@ function arrester(){
   P.pos.set(c.x,groundAt(c.x,c.z)+1.75,c.z);
   P.vel.set(0,0,0); P.fly=false; P.yaw=0;
   fengsel.dorAapen=false; fengsel.soning=0; fengsel.fri=false;
+  politi.sisteX=c.x; politi.sisteZ=c.z; politi.evade=0;
   politi.varme=0; politi.stjerner=0; politi.pagrepT=0; politi.tilstand='rolig';
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
   visStjerner(); visJakt();
@@ -1773,7 +1774,9 @@ function settBilRotasjon(obj,x,z,head,rull,stamp){
 const POLITI={
   terskler:[6,22,44,70,94],        // varme som kreves for 1..5 stjerner
   maksBiler:[0,2,3,5,7,9],
-  fart:[0,17,20,23,26,29],
+  fart:[0,20,24,27,30,34],
+  spawnPause:[0,1.5,1.1,0.8,0.55,0.35],   // sekunder mellom hver ny bil
+  spawnNaer:[0,150,132,112,92,70],        // hvor nær de dukker opp
   syn:118,                          // hvor langt en politibil ser
   evadeSek:[0,9,11,13,15,17]        // sekunder i skjul for å slippe unna
 };
@@ -1853,7 +1856,8 @@ function spawnPolitibil(){
   const sp=(politi.tilstand==='leter')
     ? {x:politi.sisteX,z:politi.sisteZ} : spillerPos();
   for(let t=0;t<80;t++){
-    const a=rand()*6.283, r=rnd(95,190);
+    const naer=POLITI.spawnNaer[politi.stjerner]||120;
+    const a=rand()*6.283, r=rnd(naer,naer+85);
     const x=sp.x+Math.cos(a)*r, z=sp.z+Math.sin(a)*r;
     if(Math.abs(x)>HW-30||Math.abs(z)>HD-30)continue;
     if(!friPlass(x,z))continue;
@@ -1909,7 +1913,10 @@ function oppdaterPoliti(dt){
   } else politi.pagrepT=0;
 
   if(politi.stjerner>0){
-    if(ser){
+    // Er ingen biler ute ennå, vet meldingen hvor du er — man kan ikke gjemme
+    // seg for patruljer som ikke har rykket ut. Uten dette spawnet de ved en
+    // utdatert «siste kjente posisjon» langt unna.
+    if(ser||politi.biler.length===0){
       politi.tilstand='jaktet'; politi.evade=0;
       politi.sisteX=sp.x; politi.sisteZ=sp.z;      // siste kjente posisjon
     } else {
@@ -1926,7 +1933,10 @@ function oppdaterPoliti(dt){
   // --- bemanning ---
   const vil=POLITI.maksBiler[politi.stjerner];
   politi.spawnT-=dt;
-  if(politi.biler.length<vil&&politi.spawnT<=0){ spawnPolitibil(); politi.spawnT=1.6; }
+  if(politi.biler.length<vil&&politi.spawnT<=0){
+    spawnPolitibil();
+    politi.spawnT=POLITI.spawnPause[politi.stjerner]||1.2;
+  }
   while(politi.biler.length>vil){
     // fjern den som er lengst unna
     let verst=null,vd=-1;
@@ -1958,8 +1968,11 @@ function oppdaterPoliti(dt){
     let da=onsket-b.kurs;
     while(da>Math.PI)da-=6.283; while(da<-Math.PI)da+=6.283;
     b.kurs+=cl(da,-2.4*dt,2.4*dt);
-    const mf=d>9?(politi.tilstand==='jaktet'?maalFart:maalFart*0.72):0;
-    b.fart+=(mf-b.fart)*Math.min(1,dt*1.4);
+    // Ligger de langt bak, får de ekstra fart så jakten ikke stopper opp.
+    const bak=cl((avstSpiller-55)/120,0,1);
+    const innhent=1+bak*0.55;
+    const mf=d>9?(politi.tilstand==='jaktet'?maalFart*innhent:maalFart*0.72):0;
+    b.fart+=(mf-b.fart)*Math.min(1,dt*2.2);   // raskere respons
     // knuff fra kollisjon får virke først
     if(b.vx||b.vz){
       b.x+=b.vx*dt; b.z+=b.vz*dt;
@@ -2378,7 +2391,8 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'kart-19',
+  ver:()=>'jakt-23',
+  tegnKart:()=>drawMinimap(),
   flytt:(x,z)=>{if(drive.on){drive.x=x;drive.z=z;}else P.pos.set(x,groundAt(x,z)+1.75,z);},
   fengsel:()=>fengsel?{x:Math.round(fengsel.x),z:Math.round(fengsel.z),
      inne:fengsel.inne,dor:fengsel.dorAapen,soning:+fengsel.soning.toFixed(1),fri:fengsel.fri}:null,
@@ -2632,10 +2646,6 @@ function drawMinimap(){
     const r=p.erPoliti?2.6:(hero?2.5:1.5);
     mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
   }
-  const x=(P.pos.x+HW)*300/CITY_W,y=(P.pos.z+HD)*200/CITY_D;
-  mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
-  mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
-  mc.arc(0,0,26,-Math.PI/2-.5,-Math.PI/2+.5);mc.closePath();mc.fill();
   // landemerker: rosa K = nattklubb, blå F = fengsel
   const merke=(x,z,farge,bokstav)=>{
     const mx2=(x+HW)*SX, mz2=(z+HD)*SZ;
@@ -2648,7 +2658,12 @@ function drawMinimap(){
     mc.fillText(bokstav,mx2,mz2+0.5);
   };
   if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
-  if(fengsel)merke(fengsel.x,fengsel.z,'#7fb6ff','F');
+  if(fengsel)merke(fengsel.x,fengsel.z,'#eef2f8','F');   // hvit, ikke blå som bilprikkene
+
+  const x=(P.pos.x+HW)*300/CITY_W,y=(P.pos.z+HD)*200/CITY_D;
+  mc.save();mc.translate(x,y);mc.rotate(-P.yaw);
+  mc.fillStyle='rgba(255,225,120,.26)';mc.beginPath();mc.moveTo(0,0);
+  mc.arc(0,0,26,-Math.PI/2-.5,-Math.PI/2+.5);mc.closePath();mc.fill();
   mc.fillStyle='#ffe26a';mc.beginPath();mc.moveTo(0,-5);mc.lineTo(3.6,4);mc.lineTo(-3.6,4);
   mc.closePath();mc.fill();mc.restore();
 }
@@ -3014,7 +3029,7 @@ function loop(now){
       let h='';
       if(klubb)  h+='<span style="color:#ff5fa2">K</span> nattklubb '+
                     Math.round(Math.hypot(klubb.x-sp.x,klubb.z-sp.z))+' m '+pil(klubb.x,klubb.z)+'<br>';
-      if(fengsel)h+='<span style="color:#7fb6ff">F</span> fengsel '+
+      if(fengsel)h+='<span style="color:#eef2f8">F</span> fengsel '+
                     Math.round(Math.hypot(fengsel.x-sp.x,fengsel.z-sp.z))+' m '+pil(fengsel.x,fengsel.z);
       document.getElementById('landemerker').innerHTML=h;
     }
@@ -3029,7 +3044,7 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build kart-19';
+  document.getElementById('verline').textContent='build jakt-23';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
