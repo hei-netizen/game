@@ -22,6 +22,37 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
+  #hotbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
+    display:flex;gap:6px;pointer-events:none}
+  #hotbar .s{width:56px;height:56px;border-radius:6px;background:rgba(13,16,22,.72);
+    border:1px solid #3a4155;position:relative;display:flex;align-items:center;
+    justify-content:center;font-size:26px;line-height:1;
+    box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  #hotbar .s.valgt{border-color:#ffd85e;background:rgba(40,34,14,.82);
+    box-shadow:0 0 0 1px #ffd85e,0 6px 22px rgba(0,0,0,.6)}
+  #hotbar .s .nr{position:absolute;left:4px;top:2px;font:10px ui-monospace,Menlo,monospace;
+    color:#7f889b}
+  #hotbar .s .ant{position:absolute;right:4px;bottom:2px;font:bold 11px ui-monospace,Menlo,monospace;
+    color:#e6ebf5;text-shadow:0 1px 3px #000}
+  #hotbar .s .nv{position:absolute;left:0;right:0;bottom:-16px;text-align:center;
+    font:10px ui-monospace,Menlo,monospace;color:#ffd85e;letter-spacing:.06em}
+  #ammo{position:fixed;right:18px;bottom:18px;z-index:6;pointer-events:none;
+    font:bold 26px ui-monospace,Menlo,monospace;color:#e6ebf5;text-shadow:0 2px 8px #000}
+  #ammo small{font-size:15px;color:#8b93a6;font-weight:400}
+  #ammo.tom{color:#ff6b6b}
+  #helse{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);z-index:6;
+    width:220px;height:7px;border-radius:4px;background:rgba(13,16,22,.72);
+    border:1px solid #3a4155;overflow:hidden;pointer-events:none}
+  #helsefyll{height:100%;background:linear-gradient(90deg,#ff5a5a,#7ce09a);
+    transition:width .12s linear}
+  #pengerhud{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:6;
+    pointer-events:none;font:bold 15px ui-monospace,Menlo,monospace;color:#7ce09a;
+    text-shadow:0 2px 8px #000;text-align:center;letter-spacing:.04em}
+  #pengerhud small{display:block;font-size:11px;font-weight:400;color:#ffb0d0;
+    letter-spacing:.06em;margin-top:2px}
+  #roddblink{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;
+    transition:opacity .18s linear;
+    background:radial-gradient(ellipse at center,rgba(180,0,0,0) 35%,rgba(150,0,0,.85) 100%)}
   #overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
     background:radial-gradient(ellipse at 50% 40%,#151b28 0%,#080a0f 70%);cursor:pointer}
   #overlay .box{text-align:center;max-width:600px;padding:0 30px}
@@ -80,6 +111,11 @@
 
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
+<div id="hotbar"></div>
+<div id="ammo"></div>
+<div id="pengerhud"></div>
+<div id="helse"></div>
+<div id="roddblink"></div>
 <div id="stjerner"></div>
 <div id="jakt"><div class="ba"><div id="jaktfyll"></div></div><div id="jakttekst"></div></div>
 <div id="players"><div class="lbl">I byen</div><div id="plist"></div></div>
@@ -93,7 +129,8 @@
 
 <div id="keys">
   <kbd>W A S D</kbd> gå &nbsp; <kbd>Shift</kbd> løp &nbsp; <kbd>Space</kbd> hopp<br>
-  <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>R</kbd> ny by &nbsp; <kbd>Esc</kbd> slipp mus
+  <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>Esc</kbd> slipp mus<br>
+  <kbd>1</kbd>&ndash;<kbd>6</kbd> / hjul velg ting &nbsp; <kbd>Venstreklikk</kbd> skyt &nbsp; <kbd>R</kbd> lad om &nbsp; <kbd>Shift</kbd>+<kbd>R</kbd> ny by
 </div>
 
 <div id="overlay" style="display:none">
@@ -1176,7 +1213,20 @@ function byggInteriør(b){
       else seg(xx0,xx1,b.z0,b.z1);
     }
   }
-  mobler(mobB,{x0:b.x0+t+0.3,x1:b.x1-t-0.3,z0:b.z0+t+0.3,z1:b.z1-t-0.3,y:y},b.type);
+  const G={x0:b.x0+t+0.3,x1:b.x1-t-0.3,z0:b.z0+t+0.3,z1:b.z1-t-0.3,y:y};
+  mobler(mobB,G,b.type);
+  // kassaapparat i butikk, kafé, bar og bank — kan ranes
+  const KP={butikk:{x:G.x0+1.05,z:(G.z0+G.z1)/2},
+            kafe:  {x:G.x0+1.30,z:G.z0+1.6},
+            bar:   {x:G.x0+1.35,z:(G.z0+G.z1)/2},
+            bank:  {x:(G.x0+G.x1)/2,z:G.z1-2.0}}[b.type];
+  if(KP){
+    b.kasse=KP;
+    const bo=(ax,bx2,ay,by2,az,bz2,c)=>{ walls(mobB,ax,bx2,ay,by2,az,bz2,1,1,1,c);
+                                         slab(mobB,ax,bx2,by2,az,bz2,2,c); };
+    bo(KP.x-0.28,KP.x+0.28,y+1.05,y+1.34,KP.z-0.22,KP.z+0.22,[.16,.17,.20]);
+    bo(KP.x-0.20,KP.x+0.20,y+1.34,y+1.52,KP.z-0.03,KP.z+0.10,[.30,.72,.46]);
+  } else b.kasse=null;
 
   const lag=(buf,farge,egen)=>{
     if(!buf.p.length)return;
@@ -1249,25 +1299,71 @@ function oppdaterInteriør(){
 // pågrepet havner du i midtcella med sperret dør. Døra åpnes ved vaktrunde
 // etter en stund, og da må du komme deg over ringmuren via kassestabelen.
 const FENGSEL={b:54,d:40,mur:5.2,t:1.0};
+let hint='';        // én linje i HUD-en som systemene kan be om
 let fengsel=null;
 
 function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
   const hb=FENGSEL.b/2, hd=FENGSEL.d/2, t=FENGSEL.t, H=pad+FENGSEL.mur;
   const x0=x-hb,x1=x+hb,z0=z-hd,z1=z+hd, V=[1,1,1];
-  fengsel={x,z,pad,x0,x1,z0,z1,dorAapen:false,soning:0,inne:false,fri:false};
+  fengsel={x,z,pad,x0,x1,z0,z1,dorAapen:false,soning:0,inne:false,fri:false,
+           luke:null,lukeT:0};
+  const BETONG=[.78,.77,.75], STAAL=[.42,.44,.48], MORK=[.30,.31,.34];
 
-  // ringmur
-  walls(vegg,x0,x1,pad,H,z0,z0+t, 6,1,2,V);
-  walls(vegg,x0,x1,pad,H,z1-t,z1, 6,1,2,V);
-  walls(vegg,x0,x0+t,pad,H,z0,z1, 1,5,2,V);
-  walls(vegg,x1-t,x1,pad,H,z0,z1, 1,5,2,V);
-  addCol({x0:x0,x1:x1,z0:z0,z1:z0+t,top:H});
+  // ---- ringmur med port i front ----
+  const ph=6.0, px0=x-ph, px1=x+ph;          // portåpning
+  walls(vegg,x0,px0,pad,H,z0,z0+t, 3,1,2,BETONG);
+  walls(vegg,px1,x1,pad,H,z0,z0+t, 3,1,2,BETONG);
+  walls(vegg,px0,px1,pad+4.2,H,z0,z0+t, 2,1,1,BETONG);   // portoverligger
+  walls(vegg,x0,x1,pad,H,z1-t,z1, 6,1,2,BETONG);
+  walls(vegg,x0,x0+t,pad,H,z0,z1, 1,5,2,BETONG);
+  walls(vegg,x1-t,x1,pad,H,z0,z1, 1,5,2,BETONG);
+  addCol({x0:x0,x1:px0,z0:z0,z1:z0+t,top:H});
+  addCol({x0:px1,x1:x1,z0:z0,z1:z0+t,top:H});
   addCol({x0:x0,x1:x1,z0:z1-t,z1:z1,top:H});
   addCol({x0:x0,x1:x0+t,z0:z0,z1:z1,top:H});
   addCol({x0:x1-t,x1:x1,z0:z0,z1:z1,top:H});
+  // stengt sprinkelport
+  for(let g=0;g<15;g++){
+    const gx=px0+0.5+g*((ph*2-1.0)/14);
+    walls(vegg,gx-0.09,gx+0.09,pad,pad+4.2,z0+t*0.35,z0+t*0.65,1,1,2,STAAL);
+  }
+  walls(vegg,px0,px1,pad+4.0,pad+4.2,z0+t*0.3,z0+t*0.7,3,1,1,STAAL);
+  addCol({x0:px0,x1:px1,z0:z0+t*0.3,z1:z0+t*0.7,top:pad+4.2});
+
+  // ---- piggtråd på toppen: to tynne bånd på skråstilte stolper ----
+  const traad=(ax0,ax1,az0,az1,langsX)=>{
+    for(let k=0;k<2;k++){
+      const y=H+0.45+k*0.42;
+      walls(vegg,ax0,ax1,y,y+0.08,az0,az1, langsX?18:1,langsX?1:14,1,MORK);
+    }
+    const n=langsX?Math.round((ax1-ax0)/4):Math.round((az1-az0)/4);
+    for(let i=0;i<=n;i++){
+      const px=langsX?ax0+(ax1-ax0)*i/n:(ax0+ax1)/2;
+      const pz=langsX?(az0+az1)/2:az0+(az1-az0)*i/n;
+      walls(vegg,px-0.06,px+0.06,H,H+0.95,pz-0.06,pz+0.06,1,1,1,MORK);
+    }
+  };
+  traad(x0,x1,z0+t*0.4,z0+t*0.6,true);
+  traad(x0,x1,z1-t*0.6,z1-t*0.4,true);
+  traad(x0+t*0.4,x0+t*0.6,z0,z1,false);
+  traad(x1-t*0.6,x1-t*0.4,z0,z1,false);
+
+  // ---- vakttårn i alle fire hjørner ----
+  const taarn=(tx,tz)=>{
+    const s2=1.9, ty=H+3.4;
+    for(const[ox,oz]of[[-s2,-s2],[s2,-s2],[-s2,s2],[s2,s2]])
+      walls(vegg,tx+ox-0.16,tx+ox+0.16,pad,ty,tz+oz-0.16,tz+oz+0.16,1,1,3,STAAL);
+    walls(vegg,tx-s2-0.5,tx+s2+0.5,ty,ty+2.3,tz-s2-0.5,tz+s2+0.5,2,2,1,[.66,.66,.70]);
+    slab(vegg,tx-s2-1.1,tx+s2+1.1,ty+2.3,tz-s2-1.1,tz+s2+1.1,3,MORK);
+    slab(vegg,tx-s2-1.1,tx+s2+1.1,ty+2.55,tz-s2-1.1,tz+s2+1.1,3,MORK);
+    addCol({x0:tx-s2-0.5,x1:tx+s2+0.5,z0:tz-s2-0.5,z1:tz+s2+0.5,top:ty+2.55});
+  };
+  taarn(x0+2.6,z0+2.6); taarn(x1-2.6,z0+2.6);
+  taarn(x0+2.6,z1-2.6); taarn(x1-2.6,z1-2.6);
+
   slab(gulv,x0+t,x1-t,pad+0.05,z0+t,z1-t,6,V);
 
-  // cellefløy langs bakveggen: tre celler, åpne mot gården
+  // ---- cellefløy: korridor foran tre celler med sprinkeldører ----
   const cw=9.5, cd=8.5, cy=pad+3.6;
   const cz0=z1-t-cd, cz1=z1-t;
   fengsel.celler=[];
@@ -1277,23 +1373,50 @@ function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
     if(i===2)walls(vegg,cx1-0.5,cx1,pad,cy,cz0,cz1, 1,3,1,[.72,.72,.76]);
     addCol({x0:cx0,x1:cx0+0.5,z0:cz0,z1:cz1,top:cy});
     if(i===2)addCol({x0:cx1-0.5,x1:cx1,z0:cz0,z1:cz1,top:cy});
-    // sprinkeldør mot gården — kan åpnes
     const d={x0:cx0+0.5,x1:cx1-0.5,z0:cz0-0.25,z1:cz0+0.25,top:cy,dor:true};
     addCol(d);
     for(let g=0;g<7;g++){
       const gx=cx0+1.2+g*((cw-2.4)/6);
-      walls(vegg,gx-0.07,gx+0.07,pad,cy,cz0-0.08,cz0+0.08,1,1,2,[.55,.56,.60]);
+      walls(vegg,gx-0.07,gx+0.07,pad,cy,cz0-0.08,cz0+0.08,1,1,2,STAAL);
     }
+    // køye og vask, så cella ser bebodd ut
+    walls(vegg,cx0+0.9,cx0+2.9,pad+0.42,pad+0.60,cz0+1.0,cz0+5.0,1,2,1,[.55,.56,.60]);
+    walls(vegg,cx0+0.9,cx0+2.9,pad+0.62,pad+0.78,cz0+1.0,cz0+5.0,1,2,1,[.80,.78,.72]);
+    walls(vegg,cx1-2.0,cx1-1.1,pad+0.75,pad+1.05,cz1-1.6,cz1-0.8,1,1,1,[.86,.86,.88]);
     fengsel.celler.push({x:(cx0+cx1)/2,z:(cz0+cz1)/2});
   }
-  slab(vegg,x-cw*1.5,x+cw*1.5,cy,cz0,cz1,5,[.62,.62,.66]);   // tak over cellene
+  slab(vegg,x-cw*1.5,x+cw*1.5,cy,cz0,cz1,5,[.62,.62,.66]);
 
-  // kassestabel opp mot muren — eneste vei ut
+  // ---- rømningsluke i midtcella: kloakken under gulvet ----
+  const lx=x, lz=cz0+2.2;
+  slab(vegg,lx-0.85,lx+0.85,pad+0.06,lz-0.85,lz+0.85,1,[.26,.27,.30]);
+  for(let k=0;k<5;k++){
+    const gy=lz-0.7+k*0.35;
+    walls(vegg,lx-0.8,lx+0.8,pad+0.07,pad+0.11,gy-0.05,gy+0.05,1,1,1,[.44,.45,.49]);
+  }
+  fengsel.luke={x:lx,z:lz};
+  // der du kommer opp igjen — i gata rett utenfor muren
+  let ux=x, uz=z0-9;
+  for(let k=0;k<26&&!friPlass(ux,uz);k++) uz-=1.5;
+  fengsel.utgang={x:ux,z:uz};
+
+  // ---- gårdsplass: basketkurv og to benker ----
+  const bx=x-hb+9, bz=z-2;
+  walls(vegg,bx-0.14,bx+0.14,pad,pad+3.5,bz-0.14,bz+0.14,1,1,2,STAAL);
+  walls(vegg,bx-0.10,bx+1.5,pad+3.2,pad+3.3,bz-0.10,bz+0.10,1,1,1,STAAL);
+  walls(vegg,bx+1.4,bx+1.6,pad+2.6,pad+3.7,bz-0.9,bz+0.9,1,1,1,[.88,.88,.90]);
+  for(const[sx,sz]of[[x+9,z-4],[x+9,z+3]]){
+    walls(vegg,sx-1.6,sx+1.6,pad+0.42,pad+0.55,sz-0.35,sz+0.35,2,1,1,[.52,.40,.28]);
+    for(const ox of[-1.4,1.4])
+      walls(vegg,sx+ox-0.09,sx+ox+0.09,pad,pad+0.42,sz-0.30,sz+0.30,1,1,1,MORK);
+  }
+
+  // kassestabel mot muren — den harde veien ut, fortsatt mulig
   const kx=x0+t+4.5, kz=z0+t+5;
-  const kasse=(bx,bz,by,bw,bh)=>{
-    walls(vegg,bx,bx+bw,by,by+bh,bz,bz+bw,1,1,1,[.58,.44,.30]);
-    slab(vegg,bx,bx+bw,by+bh,bz,bz+bw,2,[.66,.50,.34]);
-    addCol({x0:bx,x1:bx+bw,z0:bz,z1:bz+bw,top:by+bh});
+  const kasse=(bx2,bz2,by,bw,bh)=>{
+    walls(vegg,bx2,bx2+bw,by,by+bh,bz2,bz2+bw,1,1,1,[.58,.44,.30]);
+    slab(vegg,bx2,bx2+bw,by+bh,bz2,bz2+bw,2,[.66,.50,.34]);
+    addCol({x0:bx2,x1:bx2+bw,z0:bz2,z1:bz2+bw,top:by+bh});
   };
   kasse(kx,      kz,      pad,      2.4,1.5);
   kasse(kx+2.6,  kz+0.3,  pad,      2.4,3.0);
@@ -1312,6 +1435,7 @@ function arrester(){
   politi.sisteX=c.x; politi.sisteZ=c.z; politi.evade=0;
   politi.varme=0; politi.stjerner=0; politi.pagrepT=0; politi.tilstand='rolig';
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
+  frigiBetjenter();
   visStjerner(); visJakt();
   showToast('🚔 ARRESTERT — du sitter inne');
 }
@@ -1328,8 +1452,28 @@ function oppdaterFengsel(dt){
   }
   if(innenfor&&!fengsel.dorAapen){
     fengsel.soning+=dt;
-    if(fengsel.soning>=18){ fengsel.dorAapen=true; showToast('🔓 Vaktrunde — cella er åpen'); }
+    if(fengsel.soning>=12){ fengsel.dorAapen=true; showToast('🔓 Vaktrunde — cella er åpen'); }
   }
+
+  // Rømningsluka: står du på den og holder E, kryper du ut i kloakken og
+  // kommer opp i gata utenfor. Kassestabelen over muren finnes fortsatt,
+  // men den var for vrien til å være eneste vei ut.
+  if(innenfor&&!drive.on&&fengsel.luke){
+    const d=Math.hypot(P.pos.x-fengsel.luke.x,P.pos.z-fengsel.luke.z);
+    if(d<1.9){
+      if(keys['KeyE']){
+        fengsel.lukeT+=dt;
+        if(fengsel.lukeT>=2.2){
+          const u=fengsel.utgang;
+          P.pos.set(u.x,groundAt(u.x,u.z)+1.75,u.z); P.vel.set(0,0,0);
+          fengsel.lukeT=0; fengsel.fri=true; fengsel.dorAapen=false;
+          hint=''; showToast('🕳 Du krøp ut gjennom kloakken');
+          return;
+        }
+        hint='🕳 Kryper ned i kloakken … '+Math.round(fengsel.lukeT/2.2*100)+' %';
+      } else { fengsel.lukeT=0; hint='🕳 Hold E for å åpne rømningsluka'; }
+    } else fengsel.lukeT=0;
+  } else fengsel.lukeT=0;
 }
 
 // ---------------------------- NATTKLUBB -----------------------------------
@@ -1338,7 +1482,7 @@ function oppdaterFengsel(dt){
 // vært en solid kloss. Innvendig: pulserende dansegulv, bar, DJ-pult og
 // fargede lys.
 const KLUBB={b:26,d:20,h:7,dor:3.6};
-let klubb=null, klubbFliser=null, klubbLys=[];
+let klubb=null, klubbFliser=null, klubbLys=[], klubbLed=null, klubbKule=null;
 
 function lagNattklubb(chunkOf,x,z,pad,vegg,gulv,neon){
   const hb=KLUBB.b/2, hd=KLUBB.d/2, t=0.55, H=pad+KLUBB.h;
@@ -1378,12 +1522,31 @@ function lagNattklubb(chunkOf,x,z,pad,vegg,gulv,neon){
   quad(neon,x-4.2,pad+4.2,z0-0.2, x+4.2,pad+4.2,z0-0.2,
             x+4.2,pad+5.4,z0-0.2, x-4.2,pad+5.4,z0-0.2, 0,0,-1, 0,0,1,1,V);
 
-  // to dansestenger, gulv til tak
-  for(const px of [x-5.5,x+5.5]){
-    walls(vegg,px-0.09,px+0.09,pad,H-0.6,z-1.6,z-1.42,1,1,3,[.85,.85,.9]);
-    slab(vegg,px-0.55,px+0.55,pad+0.30,z-2.1,z-0.9,2,[.30,.28,.34]);   // podium
+  // flaskehylle bak baren
+  for(let k=0;k<3;k++){
+    const hy=pad+1.5+k*0.55;
+    slab(vegg,x0+t+0.15,x0+t+0.75,hy,z+1.2,z+hd-2.7,2,[.26,.24,.30]);
+    for(let f2=0;f2<11;f2++){
+      const fz=z+1.5+f2*((hd-4.4)/10);
+      walls(vegg,x0+t+0.28,x0+t+0.48,hy,hy+0.34,fz-0.09,fz+0.09,1,1,1,
+        [[.18,.62,.42],[.72,.58,.22],[.66,.24,.30],[.32,.44,.72]][f2%4]);
+    }
   }
-  klubb.stenger=[{x:x-5.5,z:z-1.5},{x:x+5.5,z:z-1.5}];
+  // to sittekroker med bord
+  for(const sz of [z-hd+t+2.6, z+hd-t-3.2]){
+    walls(vegg,x1-t-3.4,x1-t-0.4,pad,pad+0.48,sz-0.45,sz+0.45,1,1,1,[.34,.20,.26]);
+    walls(vegg,x1-t-3.4,x1-t-0.4,pad+0.48,pad+1.15,sz+0.30,sz+0.45,1,1,1,[.40,.24,.31]);
+    addCol({x0:x1-t-3.4,x1:x1-t-0.4,z0:sz-0.45,z1:sz+0.45,top:pad+0.5});
+    walls(vegg,x1-t-2.6,x1-t-1.4,pad,pad+0.62,sz-1.6,sz-0.9,1,1,1,[.20,.19,.24]);
+  }
+
+  // tre dansestenger, gulv til tak
+  for(const px of [x-7.0,x,x+7.0]){
+    walls(vegg,px-0.09,px+0.09,pad,H-0.6,z-1.6,z-1.42,1,1,3,[.85,.85,.9]);
+    slab(vegg,px-0.62,px+0.62,pad+0.34,z-2.2,z-0.8,2,[.30,.28,.34]);   // podium
+    walls(vegg,px-0.62,px+0.62,pad,pad+0.34,z-2.2,z-0.8,1,1,1,[.24,.22,.28]);
+  }
+  klubb.stenger=[{x:x-7.0,z:z-1.5},{x:x,z:z-1.5},{x:x+7.0,z:z-1.5}];
 
   // dansegulv: fliser som pulserer
   const FX=9,FZ=6, fw=(KLUBB.b-2*t-5)/FX, fd=(KLUBB.d-2*t-7)/FZ;
@@ -1401,6 +1564,29 @@ function lagNattklubb(chunkOf,x,z,pad,vegg,gulv,neon){
   klubbFliser.instanceMatrix.needsUpdate=true;
   scene.add(klubbFliser);
   klubb.fx=FX; klubb.fz=FZ;
+
+  // LED-vegg bak DJ-en — samme triks som gulvet, men reist opp
+  const LX=14, LY=7;
+  const lg=new THREE.PlaneGeometry((KLUBB.b-2*t-2)/LX*0.9,(KLUBB.h-2.2)/LY*0.85);
+  klubbLed=new THREE.InstancedMesh(lg,new THREE.MeshBasicMaterial({color:0xffffff}),LX*LY);
+  klubbLed.frustumCulled=false;
+  klubbLed.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(LX*LY*3),3);
+  let li=0;
+  for(let a=0;a<LX;a++)for(let b3=0;b3<LY;b3++){
+    dm.position.set(x0+t+1+(a+0.5)*((KLUBB.b-2*t-2)/LX), pad+1.5+(b3+0.5)*((KLUBB.h-2.2)/LY),
+                    z1-t-0.06);
+    dm.rotation.set(0,Math.PI,0); dm.scale.set(1,1,1); dm.updateMatrix();
+    klubbLed.setMatrixAt(li++,dm.matrix);
+  }
+  klubbLed.instanceMatrix.needsUpdate=true; scene.add(klubbLed);
+  klubb.lx=LX; klubb.ly=LY;
+
+  // diskokule i taket
+  klubbKule=new THREE.Mesh(new THREE.IcosahedronGeometry(0.85,1),
+    new THREE.MeshStandardMaterial({color:0xcfd6e2,metalness:1,roughness:0.14,
+      emissive:0x6a7488,emissiveIntensity:0.55,flatShading:true}));
+  klubbKule.position.set(x,H-1.5,z-1.0); scene.add(klubbKule);
+  walls(vegg,x-0.05,x+0.05,H-1.5,H,z-1.05,z-0.95,1,1,1,[.4,.4,.45]);
 
   // fargede lys i taket
   klubbLys=[];
@@ -1427,6 +1613,20 @@ function oppdaterKlubb(dt){
       klubbFliser.setColorAt(i++,_kf);
     }
     klubbFliser.instanceColor.needsUpdate=true;
+  }
+  if(klubbLed){
+    let i=0;
+    for(let a=0;a<klubb.lx;a++)for(let b=0;b<klubb.ly;b++){
+      const bolge=Math.sin(t*4.2-a*0.55+b*0.3);
+      const striper=Math.sin(t*1.7+a*0.9)>0.35?1:0;
+      _kf.setHSL(((t*0.19+a*0.03)%1),0.9,0.10+Math.max(0,bolge)*0.42+striper*0.16);
+      klubbLed.setColorAt(i++,_kf);
+    }
+    klubbLed.instanceColor.needsUpdate=true;
+  }
+  if(klubbKule){
+    klubbKule.rotation.y=t*1.15; klubbKule.rotation.x=Math.sin(t*0.4)*0.25;
+    klubbKule.material.emissiveIntensity=0.45+Math.abs(Math.sin(t*3.1))*0.75;
   }
   for(const k of klubbLys)
     k.l.intensity=(0.25+Math.max(0,Math.sin(t*2.6+k.fase))**2)*(klubb.inne?70:22);
@@ -1480,8 +1680,20 @@ function lagFolk(scene){
         h:rnd(.88,1.08), langtHaar:rand()<.5});
     };
     if(klubb.stenger)for(const st of klubb.stenger)leggDanser(st.x,st.z+0.75,true);
-    for(let i=0;i<14;i++)
-      leggDanser(klubb.x+rnd(-7.5,7.5), klubb.z+rnd(0.5,7.0), false);
+    for(let i=0;i<22;i++)
+      leggDanser(klubb.x+rnd(-9.5,9.5), klubb.z+rnd(0.5,7.5), false);
+  }
+
+  // Reserverte plasser til betjenter som går ut av bilen. De ligger i samme
+  // instansmesh som resten, så de koster ingen ekstra tegnekall.
+  betjentSlot=[];
+  for(let i=0;i<BETJENT_N;i++){
+    betjentSlot.push(folkData.length);
+    folkData.push({betjent:true,skjult:true,aktiv:false,man:false,
+      x:0,z:0,pad:0,yaw:0,t:0,L:1,w:1,d:1,x0:0,z0:0,x1:0,z1:0,dir:1,fart:0,
+      fase:0,hp:52,skytT:0,
+      skin:HUD_SKIN[rndi(0,HUD_SKIN.length-1)], haar:0x241c16,
+      skjorte:0x1f3f78, bukse:0x1a2333, h:1.04});
   }
 
   const ANT=folkData.length;
@@ -1539,27 +1751,56 @@ function oppdaterFolk(dt){
   if(!folkData.length||!folkM.hode)return;
   for(let i=0;i<folkData.length;i++){
     const f=folkData[i];
+    if(f.skjult){                       // ubrukt betjentplass — parkert utenfor
+      if(!f.varSkjult){ f.varSkjult=true;
+        _fd.position.set(0,-500,0); _fd.rotation.set(0,0,0); _fd.scale.setScalar(0.001);
+        _fd.updateMatrix();
+        for(const k in folkM) folkM[k].setMatrixAt(i,_fd.matrix);
+      }
+      continue;
+    }
+    f.varSkjult=false;
     let p,yaw,sv,bob,armEkstra=0;
+    if(f.dod){
+      // faller framover og synker i bakken, så reiser de seg et nytt sted
+      f.dodT=(f.dodT||0)+dt;
+      if(f.kast){ f.x=(f.x||folkPos(f).x)+f.kastX*f.kast*dt*3.2;
+                  f.z=(f.z||folkPos(f).z)+f.kastZ*f.kast*dt*3.2;
+                  f.kast=Math.max(0,f.kast-dt*2.2); f.man=true; }
+      if(f.dodT>9){
+        f.dod=false; f.dodT=0; f.kast=0; f.hp=undefined;
+        if(f.betjent){ f.aktiv=false; f.skjult=true; if(f.bil)f.bil.utsteg=false; }
+        else { f.man=false; f.t=rand()*f.L; }
+        continue;
+      }
+    }
+    if(f.jubel>0)f.jubel-=dt;
     if(f.dans){
-      f.fase+=dt*4.4;
+      f.fase+=dt*(f.jubel>0?7.6:4.4);
       p={x:f.x,z:f.z};
       yaw=f.yaw0+Math.sin(f.fase*0.33)*1.05;        // vrir seg rundt
       sv=Math.sin(f.fase)*0.42;
       bob=Math.abs(Math.sin(f.fase))*0.085;
       armEkstra=-1.95+Math.sin(f.fase*1.3)*0.45;    // armene i været
+    } else if(f.man){                   // betjent som styres av jakt-logikken
+      p={x:f.x,z:f.z};
+      yaw=f.yaw;
+      sv=Math.sin(f.fase)*0.55;
+      bob=Math.abs(Math.sin(f.fase))*0.035;
     } else {
-      f.t+=f.fart*f.dir*dt;
-      f.fase+=f.fart*dt*3.4;
+      if(!f.dod){ f.t+=f.fart*f.dir*dt; f.fase+=f.fart*dt*3.4; }
       p=folkPos(f);
       yaw=p.yaw+(f.dir<0?Math.PI:0);
       sv=Math.sin(f.fase)*0.55;
       bob=Math.abs(Math.sin(f.fase))*0.035;
     }
-    const y=f.pad+bob, S=f.h;
+    const fall=f.dod?Math.min(1,(f.dodT||0)/0.55):0;
+    const utT=f.dod?Math.max(0,((f.dodT||0)-7.6)/1.4):0;
+    const y=f.pad+bob-fall*0.62-utT*1.4, S=f.h;
     const sh=Math.sin(yaw), ch=Math.cos(yaw);
     const sett=(navn,lx,ly,lz,rx,sc,rz)=>{
-      _fd.position.set(p.x+(lx*ch+lz*sh), y+ly*S, p.z+(-lx*sh+lz*ch));
-      _fd.rotation.set(rx||0,yaw,rz||0);
+      _fd.position.set(p.x+(lx*ch+lz*sh), y+ly*S*(1-fall*0.55), p.z+(-lx*sh+lz*ch));
+      _fd.rotation.set((rx||0)+fall*1.45,yaw,rz||0);
       _fd.scale.setScalar(sc||S);
       _fd.updateMatrix();
       folkM[navn].setMatrixAt(i,_fd.matrix);
@@ -1678,6 +1919,13 @@ async function loadCars(){
 // Helte-biler: for tunge til trafikk (McLaren er 4,7 MB / 187k verteks), så de
 // lastes etter at byen står, og settes ut som noen få parkerte eksemplarer.
 const HERO_CARS=['mclaren'];
+// Racerne har mer effekt, kvikkere ratt og lettere karosseri, men mykere
+// bakgrep — de går fortere og sladder villigere enn resten.
+const RACE_CARS=['sedan-sports','hatchback-sports','mclaren'];
+const TUNGE_CARS=['van','delivery','truck-flat','ambulance'];
+function bilKlasse(t){
+  return RACE_CARS.indexOf(t)>=0?'race':TUNGE_CARS.indexOf(t)>=0?'tung':'vanlig';
+}
 async function loadHeroCars(){
   const loader=new GLTFLoader();
   for(const t of HERO_CARS){
@@ -1721,7 +1969,8 @@ function buildTraffic(){
       const line=isX?ax[rndi(0,ax.length-1)]:az[rndi(0,az.length-1)];
       const dir=rand()<.5?1:-1;
       carData.push({m:im,i:i,ax:isX,pos:rnd(-1,1)*(isX?HD:HW),type:t,dead:false,
-        off:line.p+(dir>0?4.8:-4.8),dir:dir,spd:rnd(9,20)});
+        off:line.p+(dir>0?4.8:-4.8),dir:dir,
+        spd:bilKlasse(t)==='race'?rnd(19,31):bilKlasse(t)==='tung'?rnd(7,13):rnd(9,20)});
     }
     traffic.push(im);scene.add(im);
   }
@@ -2218,6 +2467,11 @@ function oppdaterPoliti(dt){
 }
 
 function enterExit(){
+  // står du på rømningsluka eller ved ei kasse er E reservert til det
+  if(!drive.on&&fengsel&&fengsel.luke&&fengsel.inne&&
+     Math.hypot(P.pos.x-fengsel.luke.x,P.pos.z-fengsel.luke.z)<1.9)return;
+  if(!drive.on&&aktivtBygg&&aktivtBygg.kasse&&
+     Math.hypot(P.pos.x-aktivtBygg.kasse.x,P.pos.z-aktivtBygg.kasse.z)<2.4)return;
   if(drive.on){
     const ex=drive.x+Math.cos(drive.head)*2.6, ez=drive.z-Math.sin(drive.head)*2.6;
   P.pos.set(ex,groundAt(ex,ez)+1.75,ez);
@@ -2239,6 +2493,8 @@ function enterExit(){
   drive.head=best.yaw-CAR_YAW;drive.steer=0;drive.y=groundAt(best.x,best.z);
   drive.spd=drive.vx=drive.vy=drive.yawrate=drive.ax=drive.slip=0;
   drive.skade=0;drive.rist=0;drive.rull=0;drive.stamp=0;
+  settBilstil(best.type);
+  if(drive.klasse==='race')showToast('🏁 Racer — mer effekt, kvikkere ratt, løsere bak');
   P.fly=false;showMode();
 }
 
@@ -2264,11 +2520,28 @@ const CARP={
   motor:10000, boost:15000, brems:13500, revers:3400,
   cLuft:2.1, cRull:63, ratt:0.56
 };
+// Multiplikatorer per klasse. CP er settet som fysikken faktisk leser, og
+// settes på nytt hver gang du setter deg inn i en bil.
+const BILSTIL={
+  race:  {effekt:1.62,effektBoost:1.52,maksTrekk:1.34,mu:1.07,Cf:1.34,Cr:1.06,
+          M:0.80,I:0.74,ratt:1.26,cLuft:0.84,brems:1.28,girTak:1.30,
+          sladdDemp:0.80,muHand:0.86,cRull:0.82},
+  tung:  {effekt:0.70,maksTrekk:0.94,mu:0.90,Cf:0.78,Cr:0.88,M:1.58,I:1.75,
+          ratt:0.80,cLuft:1.38,brems:0.84,girTak:0.82},
+  vanlig:{}
+};
+let CP=Object.assign({},CARP);
+function settBilstil(type){
+  const kl=bilKlasse(type), m=BILSTIL[kl]||{};
+  CP=Object.assign({},CARP);
+  for(const k in m) CP[k]=CARP[k]*m[k];
+  drive.klasse=kl;
+}
 
 // Ett fysikk-delsteg. Alt her er Monsters modell; det eneste tillegget er
 // gulvet på nevneren i slippvinklene, som holder den stabil rundt null fart.
 function carStep(h,th,hand,boost){
-  const L=CARP.b+CARP.c;
+  const L=CP.b+CP.c;
   const vx=drive.vx, vy=drive.vy, yr=drive.yawrate, d=drive.steer;
   const vmag=Math.hypot(vx,vy);
   // Fortegnsriktig vx med gulv på magnituden. Math.atan (ikke atan2) gir en
@@ -2279,12 +2552,12 @@ function carStep(h,th,hand,boost){
   // stedet for å rette den opp — bilen låste seg sidelengs for alltid.
   const av=Math.max(Math.abs(vx),3.0);
   const dirs=vx<0?-1:1;                        // rygging styrer motsatt
-  const aF=Math.atan((vy+yr*CARP.b)/av)-d*dirs;
-  const aR=Math.atan((vy-yr*CARP.c)/av);
+  const aF=Math.atan((vy+yr*CP.b)/av)-d*dirs;
+  const aR=Math.atan((vy-yr*CP.c)/av);
 
-  const W=CARP.M*9.81;
-  let Wf=(CARP.c/L)*W-(CARP.h/L)*CARP.M*(drive.ax||0);
-  let Wr=(CARP.b/L)*W+(CARP.h/L)*CARP.M*(drive.ax||0);
+  const W=CP.M*9.81;
+  let Wf=(CP.c/L)*W-(CP.h/L)*CP.M*(drive.ax||0);
+  let Wr=(CP.b/L)*W+(CP.h/L)*CP.M*(drive.ax||0);
   Wf=Math.max(Wf,W*0.12); Wr=Math.max(Wr,W*0.12);
 
   // --- BAKHJULSDRIFT ---
@@ -2292,48 +2565,48 @@ function carStep(h,th,hand,boost){
   // friksjonsbudsjett. Bruker du hele budsjettet på å dra, har bakdekket
   // ingenting igjen til å holde bakenden inne — og da går den rundt.
   // Det er hele mekanikken bak en donut.
-  const gripR=hand?CARP.muHand:CARP.mu;
-  const maksBak=gripR*Wr, maksFor=CARP.mu*Wf;
+  const gripR=hand?CP.muHand:CP.mu;
+  const maksBak=gripR*Wr, maksFor=CP.mu*Wf;
 
   // Ekte biler har effekt, ikke konstant kraft: trekkraften faller med farten.
   // Uten dette spant hjulene også i 90 km/t, og bilen spant ut av seg selv.
   let Fdrag=0;
   if(th>0){
-    const P=boost?CARP.effektBoost:CARP.effekt;
-    Fdrag=Math.min(CARP.maksTrekk,P/Math.max(Math.abs(vx),3.0))*(1-drive.skade/100*0.45);
-  } else if(th<0&&vx<=0.6) Fdrag=-CARP.revers;
+    const P=boost?CP.effektBoost:CP.effekt;
+    Fdrag=Math.min(CP.maksTrekk,P/Math.max(Math.abs(vx),3.0))*(1-drive.skade/100*0.45);
+  } else if(th<0&&vx<=0.6) Fdrag=-CP.revers;
 
   const Fbak=cl(Fdrag,-maksBak,maksBak);               // det dekket faktisk overfører
   drive.spinn=cl((Math.abs(Fdrag)-maksBak)/Math.max(1,maksBak),0,1);
   // Rest av friksjonsbudsjettet til sidekraft. Gulvet gjør at et spinnende dekk
   // ikke mister ALT sidegrep — ellers ble bilen ustyrlig på rett strekning.
   const igjen=Math.sqrt(Math.max(0,maksBak*maksBak-Fbak*Fbak));
-  const takLat=Math.max(igjen,maksBak*CARP.sideGulv);
-  const Fr=cl(-CARP.Cr*aR,-takLat,takLat);
-  const Ff=cl(-CARP.Cf*aF,-maksFor,maksFor);           // forhjul styrer, drar ikke
+  const takLat=Math.max(igjen,maksBak*CP.sideGulv);
+  const Fr=cl(-CP.Cr*aR,-takLat,takLat);
+  const Ff=cl(-CP.Cf*aF,-maksFor,maksFor);           // forhjul styrer, drar ikke
 
   let Ft=Fbak;
-  if(th<0&&vx>0.6)Ft-=CARP.brems;                      // bremsen tar alle fire
-  if(hand)Ft-=Math.sign(vx)*CARP.brems*0.55;
-  Ft-=CARP.cLuft*vx*Math.abs(vx);
-  Ft-=CARP.cRull*vx;
+  if(th<0&&vx>0.6)Ft-=CP.brems;                      // bremsen tar alle fire
+  if(hand)Ft-=Math.sign(vx)*CP.brems*0.55;
+  Ft-=CP.cLuft*vx*Math.abs(vx);
+  Ft-=CP.cRull*vx;
 
-  const ax=Ft/CARP.M+yr*vy;
-  const ay=(Math.cos(d)*Ff+Fr)/CARP.M-yr*vx;
+  const ax=Ft/CP.M+yr*vy;
+  const ay=(Math.cos(d)*Ff+Fr)/CP.M-yr*vx;
   drive.vx+=ax*h; drive.vy+=ay*h; drive.ax=ax; drive.ayL=ay;
 
-  const moment=Math.cos(d)*Ff*CARP.b-Fr*CARP.c-CARP.girDemp*yr;   // demping = kontroll
-  const dynYaw=drive.yawrate+(moment/CARP.I)*h;
+  const moment=Math.cos(d)*Ff*CP.b-Fr*CP.c-CP.girDemp*yr;   // demping = kontroll
+  const dynYaw=drive.yawrate+(moment/CP.I)*h;
 
   // Under ~3 m/s TOTAL fart er den dynamiske modellen meningsløs; da blandes
   // den mot kinematisk sykkelmodell så parkering og rygging blir rolig.
   const kinYaw=(Math.abs(vx)>0.15)?(vx*Math.tan(d)/L):0;
   const t=cl((vmag-3.0)/4.0,0,1);
-  drive.yawrate=cl(kinYaw*(1-t)+dynYaw*t,-CARP.girTak,CARP.girTak);
+  drive.yawrate=cl(kinYaw*(1-t)+dynYaw*t,-CP.girTak,CP.girTak);
   // Sidefarten dempes mot null når du IKKE holder håndbrekk. Det er dette som
   // gjør sladden styrbar: hold håndbrekket for å holde den gående, slipp for
   // å hekte den opp igjen.
-  const sd=hand?CARP.sladdDempH:CARP.sladdDemp;
+  const sd=hand?CP.sladdDempH:CP.sladdDemp;
   drive.vy-=drive.vy*Math.min(1,sd*h);
   drive.vy=cl(drive.vy*((1-t)*0.90+t),-26,26);
   drive.head+=drive.yawrate*h;
@@ -2350,7 +2623,7 @@ function updateDrive(dt){
   const D=Math.min(dt,0.05);
 
   // ratt settes én gang per frame
-  const maxRatt=CARP.ratt/(1+(Math.abs(drive.vx)/15)*(Math.abs(drive.vx)/15));
+  const maxRatt=CP.ratt/(1+(Math.abs(drive.vx)/15)*(Math.abs(drive.vx)/15));
   drive.steer+=(st*maxRatt-drive.steer)*Math.min(1,D*7);
 
   // Kreftene mettes, og da blir eksplisitt Euler ustabil ved store slippvinkler
@@ -2383,7 +2656,7 @@ function updateDrive(dt){
   drive.x=cl(drive.x,-HW+8,HW-8);drive.z=cl(drive.z,-HD+8,HD-8);
 
   const hjulFart=drive.vx+(drive.spinn||0)*26;   // spinnende bakhjul går fortere enn bilen
-  drive.spin+=hjulFart*dt/CARP.hjulR;
+  drive.spin+=hjulFart*dt/CP.hjulR;
   const o=drive.car.obj;
   drive.y=groundAt(drive.x,drive.z);
   o.position.set(drive.x,drive.y+(drive.car.yoff||0),drive.z);
@@ -2530,6 +2803,7 @@ function build(){
   const trar=plantSkog(scene,gm);
   lagFolk(scene);
   buildTraffic();buildParked();initMerker();
+  lagPlukk(); frigiBetjenter();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
   document.getElementById('ostats').innerHTML=
@@ -2539,17 +2813,537 @@ function build(){
 
 /* ---------------------------- SPILLER ----------------------------------- */
 const P={pos:new THREE.Vector3(0,1.75,0),vel:new THREE.Vector3(),yaw:0,pitch:0,
-         onGround:false,fly:false,h:1.75,r:.6};
+         onGround:false,fly:false,h:1.75,r:.6,
+         hp:100,dodT:0,skadeT:99,blod:0};
 const keys={};
 function showMode(){
   document.getElementById('mode').textContent =
-    drive.on ? '🚗 '+Math.round(Math.abs(drive.vx)*3.6)+' km/t'+
+    drive.on ? (drive.klasse==='race'?'🏁 ':drive.klasse==='tung'?'🚚 ':'🚗 ')+
+               Math.round(Math.abs(drive.vx)*3.6)+' km/t'+
                (drive.spinn>0.05?'  ·  🔥 SPINN':'')+
                (drive.slip>0.22?'  ·  💨 SLADD':'')+
                (drive.skade>2?'  ·  🔧 '+Math.round(drive.skade)+' % skade':'')+
                '  ·  E ut  ·  Space håndbrekk  ·  Shift boost'
   : P.fly    ? '✈ FLY-MODUS (F for å lande)' : '';
 }
+
+/* ================= INVENTAR, PISTOL OG KAMP ==============================
+   Bæreslinja nederst holder seks ting. Slot 1 er nevene, slot 2 pistolen,
+   resten fylles av det du plukker opp i byen. Skytingen bruker ikke
+   three.js sin raycaster mot bygeometrien — den er på over en million
+   trekanter og ville hakket ved hvert skudd. I stedet marsjeres strålen
+   gjennom de samme kollisjonsboksene som spilleren går på, så treffet er
+   alltid enig med veggen du faktisk stopper i.                            */
+
+const TING={
+  hand:  {navn:'Never',    ikon:'✊'},
+  pistol:{navn:'Pistol',   ikon:'🔫'},
+  penger:{navn:'Penger',   ikon:'💵', stabel:true},
+  kaffe: {navn:'Kaffe',    ikon:'☕', stabel:true},
+  ol:    {navn:'Øl',       ikon:'🍺', stabel:true},
+  bok:   {navn:'Bok',      ikon:'📕', stabel:true},
+  nokkel:{navn:'Skiftenøkkel', ikon:'🔧', stabel:true},
+  ammo:  {navn:'Ammo',     ikon:'📦', stabel:true}
+};
+const inv={slot:1, felt:[{id:'hand',n:1},{id:'pistol',n:1},{id:'penger',n:0},null,null,null]};
+let hbSkitten=true;
+function tegnHotbar(){
+  const el=document.getElementById('hotbar'); if(!el)return;
+  let h='';
+  for(let i=0;i<6;i++){
+    const f=inv.felt[i], t=f?TING[f.id]:null;
+    h+='<div class="s'+(i===inv.slot?' valgt':'')+'"><span class="nr">'+(i+1)+'</span>'+
+       (t?t.ikon:'')+
+       (f&&f.n>1?'<span class="ant">'+f.n+'</span>':'')+
+       (i===inv.slot&&t?'<span class="nv">'+t.navn+'</span>':'')+'</div>';
+  }
+  el.innerHTML=h;
+}
+function velgSlot(i){
+  i=((i%6)+6)%6;
+  if(i===inv.slot)return;
+  inv.slot=i; hbSkitten=true;
+  gun.lad=0;                         // avbryter omlading når du bytter
+}
+function harPistol(){ const f=inv.felt[inv.slot]; return !!f&&f.id==='pistol'; }
+function taOpp(id,n){
+  n=n||1;
+  if(TING[id].stabel)
+    for(const f of inv.felt) if(f&&f.id===id){ f.n+=n; hbSkitten=true; return true; }
+  for(let i=0;i<6;i++) if(!inv.felt[i]){ inv.felt[i]={id:id,n:n}; hbSkitten=true; return true; }
+  return false;                      // slinja er full
+}
+
+/* ---- pistolen i hånda ---- */
+const VAAPEN={mag:12, ladT:1.15, rate:0.16, rekkevidde:150, skade:26};
+const gun={i:12, res:48, lad:0, kd:0, rekyl:0, blits:0, klikk:false};
+let vm=null, vmBase=null, vmLys=null;
+function lagPistol(){
+  const g=new THREE.Group();
+  const mM=new THREE.MeshLambertMaterial({color:0x4a5058,emissive:0x272b31});
+  const mL=new THREE.MeshLambertMaterial({color:0x8b939f,emissive:0x33383f});
+  const mG=new THREE.MeshLambertMaterial({color:0x4a382c,emissive:0x1d1611});
+  const b=(w,h,d,x,y,z,m,rx)=>{
+    const k=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+    k.position.set(x,y,z); if(rx)k.rotation.x=rx; g.add(k); return k; };
+  b(.075,.085,.300, 0, 0,    -.070, mL);        // sleide
+  b(.050,.040,.170, 0,-.010, -.290, mM);        // løp
+  b(.070,.150,.075, 0,-.120,  .045, mG, 0.34);  // grep
+  b(.046,.034,.100, 0,-.052, -.030, mM);        // avtrekkerbøyle
+  b(.026,.016,.028, 0, .052, -.200, mM);        // sikte foran
+  b(.026,.020,.026, 0, .052,  .060, mM);        // sikte bak
+  // hånd og underarm, ellers ser pistolen ut som den svever
+  const mH=new THREE.MeshLambertMaterial({color:0xc08a63,emissive:0x4a3324});
+  b(.105,.125,.125, .014,-.115, .050, mH, 0.32);
+  b(.115,.115,.300, .024,-.215, .235, mH, 0.32);
+  return g;
+}
+function settOppVaapen(){
+  vm=lagPistol();
+  vmBase=new THREE.Vector3(0.300,-0.230,-0.50);
+  vm.position.copy(vmBase); vm.rotation.set(-0.03,-0.52,0.07);
+  vm.scale.setScalar(1.35);
+  vm.renderOrder=10;
+  vm.traverse(o=>{ if(o.material){o.material.depthTest=true;} });
+  camera.add(vm); scene.add(camera);
+  vmLys=new THREE.PointLight(0xffd08a,0,14,2.0);
+  scene.add(vmLys);
+  tegnHotbar();
+}
+
+/* ---- korte effekter: sporlys, gnist, munningsglimt ---- */
+const fxListe=[];
+function effekt(o,levetid){ scene.add(o); fxListe.push({o:o,t:0,L:levetid}); }
+function oppdaterFx(dt){
+  for(let i=fxListe.length-1;i>=0;i--){
+    const e=fxListe[i]; e.t+=dt;
+    const u=e.t/e.L;
+    if(u>=1){ scene.remove(e.o); if(e.o.geometry)e.o.geometry.dispose(); fxListe.splice(i,1); continue; }
+    if(e.o.material) e.o.material.opacity=1-u;
+    if(e.o.userData.krymp) e.o.scale.setScalar(1-u*0.75);
+  }
+}
+const _spGeo=new THREE.IcosahedronGeometry(0.11,0);
+function gnist(x,y,z,farge){
+  const m=new THREE.Mesh(_spGeo,new THREE.MeshBasicMaterial(
+    {color:farge,transparent:true,opacity:1}));
+  m.position.set(x,y,z); m.userData.krymp=true;
+  effekt(m,0.20);
+}
+function sporlys(a,b){
+  const g=new THREE.BufferGeometry().setFromPoints([a,b]);
+  const l=new THREE.Line(g,new THREE.LineBasicMaterial(
+    {color:0xffe9b0,transparent:true,opacity:0.9}));
+  effekt(l,0.055);
+}
+
+/* ---- strålen: marsjer gjennom kollisjonsboksene, ikke bygeometrien ---- */
+function straaleTreff(o,d,maks){
+  let ck=null, liste=null;
+  const steg=0.28;
+  for(let t=0.6;t<maks;t+=steg){
+    const x=o.x+d.x*t, y=o.y+d.y*t, z=o.z+d.z*t;
+    if(y<groundAt(x,z)) return {t:t,hva:'bakke',x:x,y:y,z:z};
+    const k=Math.floor(x/GRID)+':'+Math.floor(z/GRID);
+    if(k!==ck){ ck=k; liste=nearby(x,z); }
+    for(const b of liste)
+      if(!b.av&&x>b.x0&&x<b.x1&&z>b.z0&&z<b.z1&&y<b.top)
+        return {t:t,hva:'vegg',x:x,y:y,z:z};
+    for(const b of innKol)
+      if(x>b.x0&&x<b.x1&&z>b.z0&&z<b.z1&&y<b.top)
+        return {t:t,hva:'vegg',x:x,y:y,z:z};
+  }
+  return {t:maks,hva:'luft',x:o.x+d.x*maks,y:o.y+d.y*maks,z:o.z+d.z*maks};
+}
+// nærmeste kule-treff langs strålen
+function kuleMot(o,d,maks,cx,cy,cz,r){
+  const vx=cx-o.x, vy=cy-o.y, vz=cz-o.z;
+  const t=vx*d.x+vy*d.y+vz*d.z;
+  if(t<0.8||t>maks)return -1;
+  const ex=vx-d.x*t, ey=vy-d.y*t, ez=vz-d.z*t;
+  return (ex*ex+ey*ey+ez*ez)<r*r ? t : -1;
+}
+
+const _ko=new THREE.Vector3(), _kd=new THREE.Vector3();
+function skyt(){
+  if(!harPistol()||gun.lad>0||gun.kd>0||drive.on)return;
+  if(gun.i<=0){ showToast('🔫 Tomt magasin — R for å lade'); gun.kd=0.25; return; }
+  gun.i--; gun.kd=VAAPEN.rate; gun.rekyl=1; gun.blits=0.055; hbSkitten=true;
+  P.pitch=Math.min(1.5,P.pitch+0.021);            // rekyl i sikte
+
+  camera.getWorldPosition(_ko);
+  camera.getWorldDirection(_kd);
+  const munn=new THREE.Vector3(0.245,-0.155,-0.62).applyMatrix4(camera.matrixWorld);
+  vmLys.position.copy(munn);
+
+  const vegg=straaleTreff(_ko,_kd,VAAPEN.rekkevidde);
+  let best={t:vegg.t,hva:vegg.hva,x:vegg.x,y:vegg.y,z:vegg.z,mal:null};
+
+  // fotgjengere og betjenter
+  for(let i=0;i<folkData.length;i++){
+    const f=folkData[i];
+    if(f.skjult||f.dod)continue;
+    const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
+    const t=kuleMot(_ko,_kd,best.t,p.x,f.pad+0.95*f.h,p.z,0.52);
+    if(t>0){ best={t:t,hva:'person',x:_ko.x+_kd.x*t,y:_ko.y+_kd.y*t,z:_ko.z+_kd.z*t,mal:f}; }
+  }
+  // biler — parkerte, politi og trafikk
+  for(const b of parked){
+    const t=kuleMot(_ko,_kd,best.t,b.x,groundAt(b.x,b.z)+0.85,b.z,1.45);
+    if(t>0) best={t:t,hva:'bil',x:_ko.x+_kd.x*t,y:_ko.y+_kd.y*t,z:_ko.z+_kd.z*t,mal:b};
+  }
+  for(const c of carData){
+    if(c.dead)continue;
+    const cx=c.ax?c.off:c.pos, cz=c.ax?c.pos:c.off;
+    const t=kuleMot(_ko,_kd,best.t,cx,groundAt(cx,cz)+0.85,cz,1.45);
+    if(t>0) best={t:t,hva:'bil',x:_ko.x+_kd.x*t,y:_ko.y+_kd.y*t,z:_ko.z+_kd.z*t,mal:null};
+  }
+
+  sporlys(munn,new THREE.Vector3(best.x,best.y,best.z));
+  if(best.hva==='person'){
+    gnist(best.x,best.y,best.z,0xd63b3b);
+    treffPerson(best.mal);
+  } else if(best.hva==='bil'){
+    gnist(best.x,best.y,best.z,0xffd08a);
+    if(best.mal&&best.mal.erPoliti) treffPolitibil(best.mal);
+    else politiVarme(1.2);
+  } else if(best.hva!=='luft'){
+    gnist(best.x,best.y,best.z,0xd8d2c4);
+  }
+  politiVarme(2.0);                 // skudd i gata blir hørt
+}
+function treffPerson(f){
+  f.hp=(f.hp===undefined?VAAPEN.skade:f.hp)-VAAPEN.skade;
+  if(f.betjent){
+    politiVarme(6);
+    if(f.hp>0){ f.hp=f.hp; return; }
+    drepPerson(f); politiVarme(16); showToast('🚨 Du skjøt en betjent');
+  } else {
+    drepPerson(f); politiVarme(11);
+  }
+}
+function drepPerson(f){
+  f.dod=true; f.dodT=0; f.man=false;
+}
+function treffPolitibil(b){
+  b.hp=(b.hp||3)-1;
+  politiVarme(3);
+  if(b.hp<=0){ gnist(b.x,groundAt(b.x,b.z)+1.2,b.z,0xff8a3c); fjernPolitibil(b); politiVarme(8); }
+}
+
+/* ---- spilleren tåler noe, men ikke mye ---- */
+function skadeSpiller(n){
+  if(P.dodT>0)return;
+  P.hp=Math.max(0,P.hp-n); P.skadeT=0; P.blod=1;
+  if(P.hp<=0) doSpiller();
+}
+function doSpiller(){
+  P.dodT=2.2;
+  showToast('💀 Du ble skutt');
+  while(politi.biler.length)fjernPolitibil(politi.biler[0]);
+  frigiBetjenter();
+  politi.varme=0; politi.stjerner=0; politi.pagrepT=0; politi.tilstand='rolig';
+  visStjerner(); visJakt();
+}
+function gjenoppliv(){
+  P.hp=100; P.dodT=0; P.blod=0; P.skadeT=99;
+  if(drive.on){drive.on=false;drive.car=null;showMode();}
+  spawn();
+  gun.i=VAAPEN.mag; gun.lad=0; hbSkitten=true;
+}
+
+/* ---- betjenter til fots ----------------------------------------------
+   De sitter i folkData som forhåndsreserverte plasser, slik at de tegnes
+   av de samme åtte instansmeshene som resten av byen. Å lage nye mesh i
+   farta ville kostet et tegnekall per betjent.                          */
+const BETJENT_N=14;
+let betjentSlot=[];                 // indekser i folkData
+function frigiBetjenter(){
+  for(const i of betjentSlot){
+    const f=folkData[i]; if(!f)continue;
+    f.man=false; f.skjult=true; f.dod=false; f.aktiv=false;
+  }
+}
+function ledigBetjent(){
+  for(const i of betjentSlot){
+    const f=folkData[i];
+    if(f&&!f.aktiv&&!f.dod)return f;
+  }
+  return null;
+}
+function slippUtBetjent(bil){
+  const f=ledigBetjent(); if(!f)return;
+  const ut=(rand()<.5?1:-1);
+  f.aktiv=true; f.skjult=false; f.man=true; f.dod=false; f.hp=52;
+  f.x=bil.x+Math.cos(bil.head||0)*2.2*ut; f.z=bil.z+Math.sin(bil.head||0)*2.2*ut;
+  f.pad=groundAt(f.x,f.z); f.yaw=0; f.fase=0; f.skytT=1.1; f.bil=bil;
+  bil.utsteg=true;
+}
+function oppdaterBetjenter(dt){
+  const sp=drive.on?{x:drive.x,z:drive.z,y:drive.y+1.0}
+                   :{x:P.pos.x,z:P.pos.z,y:P.pos.y-0.4};
+  // biler som står nær nok slipper ut en betjent
+  if(politi.stjerner>0)
+    for(const b of politi.biler){
+      if(b.utsteg)continue;
+      const d=Math.hypot(b.x-sp.x,b.z-sp.z);
+      if(d<34&&b.ser) slippUtBetjent(b);
+    }
+  for(const i of betjentSlot){
+    const f=folkData[i];
+    if(!f||!f.aktiv||f.dod)continue;
+    if(f.bil&&politi.biler.indexOf(f.bil)<0){ f.bil=null; }
+    const dx=sp.x-f.x, dz=sp.z-f.z, d=Math.hypot(dx,dz)||1;
+    f.yaw=Math.atan2(dx,dz)+Math.PI;
+    // holder avstand: går fram til 8 m, trekker seg om du kommer for nær
+    const vil=(d>9?1:(d<5?-1:0))*2.6;
+    if(vil!==0){
+      const nx=f.x+dx/d*vil*dt, nz=f.z+dz/d*vil*dt;
+      if(friPlass(nx,nz)){ f.x=nx; f.z=nz; f.pad=groundAt(nx,nz); }
+      f.fase+=dt*5.2;
+    }
+    // gir opp og forsvinner hvis du kommer langt unna
+    if(d>90){ f.aktiv=false; f.skjult=true; if(f.bil)f.bil.utsteg=false; continue; }
+    f.skytT-=dt;
+    if(f.skytT<=0&&d<38&&P.dodT<=0){
+      f.skytT=rnd(0.85,1.5);
+      const o=new THREE.Vector3(f.x,f.pad+1.25,f.z);
+      const m=new THREE.Vector3(sp.x-o.x,(sp.y||1)-o.y,sp.z-o.z).normalize();
+      const tr=straaleTreff(o,m,d+2);
+      if(tr.t>d-1.2){                       // fri skuddlinje
+        sporlys(o,new THREE.Vector3(o.x+m.x*d,o.y+m.y*d,o.z+m.z*d));
+        gnist(o.x+m.x*0.5,o.y+m.y*0.5,o.z+m.z*0.5,0xffd08a);
+        if(rand()<(d<14?0.62:0.34)) skadeSpiller(drive.on?4:9);
+      }
+    }
+  }
+}
+
+/* ---- ting å plukke opp i gata ---- */
+const PLUKK_DEF=[['ammo',0xd8b45a],['penger',0x6ad68a],['kaffe',0x8a6244],
+                 ['ol',0xe0b23a],['bok',0xc05a4a],['nokkel',0x9aa2b0]];
+let plukk=[], plukkM=null;
+const _pd=new THREE.Object3D(), _pc=new THREE.Color();
+function lagPlukk(){
+  if(plukkM){ scene.remove(plukkM); plukkM.geometry.dispose(); plukkM=null; }
+  plukk=[];
+  const kand=blocks.filter(b=>b.d!==D_PARK);
+  if(!kand.length)return;
+  let forsok=0;
+  while(plukk.length<120&&forsok<4000){
+    forsok++;
+    const b=kand[rndi(0,kand.length-1)];
+    const x=rnd(b.x0+1.6,b.x1-1.6), z=rnd(b.z0+1.6,b.z1-1.6);
+    if(!friPlass(x,z))continue;
+    const d=PLUKK_DEF[rndi(0,PLUKK_DEF.length-1)];
+    plukk.push({x:x,z:z,y:groundAt(x,z)+0.42,id:d[0],farge:d[1],
+                tatt:false,f:rand()*6.283});
+  }
+  plukkM=new THREE.InstancedMesh(new THREE.BoxGeometry(.42,.42,.42),
+    new THREE.MeshLambertMaterial({color:0xffffff,emissive:0x2a2a2a}),plukk.length);
+  plukkM.frustumCulled=false; plukkM.castShadow=true;
+  plukkM.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(plukk.length*3),3);
+  plukk.forEach((q,i)=>{ _pc.setHex(q.farge); plukkM.setColorAt(i,_pc); });
+  plukkM.instanceColor.needsUpdate=true;
+  scene.add(plukkM);
+}
+function oppdaterPlukk(dt){
+  if(!plukkM)return;
+  const sp=spillerPos();
+  const t=performance.now()*0.001;
+  for(let i=0;i<plukk.length;i++){
+    const q=plukk[i];
+    if(!q.tatt&&!drive.on&&Math.abs(q.x-sp.x)<1.7&&Math.abs(q.z-sp.z)<1.7&&
+       Math.abs(q.y-P.pos.y)<2.6){
+      if(q.id==='ammo'){ gun.res+=18; q.tatt=true; hbSkitten=true;
+        showToast('📦 +18 skudd  ('+gun.res+' i reserve)'); }
+      else if(q.id==='penger'){ const sum=rndi(2,9)*100; girPenger(sum); q.tatt=true;
+        showToast('💵 +'+sum+' kr'); }
+      else if(taOpp(q.id,1)){ q.tatt=true; showToast(TING[q.id].ikon+' '+TING[q.id].navn+' plukket opp'); }
+      else showToast('Slinja er full');
+    }
+    if(q.tatt){ _pd.position.set(0,-999,0); _pd.scale.setScalar(0.001); }
+    else{
+      _pd.position.set(q.x,q.y+Math.sin(t*2+q.f)*0.09,q.z);
+      _pd.scale.setScalar(1);
+    }
+    _pd.rotation.set(0,t*1.1+q.f,0.30);
+    _pd.updateMatrix(); plukkM.setMatrixAt(i,_pd.matrix);
+  }
+  plukkM.instanceMatrix.needsUpdate=true;
+}
+
+/* ---- påkjørsel: folk går i bakken hvis du treffer dem i fart ---- */
+function paakjorsel(){
+  if(!drive.on)return;
+  const fart=Math.abs(drive.vx);
+  if(fart<2.2)return;
+  const ch=Math.cos(drive.head), sh=Math.sin(drive.head);
+  for(let i=0;i<folkData.length;i++){
+    const f=folkData[i];
+    if(f.dod||f.skjult||f.dans)continue;
+    const p=f.man?{x:f.x,z:f.z}:folkPos(f);
+    const dx=p.x-drive.x, dz=p.z-drive.z;
+    if(dx*dx+dz*dz>18)continue;
+    // inn i bilens eget koordinatsystem — 4,2 m lang, 2,0 m bred
+    const lx=-dx*sh+dz*ch, lz=dx*ch+dz*sh;
+    if(Math.abs(lz)<2.1&&Math.abs(lx)<1.05){
+      drepPerson(f);
+      f.kastX=(dx/(Math.hypot(dx,dz)||1)); f.kastZ=(dz/(Math.hypot(dx,dz)||1));
+      f.kast=Math.min(1.5,fart*0.10);
+      politiVarme(f.betjent?18:12);
+      showToast(f.betjent?'🚨 Du kjørte ned en betjent':'🚑 Du kjørte ned en fotgjenger');
+    }
+  }
+}
+
+/* ---- alt som må skje hver frame ---- */
+function oppdaterVaapen(dt){
+  if(gun.kd>0)gun.kd-=dt;
+  if(gun.blits>0){ gun.blits-=dt; vmLys.intensity=gun.blits>0?26:0; }
+  else if(vmLys) vmLys.intensity=0;
+  if(gun.lad>0){
+    gun.lad-=dt;
+    if(gun.lad<=0){
+      const tar=Math.min(VAAPEN.mag-gun.i,gun.res);
+      gun.i+=tar; gun.res-=tar; hbSkitten=true;
+    }
+  }
+  gun.rekyl=Math.max(0,gun.rekyl-dt*7);
+  if(vm){
+    const vis=harPistol()&&!drive.on&&P.dodT<=0;
+    vm.visible=vis;
+    if(vis){
+      const gange=Math.hypot(P.vel.x,P.vel.z);
+      const t=performance.now()*0.001;
+      const bx=Math.sin(t*7.5)*0.006*gange, by=Math.abs(Math.cos(t*7.5))*0.006*gange;
+      const ladU=gun.lad>0?Math.sin((1-gun.lad/VAAPEN.ladT)*Math.PI):0;
+      vm.position.set(vmBase.x+bx, vmBase.y+by-ladU*0.14, vmBase.z+gun.rekyl*0.055);
+      vm.rotation.set(-0.03-gun.rekyl*0.42-ladU*0.7,-0.52,0.07+ladU*0.5);
+    }
+  }
+  // helse
+  if(P.dodT>0){ P.dodT-=dt; if(P.dodT<=0)gjenoppliv(); }
+  else{
+    P.skadeT+=dt;
+    if(P.skadeT>6&&P.hp<100) P.hp=Math.min(100,P.hp+16*dt);
+  }
+  if(P.blod>0)P.blod=Math.max(0,P.blod-dt*1.6);
+  const rd=document.getElementById('roddblink');
+  if(rd) rd.style.opacity=(P.dodT>0?0.72:Math.max(P.blod*0.55,(100-P.hp)/100*0.22)).toFixed(3);
+  if(hbSkitten){ tegnHotbar(); hbSkitten=false; }
+  const am=document.getElementById('ammo');
+  if(am){
+    if(harPistol()&&!drive.on){
+      am.innerHTML=(gun.lad>0?'…':gun.i)+' <small>/ '+gun.res+'</small>';
+      am.className=gun.i===0?'tom':'';
+    } else am.innerHTML='';
+  }
+  const ph=document.getElementById('pengerhud');
+  if(ph){
+    let h2='💵 '+kroner().toLocaleString('nb-NO')+' kr';
+    if(klubb&&klubb.inne&&!folgerHer)
+      h2+='<small>kastet '+kastet.toLocaleString('nb-NO')+' / '+
+          FOLGE_KRAV.toLocaleString('nb-NO')+' kr &middot; velg 💵 og venstreklikk</small>';
+    else if(folgerHer) h2+='<small>💃 hun følger etter deg</small>';
+    ph.innerHTML=h2;
+  }
+  const hl=document.getElementById('helse');
+  if(hl) hl.innerHTML='<div id="helsefyll" style="width:'+Math.round(P.hp)+'%"></div>';
+}
+
+
+/* ============================ PENGER ====================================
+   Kroner ligger i slot 3 på bæreslinja. Du finner sedler i gata og du kan
+   rane kassa i butikker, barer og banker — det siste koster stjerner. Har
+   du pengene framme kaster venstreklikk en hundrelapp; kaster du nok på
+   danserne i klubben blir én av dem med deg ut.                          */
+const KAST=100, FOLGE_KRAV=3000;
+let kastet=0, folgerHer=null, sedler=[];
+function harPengerValgt(){ const f=inv.felt[inv.slot]; return !!f&&f.id==='penger'; }
+function girPenger(n){ inv.felt[2].n+=n; hbSkitten=true; }
+function kroner(){ return inv.felt[2]?inv.felt[2].n:0; }
+
+const _sedGeo=new THREE.PlaneGeometry(0.22,0.11);
+function kastPenger(){
+  if(kroner()<KAST){ showToast('Ikke nok penger — finn sedler i gata eller ran ei kasse'); return; }
+  girPenger(-KAST);
+  camera.getWorldPosition(_ko); camera.getWorldDirection(_kd);
+  const m=new THREE.Mesh(_sedGeo,new THREE.MeshBasicMaterial(
+    {color:0x74d68f,side:THREE.DoubleSide,transparent:true,opacity:1}));
+  m.position.copy(_ko).addScaledVector(_kd,0.7);
+  scene.add(m);
+  sedler.push({o:m,vx:_kd.x*6.5+rnd(-.6,.6),vy:2.2,vz:_kd.z*6.5+rnd(-.6,.6),
+               sn:rnd(4,9),t:0});
+  // traff du en danser?
+  let truffet=null,bt=1e9;
+  for(const f of folkData){
+    if(!f.dans&&!f.folger)continue;
+    if(f.folger)continue;
+    const t=kuleMot(_ko,_kd,14,f.x,f.pad+1.0,f.z,1.1);
+    if(t>0&&t<bt){bt=t;truffet=f;}
+  }
+  if(truffet){
+    kastet+=KAST;
+    truffet.jubel=1.2;
+    if(kastet>=FOLGE_KRAV&&!folgerHer){
+      folgerHer=truffet;
+      truffet.dans=false; truffet.man=true; truffet.folger=true;
+      truffet.yaw=0; truffet.fase=0;
+      showToast('💃 Hun blir med deg');
+    } else if(kastet<FOLGE_KRAV)
+      showToast('💵 '+kastet+' / '+FOLGE_KRAV+' kr kastet');
+  }
+}
+function oppdaterSedler(dt){
+  for(let i=sedler.length-1;i>=0;i--){
+    const s2=sedler[i]; s2.t+=dt;
+    s2.vy-=9.0*dt;
+    s2.o.position.x+=s2.vx*dt; s2.o.position.y+=s2.vy*dt; s2.o.position.z+=s2.vz*dt;
+    s2.o.rotation.x+=s2.sn*dt; s2.o.rotation.z+=s2.sn*0.6*dt;
+    s2.vx*=(1-1.6*dt); s2.vz*=(1-1.6*dt);
+    const gy=groundAt(s2.o.position.x,s2.o.position.z)+0.02;
+    if(s2.o.position.y<gy){ s2.o.position.y=gy; s2.vy=0; s2.vx*=0.4; s2.vz*=0.4; }
+    if(s2.t>7){ s2.o.material.opacity=Math.max(0,1-(s2.t-7)/1.5); }
+    if(s2.t>8.5){ scene.remove(s2.o); s2.o.material.dispose(); sedler.splice(i,1); }
+  }
+}
+function oppdaterFolger(dt){
+  if(!folgerHer)return;
+  const f=folgerHer;
+  const sp=drive.on?{x:drive.x,z:drive.z}:{x:P.pos.x,z:P.pos.z};
+  const dx=sp.x-f.x, dz=sp.z-f.z, d=Math.hypot(dx,dz)||1;
+  f.yaw=Math.atan2(dx,dz)+Math.PI;
+  if(d>2.4){
+    const v=Math.min(6.4,1.8+d*0.55);
+    const nx=f.x+dx/d*v*dt, nz=f.z+dz/d*v*dt;
+    if(friPlass(nx,nz)||d>10){ f.x=nx; f.z=nz; f.pad=groundAt(nx,nz); }
+    f.fase+=dt*5.4;
+  }
+  if(d>55){ f.x=sp.x-dx/d*3; f.z=sp.z-dz/d*3; f.pad=groundAt(f.x,f.z); }
+}
+
+/* ---- rane kassa i et interiør ---- */
+let ranT=0;
+function oppdaterRan(dt){
+  const b=aktivtBygg;
+  if(!b||!b.kasse||drive.on||P.dodT>0){ ranT=0; return; }
+  const d=Math.hypot(P.pos.x-b.kasse.x,P.pos.z-b.kasse.z);
+  if(d>2.4){ ranT=0; return; }
+  if(b.ranet){ hint='💵 Kassa er allerede tom'; return; }
+  if(keys['KeyE']){
+    ranT+=dt;
+    if(ranT>=1.6){
+      const sum=rndi(14,46)*100;
+      girPenger(sum); b.ranet=true; ranT=0;
+      politiVarme(b.type==='bank'?34:22);
+      showToast('💰 +'+sum.toLocaleString('nb-NO')+' kr — alarmen gikk');
+      return;
+    }
+    hint='💰 Tømmer kassa … '+Math.round(ranT/1.6*100)+' %';
+  } else { ranT=0; hint='💰 Hold E for å rane kassa'; }
+}
+
 addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='KeyE')enterExit();
@@ -2558,14 +3352,32 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyT'){renderer.shadowMap.enabled=!renderer.shadowMap.enabled;
     scene.traverse(o=>{if(o.material)o.material.needsUpdate=true});}
   if(e.code==='KeyR'){
-    // Ny by må gjelde ALLE, ellers står dere i hver deres verden.
-    if(net.isHost||!net.live){SEED=(Math.random()*1e9)|0;build();spawn();}
-    else showToast('Bare verten kan lage ny by');
+    if(harPistol()&&!e.shiftKey&&!drive.on){
+      if(gun.lad<=0&&gun.i<VAAPEN.mag&&gun.res>0){ gun.lad=VAAPEN.ladT; }
+      else if(gun.res<=0) showToast('Ingen skudd igjen — finn en ammokasse 📦');
+    } else {
+      // Ny by må gjelde ALLE, ellers står dere i hver deres verden.
+      if(net.isHost||!net.live){SEED=(Math.random()*1e9)|0;build();spawn();}
+      else showToast('Bare verten kan lage ny by');
+    }
+  }
+  if(e.code.startsWith('Digit')){
+    const n=+e.code.slice(5);
+    if(n>=1&&n<=6)velgSlot(n-1);
   }
   if(e.code==='Space')e.preventDefault();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 renderer.domElement.addEventListener('click',()=>renderer.domElement.requestPointerLock());
+renderer.domElement.addEventListener('mousedown',e=>{
+  if(document.pointerLockElement!==renderer.domElement)return;
+  if(e.button!==0)return;
+  if(harPengerValgt())kastPenger(); else skyt();
+});
+addEventListener('wheel',e=>{
+  if(document.pointerLockElement!==renderer.domElement)return;
+  velgSlot(inv.slot+(e.deltaY>0?1:-1));
+},{passive:true});
 document.getElementById('overlay').addEventListener('click',()=>renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange',()=>{
   document.getElementById('overlay').style.display=
@@ -2610,7 +3422,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'dorer-27',
+  ver:()=>'kamp-29',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -2633,6 +3445,129 @@ window.__dbg={
   },
   bygg:()=>bygg.length,
   bx:(i)=>bygg[i],
+  kl:()=>klubb, fg:()=>fengsel,
+  dag:()=>{night=false;applyTime();return true;},
+  // --- testkroker for kamp, penger og fengsel ---
+  skyt:()=>skyt(),
+  hp:()=>({hp:+P.hp.toFixed(1),dod:+P.dodT.toFixed(1)}),
+  kr:()=>kroner(),
+  dode:()=>folkData.filter(f=>f.dod).length,
+  betjenterUte:()=>folkData.filter(f=>f.betjent&&f.aktiv&&!f.dod).length,
+  varme:(v)=>{politi.varme=v;politi.stjerner=stjernerAv(v);visStjerner();return politi.stjerner;},
+  // sett deg foran nærmeste levende fotgjenger og skyt
+  skytFolk:()=>{
+    let best=null,bd=1e9;
+    for(const f of folkData){
+      if(f.dod||f.skjult||f.dans||f.betjent)continue;
+      const p=folkPos(f); const d=Math.hypot(p.x-P.pos.x,p.z-P.pos.z);
+      if(d<bd){bd=d;best={f:f,p:p};}
+    }
+    if(!best)return null;
+    const p=best.p, py=best.f.pad+0.95*best.f.h;
+    const ox=p.x+3.0, oz=p.z+3.0;
+    P.fly=false; drive.on=false;
+    P.pos.set(ox,groundAt(ox,oz)+P.h,oz);
+    P.yaw=Math.atan2(p.x-ox,p.z-oz)+Math.PI;
+    P.pitch=Math.atan2(py-(P.pos.y),Math.hypot(p.x-ox,p.z-oz));
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    const for_=best.f.dod; gun.kd=0; gun.lad=0;
+    skyt();
+    return {for:for_,etter:!!best.f.dod,avstand:+bd.toFixed(1),ammo:gun.i};
+  },
+  // kjør ned nærmeste fotgjenger
+  kjorNed:()=>{
+    let best=null,bd=1e9;
+    for(const f of folkData){
+      if(f.dod||f.skjult||f.dans||f.betjent)continue;
+      const p=folkPos(f); const d=Math.hypot(p.x-P.pos.x,p.z-P.pos.z);
+      if(d<bd){bd=d;best={f:f,p:p};}
+    }
+    if(!best)return null;
+    drive.on=true; drive.car=parked[0]||null;
+    drive.x=best.p.x; drive.z=best.p.z; drive.head=0; drive.vx=14; drive.y=groundAt(drive.x,drive.z);
+    paakjorsel();
+    return {dod:!!best.f.dod};
+  },
+  // fengsel: arrester, gå til luka og hold E
+  fengselTest:()=>{
+    arrester();
+    const L=fengsel.luke;
+    P.pos.set(L.x,groundAt(L.x,L.z)+P.h,L.z); P.fly=false;
+    keys['KeyE']=true;
+    for(let k=0;k<200;k++) oppdaterFengsel(1/60);
+    keys['KeyE']=false;
+    const u=fengsel.utgang;
+    return {fri:fengsel.fri,utgang:[Math.round(u.x),Math.round(u.z)],
+            ute:Math.hypot(P.pos.x-fengsel.x,P.pos.z-fengsel.z)>28,
+            avstand:Math.round(Math.hypot(P.pos.x-fengsel.x,P.pos.z-fengsel.z))};
+  },
+  // finn et bygg med kasse, gå inn, ran den
+  ranTest:()=>{
+    for(let i=0;i<bygg.length;i++){
+      const b=bygg[i];
+      if(['butikk','kafe','bar','bank'].indexOf(b.type)<0)continue;
+      const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
+      P.fly=false; drive.on=false;
+      P.pos.set(mx,groundAt(mx,mz)+P.h,mz);
+      oppdaterInteriør();
+      if(!aktivtBygg||!aktivtBygg.kasse)continue;
+      const K=aktivtBygg.kasse;
+      P.pos.set(K.x+0.9,groundAt(K.x,K.z)+P.h,K.z+0.9);
+      const for_=kroner();
+      keys['KeyE']=true;
+      for(let k=0;k<200;k++) oppdaterRan(1/60);
+      keys['KeyE']=false;
+      return {type:b.type,for:for_,etter:kroner(),stjerner:stjernerAv(politi.varme)};
+    }
+    return null;
+  },
+  // kast penger på danserne til hun følger etter
+  klubbTest:()=>{
+    if(!klubb)return null;
+    const d=folkData.filter(f=>f.dans);
+    if(!d.length)return null;
+    girPenger(9000);
+    const m=d[0];
+    P.fly=false; drive.on=false;
+    P.pos.set(m.x, m.pad+P.h, m.z-3.0);
+    P.yaw=Math.PI; P.pitch=-0.1;
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    for(let k=0;k<40;k++) kastPenger();
+    return {dansere:d.length,kastet:kastet,folger:!!folgerHer,kr:kroner()};
+  },
+  bilstil:(t)=>{settBilstil(t);return {klasse:drive.klasse,effekt:CP.effekt,ratt:+CP.ratt.toFixed(3),M:CP.M};},
+  // politibetjent ut av bilen, skyter på deg, og lar seg skyte tilbake
+  betjentTest:()=>{
+    politi.varme=50; politi.stjerner=stjernerAv(50);
+    drive.on=false; P.fly=false; P.hp=100; P.dodT=0;
+    const bx=P.pos.x+14, bz=P.pos.z;
+    const b={x:bx,z:bz,head:0,ser:true,utsteg:false,obj:new THREE.Object3D(),
+             erPoliti:true,type:'police',yaw:0,hp:3};
+    politi.biler.push(b);
+    for(let k=0;k<10;k++) oppdaterBetjenter(1/60);
+    const ute=folkData.filter(f=>f.betjent&&f.aktiv&&!f.dod).length;
+    const hpFor=P.hp;
+    for(let k=0;k<600;k++) oppdaterBetjenter(1/60);   // 10 sekunder skuddveksling
+    const bt=folkData.find(f=>f.betjent&&f.aktiv&&!f.dod);
+    let skutt=null;
+    if(bt){
+      const py=bt.pad+0.95*bt.h;
+      const ox=bt.x+2.5, oz=bt.z+2.5;
+      P.pos.set(ox,groundAt(ox,oz)+P.h,oz);
+      P.yaw=Math.atan2(bt.x-ox,bt.z-oz)+Math.PI;
+      P.pitch=Math.atan2(py-P.pos.y,Math.hypot(bt.x-ox,bt.z-oz));
+      camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+      camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+      gun.i=12; gun.kd=0; gun.lad=0;
+      skyt(); const hp1=bt.hp; gun.kd=0; skyt();
+      skutt={hpEtter1:hp1,dod:!!bt.dod};
+    }
+    politi.biler.length=0; frigiBetjenter();
+    return {uteEtter10frames:ute,hpFor:+hpFor.toFixed(0),
+            hpEtter:+P.hp.toFixed(0),skutt:skutt};
+  },
   kart:()=>{drawMinimap();return {n:poi?poi.length:0,png:mm.toDataURL('image/png')};},
   aktivt:()=>aktivtBygg?{type:aktivtBygg.type,side:aktivtBygg.side,
     mesher:innMesh.length,kol:innKol.length}:null,
@@ -2912,8 +3847,9 @@ function drawMinimap(){
   }
   for(const p of parked){                                // parkerte — kan kjøres
     const hero=HERO_CARS.indexOf(p.type)>=0;
-    mc.fillStyle=p.erPoliti?'#4d9dff':(hero?'#ff9a3c':'#6cf09a');
-    const r=p.erPoliti?2.6:(hero?2.5:1.5);
+    const race=!hero&&RACE_CARS.indexOf(p.type)>=0;
+    mc.fillStyle=p.erPoliti?'#4d9dff':(hero?'#ff9a3c':race?'#ff5f5f':'#6cf09a');
+    const r=p.erPoliti?2.6:(hero||race?2.5:1.5);
     mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
   }
   // landemerker: rosa K = nattklubb, hvit F = fengsel, resten er bygg du kan gå inn i
@@ -3272,7 +4208,8 @@ function loop(now){
   requestAnimationFrame(loop);
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();netInterp(dt);
+  hint='';
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -3288,7 +4225,7 @@ function loop(now){
     if(drive.on){showMode();}
     else if(toastT<=0){
       const n=nearestCar();
-      document.getElementById('mode').textContent=
+      document.getElementById('mode').textContent= hint ? hint :
         (n.p||n.tr)?'🚗 Trykk E for å '+(n.tr?'kapre bilen':'kjøre'):(P.fly?'✈ FLY-MODUS (F for å lande)':'');
     }
     drawMinimap();plist();visJakt();
@@ -3322,10 +4259,10 @@ addEventListener('resize',()=>{
 
 setTimeout(async ()=>{
   await loadCars();
-  build();spawn();applyTime();
+  build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build dorer-27';
+  document.getElementById('verline').textContent='build kamp-29';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
