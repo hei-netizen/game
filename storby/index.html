@@ -204,7 +204,7 @@
     </div>
     <div class="body">
       <h1>STORBY</h1>
-      <div class="sub">3 &times; 2 km prosedural by</div>
+      <div class="sub" id="osub">3 &times; 2 km prosedural by</div>
       <div class="rule"></div>
 
       <div id="nameRow">
@@ -2268,6 +2268,8 @@ function build(){
   buildTraffic();buildParked();initMerker();
   drawMinimapBase();
   document.getElementById('bcount').textContent=buildingCount.toLocaleString('nb-NO');
+  document.getElementById('osub').textContent=
+    SK ? 'Skien sentrum \u00b7 ekte kartdata' : '3 \u00d7 2 km prosedural by';
   document.getElementById('ostats').innerHTML= SK
     ? buildingCount.toLocaleString('nb-NO')+' ekte bygninger &middot; '+
       SK.veier.length.toLocaleString('nb-NO')+' gater &middot; Skien sentrum'
