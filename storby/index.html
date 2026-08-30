@@ -176,6 +176,7 @@
   <div><b id="fps">0</b> fps &nbsp;&middot;&nbsp; <b id="bcount">0</b> bygninger &middot; <b id="propcount">0</b> props</div>
   <div id="mode" style="color:#f0c674">&nbsp;</div>
   <div id="verline" style="color:#66708a;font-size:10px;letter-spacing:.12em"></div>
+  <div id="kildeline" style="color:#4d566e;font-size:9px;letter-spacing:.06em">&nbsp;</div>
   <div id="herocar" style="color:#ff9a3c">&nbsp;</div>
 </div>
 
@@ -2990,7 +2991,9 @@ setTimeout(async ()=>{
   build();spawn();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent=SK?'build sladdespor-8':'build sladdespor-8';
+  document.getElementById('verline').textContent=SK?'build skien-1':'build sladdespor-8';
+  document.getElementById('kildeline').textContent=SK
+    ? 'kart: \u00a9 OpenStreetMap-bidragsytere (ODbL) \u00b7 terreng: Kartverket (NLOD)' : '';
   document.getElementById('roomLbl').textContent='Rom: '+ROOM;
   document.getElementById('verLbl').textContent=SK?'build sladdespor-8':'build sladdespor-8';
   requestAnimationFrame(loop);
