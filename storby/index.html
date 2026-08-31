@@ -36,6 +36,14 @@
   #raceboard .pl.min{color:#ffe26a}
   #raceboard .pl .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #raceboard .pl .s{font-family:ui-monospace,Menlo,monospace;color:#8b93a6}
+  #raceseier{position:fixed;inset:0;z-index:26;display:none;align-items:center;
+    justify-content:center;pointer-events:none;text-align:center;
+    background:radial-gradient(ellipse at center,rgba(90,70,0,.45) 0%,rgba(14,10,0,.9) 80%)}
+  #raceseier h2{font-size:72px;letter-spacing:.2em;font-weight:800;color:#ffe26a;
+    text-shadow:0 0 40px rgba(255,210,60,.55),0 6px 26px #000;margin-bottom:10px}
+  #raceseier p{color:#e6dcb8;font-size:15px;letter-spacing:.12em;line-height:2}
+  #raceseier.tapte{background:radial-gradient(ellipse at center,rgba(60,0,0,.5) 0%,rgba(16,2,2,.92) 80%)}
+  #raceseier.tapte h2{color:#ff6b6b;text-shadow:0 0 40px rgba(255,60,60,.5),0 6px 26px #000}
   #racelobby{position:fixed;inset:0;z-index:30;display:none;align-items:center;
     justify-content:center;background:rgba(5,7,11,.9)}
   #racelobby .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
@@ -80,6 +88,22 @@
   .pk.stor b{font-size:12px;color:#ffd98a;letter-spacing:.10em}
   .pk.stor span{font-size:11px}
   .pk.ute{opacity:1}
+  #info{position:fixed;inset:0;z-index:31;display:none;align-items:center;
+    justify-content:center;background:rgba(5,7,11,.93);cursor:pointer}
+  #info .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
+    padding:26px 30px;width:min(860px,94vw);max-height:90vh;overflow:auto;cursor:default;
+    box-shadow:0 30px 90px rgba(0,0,0,.75)}
+  #info h2{font-size:21px;letter-spacing:.16em;color:#fff;margin-bottom:3px}
+  #info .und{color:#7f8aa3;font-size:11px;letter-spacing:.10em;margin-bottom:18px}
+  #info .kol{display:flex;gap:30px;flex-wrap:wrap}
+  #info .kol>div{flex:1;min-width:270px}
+  #info h3{font-size:12px;letter-spacing:.14em;color:#ffd98a;margin:16px 0 6px;
+    text-transform:uppercase}
+  #info h3:first-child{margin-top:0}
+  #info p{font-size:12.5px;color:#c3ccdd;line-height:1.75;margin-bottom:3px}
+  #info b{color:#8fc7ff}
+  #info kbd{background:#222836;border:1px solid #3d4457;padding:1px 5px;
+    border-radius:3px;color:#cdd4e4;font:inherit;font-size:10.5px}
   #butikk{position:fixed;inset:0;z-index:30;display:none;align-items:center;
     justify-content:center;background:rgba(5,7,11,.88);cursor:pointer}
   #butikk .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
@@ -240,8 +264,10 @@
 <div id="pekere"></div>
 <div id="raceboard" style="display:none"></div>
 <div id="racelobby" style="display:none"></div>
+<div id="raceseier"><div><h2></h2><p></p></div></div>
 <div id="sikte"></div>
 <div id="butikk" style="display:none"></div>
+<div id="info" style="display:none"></div>
 <div id="hotbar"></div>
 <div id="ammo"></div>
 <div id="pengerhud"></div>
@@ -264,7 +290,7 @@
   <kbd>W A S D</kbd> gå &nbsp; <kbd>Shift</kbd> løp &nbsp; <kbd>Space</kbd> hopp<br>
   <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>Esc</kbd> slipp mus<br>
   <kbd>1</kbd>&ndash;<kbd>9</kbd><kbd>0</kbd> / hjul velg ting &nbsp; <kbd>Venstreklikk</kbd> skyt/slå &nbsp; <kbd>Høyreklikk</kbd> sikte &nbsp; <kbd>R</kbd> lad om<br>
-  <kbd>G</kbd> kast penger &nbsp; <kbd>X</kbd> kast gjenstand &nbsp; <kbd>E</kbd> handle/rane &nbsp; <kbd>Shift</kbd>+<kbd>R</kbd> ny by
+  <kbd>G</kbd> kast penger &nbsp; <kbd>X</kbd> kast gjenstand &nbsp; <kbd>E</kbd> handle/rane &nbsp; <kbd>B</kbd> race &nbsp; <kbd style="background:#3a4a2c">I</kbd> info
 </div>
 
 <div id="overlay" style="display:none">
@@ -1845,10 +1871,24 @@ function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
        0,1,0, 0,0,2,7,VAT);
   quad(vegg, lx-TB,pad-0.05,ut2, lx+TB,pad-0.05,ut2, lx+TB,KG,rampStart, lx-TB,KG,rampStart,
        0,1,0, 0,0,2,4,VAT);
-  // vegger og tak
-  walls(vegg,lx-TB-0.35,lx-TB,KG,pad-0.55,lz-1.5,ut2,1,7,2,MORK2);
-  walls(vegg,lx+TB,lx+TB+0.35,KG,pad-0.55,lz-1.5,ut2,1,7,2,MORK2);
+  // Veggene går helt opp i bakkenivå. Før stoppet de 0,55 m under, og da
+  // ble det en glipe man kunne se dagslyset gjennom hele veien.
+  walls(vegg,lx-TB-0.40,lx-TB,KG,pad+0.20,lz-1.5,ut2,1,7,3,MORK2);
+  walls(vegg,lx+TB,lx+TB+0.40,KG,pad+0.20,lz-1.5,ut2,1,7,3,MORK2);
+  slab(vegg,lx-TB-0.40,lx-TB,pad+0.20,lz-1.5,ut2,3,[.46,.47,.50]);
+  slab(vegg,lx+TB,lx+TB+0.40,pad+0.20,lz-1.5,ut2,3,[.46,.47,.50]);
+  // tak over hele den flate delen, og et stykke opp i rampa
   slab(vegg,lx-TB,lx+TB,pad-0.55,lz-1.5,rampStart,3,MORK2);
+  {
+    const slutt=rampStart+(ut2-rampStart)*0.62;
+    const h0=pad-0.55;
+    const gulvVed=z=>KG+(pad-0.05-KG)*((z-rampStart)/(ut2-rampStart));
+    const h1=gulvVed(slutt)+2.35;
+    quad(vegg, lx-TB,h0,rampStart, lx+TB,h0,rampStart,
+               lx+TB,h1,slutt,      lx-TB,h1,slutt, 0,1,0, 0,0,2,3,MORK2);
+    quad(vegg, lx-TB,h1,slutt, lx+TB,h1,slutt,
+               lx+TB,h0,rampStart, lx-TB,h0,rampStart, 0,-1,0, 0,0,2,3,MORK2);
+  }
   // sidevegger som kollisjon — de gjelder bare under bakken (top < pad)
   addCol({x0:lx-TB-0.35,x1:lx-TB,z0:lz-1.6,z1:ut2,top:pad-0.30,kloakk:true});
   addCol({x0:lx+TB,x1:lx+TB+0.35,z0:lz-1.6,z1:ut2,top:pad-0.30,kloakk:true});
@@ -3660,6 +3700,25 @@ function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
     const dx2=p.x-n0.nx*hb, dz2=p.z-n0.nz*hb;
     quad(veiBuf, ax,y(ax,az),az, bx,y(bx,bz),bz, cx2,y(cx2,cz2),cz2, dx2,y(dx2,dz2),dz2,
          0,1,0, 0,0,1.6,n0.L/6,W);
+    // rekkverk et stykke utenfor kantsteinen — du skal holdes på banen
+    for(const sgn of [1,-1]){
+      const e=(hb+3.2)*sgn;
+      const ax2=p.x+n0.nx*e, az2=p.z+n0.nz*e;
+      const bx2=q.x+n1.nx*e, bz2=q.z+n1.nz*e;
+      const y0=terrainH(ax2,az2), y1=terrainH(bx2,bz2);
+      // to skinner
+      for(const h2 of [0.55,1.05]){
+        quad(kantBuf, ax2,y0+h2,az2, bx2,y1+h2,bz2, bx2,y1+h2+0.22,bz2, ax2,y0+h2+0.22,az2,
+             -n0.nx*sgn,0,-n0.nz*sgn, 0,0,n0.L/3,1,[.86,.87,.90]);
+        quad(kantBuf, bx2,y1+h2,bz2, ax2,y0+h2,az2, ax2,y0+h2+0.22,az2, bx2,y1+h2+0.22,bz2,
+             n0.nx*sgn,0,n0.nz*sgn, 0,0,n0.L/3,1,[.86,.87,.90]);
+      }
+      if(i%2===0)                       // stolpe annenhver
+        walls(kantBuf,ax2-0.11,ax2+0.11,y0,y0+1.30,az2-0.11,az2+0.11,1,1,1,[.42,.44,.48]);
+      addCol({x0:Math.min(ax2,bx2)-0.35,x1:Math.max(ax2,bx2)+0.35,
+              z0:Math.min(az2,bz2)-0.35,z1:Math.max(az2,bz2)+0.35,
+              top:Math.max(y0,y1)+1.3});
+    }
     // kantstein i rødt og hvitt
     const kf=(i%2)?[1.35,.30,.28]:[1.5,1.5,1.5];
     for(const sgn of [1,-1]){
@@ -3685,14 +3744,14 @@ function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
       walls(malBuf,px-0.30,px+0.30,py,py+5.2,pz-0.30,pz+0.30,1,1,2,[.20,.36,.72]);
     }
   }
-  // start/mål: rutet felt over veien, portal og tribune
+  // start/mål: bredt rutet felt, høy portal og tribune
   {
     const p=P2[0], n=norm(0);
     const py=terrainH(p.x,p.z);
-    for(let a2=0;a2<10;a2++)for(let b2=0;b2<4;b2++){
-      const u=(a2/10-0.5)*BANE.bredde, v=(b2/4-0.5)*5.5;
+    for(let a2=0;a2<14;a2++)for(let b2=0;b2<6;b2++){
+      const u=(a2/14-0.5)*BANE.bredde, v=(b2/6-0.5)*9.0;
       const x0=p.x+n.nx*u+n.dx*v, z0=p.z+n.nz*u+n.dz*v;
-      const s=BANE.bredde/10*0.5, t2=5.5/4*0.5;
+      const s=BANE.bredde/14*0.5, t2=9.0/6*0.5;
       const hj=[[-s,-t2],[s,-t2],[s,t2],[-s,t2]].map(([du,dv])=>
         [x0+n.nx*du+n.dx*dv, terrainH(x0,z0)+0.16, z0+n.nz*du+n.dz*dv]);
       const c=((a2+b2)%2)?[1.5,1.5,1.5]:[.10,.10,.12];
@@ -3700,16 +3759,57 @@ function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
                    hj[2][0],hj[2][1],hj[2][2], hj[3][0],hj[3][1],hj[3][2],
            0,1,0, 0,0,1,1,c);
     }
+    // to kraftige tårn med stiger, og en bred bue over veien
+    const HP=11.5, TB=1.9;
     for(const sgn of [1,-1]){
-      const px=p.x+n.nx*(hb+1.4)*sgn, pz=p.z+n.nz*(hb+1.4)*sgn;
-      walls(malBuf,px-0.45,px+0.45,py,py+8.5,pz-0.45,pz+0.45,1,1,3,[.85,.20,.24]);
+      const px=p.x+n.nx*(hb+3.4)*sgn, pz=p.z+n.nz*(hb+3.4)*sgn;
+      walls(malBuf,px-TB/2,px+TB/2,py,py+HP,pz-TB/2,pz+TB/2,1,1,4,[.84,.20,.24]);
+      // hvite bånd
+      for(let k=0;k<4;k++)
+        walls(malBuf,px-TB/2-0.06,px+TB/2+0.06,py+1.1+k*2.4,py+1.55+k*2.4,
+              pz-TB/2-0.06,pz+TB/2+0.06,1,1,1,[1.45,1.45,1.5]);
     }
-    const bx=p.x+n.nx*(hb+1.4), bz=p.z+n.nz*(hb+1.4);
-    const ex=p.x-n.nx*(hb+1.4), ez=p.z-n.nz*(hb+1.4);
-    quad(malBuf, bx,py+7.0,bz, ex,py+7.0,ez, ex,py+8.5,ez, bx,py+8.5,bz,
-         n.dx,0,n.dz, 0,0,4,1,[.92,.92,.95]);
-    quad(malBuf, ex,py+7.0,ez, bx,py+7.0,bz, bx,py+8.5,bz, ex,py+8.5,ez,
-         -n.dx,0,-n.dz, 0,0,4,1,[.92,.92,.95]);
+    const bx=p.x+n.nx*(hb+3.4), bz=p.z+n.nz*(hb+3.4);
+    const ex=p.x-n.nx*(hb+3.4), ez=p.z-n.nz*(hb+3.4);
+    // bjelke i to høyder, med rutemønster
+    for(const [y0b,y1b,rute] of [[HP-2.6,HP-0.4,true],[HP-0.4,HP+0.5,false]]){
+      const nR=16;
+      for(let k=0;k<nR;k++){
+        const u0=k/nR, u1=(k+1)/nR;
+        const p0x=bx+(ex-bx)*u0, p0z=bz+(ez-bz)*u0;
+        const p1x=bx+(ex-bx)*u1, p1z=bz+(ez-bz)*u1;
+        const c=rute?((k%2)?[1.5,1.5,1.5]:[.09,.09,.11]):[.84,.20,.24];
+        quad(malBuf, p0x,py+y0b,p0z, p1x,py+y0b,p1z, p1x,py+y1b,p1z, p0x,py+y1b,p0z,
+             n.dx,0,n.dz, 0,0,1,1,c);
+        quad(malBuf, p1x,py+y0b,p1z, p0x,py+y0b,p0z, p0x,py+y1b,p0z, p1x,py+y1b,p1z,
+             -n.dx,0,-n.dz, 0,0,1,1,c);
+      }
+    }
+    // tribune på utsiden
+    for(let k=0;k<4;k++){
+      const e=(hb+6.5+k*1.6);
+      const ax3=p.x+n.nx*e-n.dx*11, az3=p.z+n.nz*e-n.dz*11;
+      const bx3=p.x+n.nx*e+n.dx*11, bz3=p.z+n.nz*e+n.dz*11;
+      const yy=terrainH(ax3,az3)+0.5+k*0.65;
+      quad(malBuf, ax3,yy,az3, bx3,yy,bz3,
+                   bx3+n.nx*1.55,yy,bz3+n.nz*1.55, ax3+n.nx*1.55,yy,az3+n.nz*1.55,
+           0,1,0, 0,0,6,1,[.60,.62,.68]);
+      quad(malBuf, ax3,yy-0.65,az3, bx3,yy-0.65,bz3, bx3,yy,bz3, ax3,yy,az3,
+           -n.nx,0,-n.nz, 0,0,6,1,[.44,.46,.52]);
+    }
+    // startbokser malt på asfalten
+    for(const sgn of [-1,1]){
+      const u=sgn*BANE.bredde*0.22;
+      const c0x=p.x+n.nx*u-n.dx*7, c0z=p.z+n.nz*u-n.dz*7;
+      for(const [dxx,dzz] of [[-1.3,0],[1.3,0]]){
+        const qx=c0x+n.nx*dxx, qz=c0z+n.nz*dxx;
+        quad(malBuf, qx-n.dx*2.4,terrainH(qx,qz)+0.17,qz-n.dz*2.4,
+                     qx+n.dx*2.4,terrainH(qx,qz)+0.17,qz+n.dz*2.4,
+                     qx+n.dx*2.4+n.nx*0.22,terrainH(qx,qz)+0.17,qz+n.dz*2.4+n.nz*0.22,
+                     qx-n.dx*2.4+n.nx*0.22,terrainH(qx,qz)+0.17,qz-n.dz*2.4+n.nz*0.22,
+             0,1,0, 0,0,1,1,[1.5,1.5,1.5]);
+      }
+    }
     bane.start={x:p.x,z:p.z,dx:n.dx,dz:n.dz,pad:py};
   }
   // tre hopp på de rettest mulige partiene
@@ -3724,7 +3824,7 @@ function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
 function naerBane(x,z){
   if(!bane)return false;
   if(Math.hypot(x-bane.x,z-bane.z)>BANE.R*1.45+40)return false;
-  for(const p of bane.pts) if(Math.hypot(x-p.x,z-p.z)<BANE.bredde*1.3)return true;
+  for(const p of bane.pts) if(Math.hypot(x-p.x,z-p.z)<BANE.bredde*2.1)return true;
   return false;
 }
 
@@ -3836,11 +3936,31 @@ function raceFerdig(){
     if(sum>0){
       girPenger(-sum);
       sendPenger(beste.id,sum,'vant racet');
-      showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere. Du betalte '+
-                sum.toLocaleString('nb-NO')+' kr');
-    } else showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere');
-  } else { showToast('🏆 '+t.toFixed(2)+' s — beste tid så langt!');
-           meldNyhet(net.name+' satte beste tid: '+t.toFixed(2)+' s','#ffe26a'); }
+      visRaceSeier('DU TAPTE',beste.navn+' kjørte på '+beste.tid.toFixed(2)+
+        ' s mot dine '+t.toFixed(2)+'<br>du betalte '+sum.toLocaleString('nb-NO')+' kr');
+    } else visRaceSeier('DU TAPTE',beste.navn+' kjørte på '+beste.tid.toFixed(2)+' s');
+    meldNyhet(beste.navn+' slo '+net.name+' i racet','#ffe26a');
+  } else {
+    const andre=[...raceTider.values()];
+    if(andre.length){
+      visRaceSeier('DU VANT','tid '+t.toFixed(2)+' s — du slo '+
+        andre.map(r=>r.navn).join(', ')+'<br>pengene deres er dine');
+      meldNyhet(net.name+' vant racet på '+t.toFixed(2)+' s','#ffe26a');
+    } else {
+      visRaceSeier('I MÅL','tid '+t.toFixed(2)+' s — beste tid så langt<br>'+
+        'venter på de andre …');
+      meldNyhet(net.name+' satte beste tid: '+t.toFixed(2)+' s','#ffe26a');
+    }
+  }
+}
+function visRaceSeier(tittel,tekst){
+  const el=document.getElementById('raceseier'); if(!el)return;
+  el.querySelector('h2').textContent=tittel;
+  el.querySelector('p').innerHTML=tekst;
+  el.className=tittel==='DU VANT'?'vant':(tittel==='DU TAPTE'?'tapte':'');
+  el.style.display='flex';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{ el.style.display='none'; },6500);
 }
 function taImotRace(d){
   const id=d.avId;
@@ -4374,9 +4494,13 @@ function skuddLinje(V,_ko,_kd,forste){
   } else if(best.hva==='spiller'){
     gnist(best.x,best.y,best.z,0xd63b3b);
     sendTreff(best.mal.id,V.skade);
-    best.mal.hp=Math.max(0,(best.mal.hp===undefined?100:best.mal.hp)-V.skade);
+    const for_=(best.mal.hp===undefined?100:best.mal.hp);
+    best.mal.hp=Math.max(0,for_-V.skade);
     settSpillerHelse(best.mal);
-    if(forste)showToast('🎯 Traff '+best.mal.name);
+    // Vi ser selv når treffet var dødelig, så meldingen går ut med en gang
+    // i tilfelle offeret mister forbindelsen på vei ned.
+    if(for_>0&&best.mal.hp<=0) meldNyhet(best.mal.name+' ble drept av '+net.name,'#ff6b6b');
+    else if(forste)showToast('🎯 Traff '+best.mal.name+' ('+Math.round(best.mal.hp)+' hp)');
   } else if(best.hva==='bil'){
     gnist(best.x,best.y,best.z,0xffd08a);
     if(best.mal&&best.mal.erPoliti) treffPolitibil(best.mal,V.skade>60?5:1);
@@ -4563,9 +4687,9 @@ function doSpiller(){
         :(politi.stjerner>0?'politiet':'');
   if(P.sisteSkytter&&P.sisteSkytterT>0) sendBytte(P.sisteSkytter);
   const drept=!!P.sisteSkytter;
-  meldNyhet(drept?(net.name+' ble drept av '+(P.sisteSkytterNavn||'noen'))
-                 :(politi.stjerner>0?(net.name+' ble skutt av purken')
-                                    :(net.name+' døde')),'#ff6b6b');
+  if(!drept)                                   // skytteren melder sine egne drap
+    meldNyhet(politi.stjerner>0?(net.name+' ble skutt av purken')
+                               :(net.name+' døde'),'#ff6b6b');
   P.sisteSkytter=null;
   // Du mister ALT. Ble du skutt av en spiller går det rett til ham; ellers
   // blir det liggende der du falt, og hvem som helst kan komme og ta det.
@@ -4735,15 +4859,35 @@ function paakjorsel(){
   const fart=Math.abs(drive.vx);
   if(fart<2.2)return;
   const ch=Math.cos(drive.head), sh=Math.sin(drive.head);
+  // andre spillere kan kjøres ned akkurat som fotgjengerne
+  for(const o of others.values()){
+    if(o.hp!==undefined&&o.hp<=0)continue;
+    if(o.paakjortT>0){ o.paakjortT-=0.016; continue; }
+    const dx=o.x-drive.x, dz=o.z-drive.z;
+    if(dx*dx+dz*dz>20)continue;
+    const lx=-dx*sh+dz*ch, lz=dx*ch+dz*sh;   // lx = langs bilen, lz = på tvers
+    if(Math.abs(lx)<2.4&&Math.abs(lz)<1.15){
+      const sk=Math.round(Math.min(140,40+fart*7));
+      sendTreff(o.id,sk);
+      const for_=(o.hp===undefined?100:o.hp);
+      o.hp=Math.max(0,for_-sk); settSpillerHelse(o);
+      o.paakjortT=1.2;
+      if(for_>0&&o.hp<=0) meldNyhet(o.name+' ble kjørt ned av '+net.name,'#ff6b6b');
+      else showToast('🚗 Traff '+o.name);
+      politiVarme(14);
+    }
+  }
   for(let i=0;i<folkData.length;i++){
     const f=folkData[i];
     if(f.dod||f.skjult||f.dans)continue;
     const p=f.man?{x:f.x,z:f.z}:folkPos(f);
     const dx=p.x-drive.x, dz=p.z-drive.z;
     if(dx*dx+dz*dz>18)continue;
-    // inn i bilens eget koordinatsystem — 4,2 m lang, 2,0 m bred
+    // inn i bilens eget koordinatsystem — lx langs, lz på tvers.
+    // Grensene sto omvendt, så treffboksen var bred og kort i stedet for
+    // smal og lang; folk ble påkjørt på sida og ikke rett foran.
     const lx=-dx*sh+dz*ch, lz=dx*ch+dz*sh;
-    if(Math.abs(lz)<2.1&&Math.abs(lx)<1.05){
+    if(Math.abs(lx)<2.4&&Math.abs(lz)<1.10){
       drepPerson(f);
       f.kastX=(dx/(Math.hypot(dx,dz)||1)); f.kastZ=(dz/(Math.hypot(dx,dz)||1));
       f.kast=Math.min(1.5,fart*0.10);
@@ -5004,6 +5148,60 @@ function oppdaterSlipte(dt){
   }
 }
 
+/* ---- infoskjerm på I ---- */
+let infoAapen=false;
+const INFO_HTML=`
+<div class="boks">
+  <h2>GRAND THEFT NORGE</h2>
+  <div class="und">alt du kan gjøre — trykk <kbd>I</kbd> eller <kbd>Esc</kbd> for å lukke</div>
+  <div class="kol">
+    <div>
+      <h3>Bevegelse</h3>
+      <p><kbd>W A S D</kbd> gå &middot; <kbd>Shift</kbd> løp &middot; <kbd>Space</kbd> hopp</p>
+      <p><kbd>E</kbd> inn/ut av bil &middot; <kbd>F</kbd> fly &middot; <kbd>N</kbd> natt/dag</p>
+      <p>I bil: <kbd>Space</kbd> håndbrekk &middot; <kbd>Shift</kbd> boost</p>
+      <h3>Våpen</h3>
+      <p><kbd>1</kbd>–<kbd>9</kbd><kbd>0</kbd> eller musehjul velger</p>
+      <p><kbd>Venstreklikk</kbd> skyt eller slå &middot; <kbd>Høyreklikk</kbd> kikkertsikte</p>
+      <p><kbd>R</kbd> lad om &middot; <kbd>X</kbd> legg fra deg &middot; <kbd>G</kbd> kast penger</p>
+      <p>Slot 1 er nevene. To slag tar en fotgjenger.</p>
+      <h3>Politi</h3>
+      <p>Krasj, skudd og påkjørsler gir stjerner. Betjentene går ut av bilen og skyter tilbake.</p>
+      <p>Skyter du en politibil i stykker eller kjører ned en betjent, <b>letner</b> jakten.</p>
+      <p>Tatt av purken? Kloakkhullet i cella di er veien ut — gå oppi det og følg tunnelen.</p>
+    </div>
+    <div>
+      <h3>Tjene penger</h3>
+      <p>💵 sedler i gata &middot; 200–1 200 kr</p>
+      <p>💰 rane kassa i butikk, kafé og bar — hold <kbd>E</kbd> ved kassa</p>
+      <p>🏦 banken gir 12 000–30 000 kr, men alarmen går</p>
+      <p>👊 alle du dreper legger igjen lommeboka</p>
+      <p>🚗 selg stjålne biler i verkstedhallen (<b>B</b> på kartet)</p>
+      <h3>Steder</h3>
+      <p><b>W</b> våpenbutikk — fem i byen, ni våpen på veggen, <kbd>E</kbd> for å kjøpe</p>
+      <p><b>K</b> nattklubb — kast 3 000 kr på danserne med <kbd>G</kbd>, så blir en av dem med deg</p>
+      <p><b>R</b> racerbane — <kbd>B</kbd> for lobby, 3 runder, vinneren tar potten</p>
+      <p><b>F</b> fengsel &middot; <b>B</b> bilkjøper</p>
+      <h3>Når du dør</h3>
+      <p>Du mister <b>alt</b>. Ble du skutt av en spiller får han det; ellers ligger det igjen der du falt.</p>
+      <p>Havner du i fengsel beslaglegger politiet pengene der du ble tatt.</p>
+    </div>
+  </div>
+</div>`;
+function apneInfo(){
+  if(infoAapen||butikkAapen||lobby.aapen)return;
+  infoAapen=true;
+  const el=document.getElementById('info');
+  el.innerHTML=INFO_HTML; el.style.display='flex';
+  document.exitPointerLock();
+}
+function lukkInfo(){
+  if(!infoAapen)return;
+  infoAapen=false;
+  document.getElementById('info').style.display='none';
+  renderer.domElement.requestPointerLock();
+}
+
 /* ---- bilkjøperen: kjør inn på plassen og selg ------------------------
    Prisen følger klasse og skade. Politibiler betales godt, men det koster
    stjerner å levere en.                                                 */
@@ -5183,6 +5381,7 @@ addEventListener('keydown',e=>{
   }
   if(e.code==='KeyB'&&bane&&!race.aktiv&&!lobby.aapen&&
      Math.hypot(spillerPos().x-bane.start.x,spillerPos().z-bane.start.z)<18) apneLobby();
+  if(e.code==='KeyI'){ if(infoAapen)lukkInfo(); else apneInfo(); }
   if(e.code==='KeyG'&&!drive.on)kastPenger();
   if(e.code==='KeyX'&&!drive.on){
     const f=inv.felt[inv.slot];
@@ -5210,6 +5409,10 @@ renderer.domElement.addEventListener('mousedown',e=>{
   const v2=inv.felt[inv.slot];
   if(v2&&v2.id==='hand')slaa(); else skyt();
 });
+document.getElementById('info').addEventListener('click',e=>{
+  if(!e.target.closest('.boks'))lukkInfo();
+});
+addEventListener('keydown',e=>{ if(infoAapen&&e.code==='Escape')lukkInfo(); });
 document.getElementById('racelobby').addEventListener('click',e=>{
   const k=e.target.closest('button'); if(!k)return;
   if(k.id==='klarknapp')settKlar();
@@ -5236,7 +5439,7 @@ document.addEventListener('pointerlockchange',()=>{
   const inne=document.pointerLockElement===renderer.domElement;
   // Butikken slipper musa med vilje. Uten dette unntaket sprang startskjermen
   // opp bak butikkvinduet, og byen gikk i kinomodus midt i handelen.
-  if((butikkAapen||lobby.aapen)&&!inne)return;
+  if((butikkAapen||lobby.aapen||infoAapen)&&!inne)return;
   document.getElementById('overlay').style.display=inne?'none':'flex';
   kino=!inne;
   document.body.classList.toggle('kino',!inne);});
@@ -5280,7 +5483,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'styring-50',
+  ver:()=>'racebane-52',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5380,6 +5583,39 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  kjorNedSpiller:()=>{
+    kino=false; net.name='Elias'; net.navnOk=true;
+    if(!parked.length)return {feil:'ingen bil'};
+    const o=addOther('SIM2','Simon',2);
+    drive.on=true; drive.car=parked[0]; settBilstil('sedan');
+    drive.x=P.pos.x; drive.z=P.pos.z; drive.head=0; drive.vx=16;
+    drive.y=groundAt(drive.x,drive.z);
+    o.x=drive.x; o.z=drive.z+1.2; o.y=drive.y+1.75; o.hp=100;
+    o.tx=o.x;o.ty=o.y;o.tz=o.z; settSpillerHelse(o);
+    paakjorsel();
+    const feed=[...document.querySelectorAll('#nyheter .ny')].map(e=>e.textContent);
+    for(let k=0;k<60;k++) netInterp(1/60);
+    const ut={hp:o.hp,feed:feed,rot:+o.mesh.rotation.x.toFixed(2)};
+    dropOther('SIM2'); drive.on=false; drive.car=null;
+    return ut;
+  },
+  drapTest:()=>{
+    kino=false; net.name='Elias'; net.navnOk=true;
+    const o=addOther('SIM','Simon',2);
+    o.x=P.pos.x; o.y=P.pos.y; o.z=P.pos.z-5; o.tx=o.x;o.ty=o.y;o.tz=o.z; o.hp=30;
+    settSpillerHelse(o);
+    P.yaw=0; P.pitch=0; P.fly=false; drive.on=false; inv.slot=1;
+    const f=inv.felt[1]; f.i=12; f.res=48; gun.kd=0; gun.lad=0;
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    skyt(); gun.kd=0; skyt();
+    const feed=[...document.querySelectorAll('#nyheter .ny')].map(e=>e.textContent);
+    const falt=+o.mesh.rotation.x.toFixed(2);
+    for(let k=0;k<60;k++) netInterp(1/60);
+    const etter=+o.mesh.rotation.x.toFixed(2);
+    dropOther('SIM');
+    return {hp:o.hp,feed:feed,rotStraks:falt,rotEtter1s:etter};
+  },
   navnTest:()=>{
     const inp=document.getElementById('pname');
     const for_={navn:net.name,ok:!!net.navnOk,kan:kanSpille()};
@@ -6873,7 +7109,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build styring-50';
+  document.getElementById('verline').textContent='build racebane-52';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
