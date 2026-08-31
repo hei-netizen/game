@@ -22,15 +22,45 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
-  #racehud{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:6;
-    pointer-events:none;background:rgba(12,15,22,.78);border:1px solid #4a5468;
-    border-radius:8px;padding:12px 16px;min-width:170px;
+  #raceboard{position:fixed;right:14px;top:232px;z-index:6;
+    pointer-events:none;background:rgba(12,15,22,.82);border:1px solid #4a5468;
+    border-radius:8px;padding:12px 15px;min-width:216px;
     box-shadow:0 8px 26px rgba(0,0,0,.6)}
-  #racehud b{display:block;font-size:13px;color:#ffe26a;letter-spacing:.12em;
-    margin-bottom:4px}
-  #racehud .tid{display:block;font:bold 30px ui-monospace,Menlo,monospace;color:#fff;
-    letter-spacing:.02em;margin-bottom:4px}
-  #racehud span{display:block;font-size:11px;color:#9fb0d0;line-height:1.9}
+  #raceboard b{display:block;font-size:12px;color:#ffe26a;letter-spacing:.13em;
+    margin-bottom:3px}
+  #raceboard .tid{display:block;font:bold 33px ui-monospace,Menlo,monospace;color:#fff;
+    letter-spacing:.02em;margin-bottom:3px}
+  #raceboard .li{display:block;font-size:11px;color:#9fb0d0;line-height:1.8}
+  #raceboard .tavle{margin-top:9px;border-top:1px solid #2b3242;padding-top:7px}
+  #raceboard .pl{display:flex;gap:7px;font-size:11px;color:#c3ccdd;line-height:1.95}
+  #raceboard .pl.min{color:#ffe26a}
+  #raceboard .pl .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #raceboard .pl .s{font-family:ui-monospace,Menlo,monospace;color:#8b93a6}
+  #racelobby{position:fixed;inset:0;z-index:30;display:none;align-items:center;
+    justify-content:center;background:rgba(5,7,11,.9)}
+  #racelobby .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
+    padding:28px 32px;width:min(480px,92vw);text-align:center;
+    box-shadow:0 30px 90px rgba(0,0,0,.7)}
+  #racelobby h2{font-size:20px;letter-spacing:.16em;color:#ffe26a;margin-bottom:4px}
+  #racelobby .und{color:#8b93a6;font-size:11px;letter-spacing:.10em;margin-bottom:18px}
+  #racelobby .rad{display:flex;align-items:center;gap:10px;padding:9px 0;
+    border-top:1px solid #232a36;font-size:14px}
+  #racelobby .nv{flex:1;text-align:left;color:#e6ebf5}
+  #racelobby .kr{color:#7ce09a;font:12px ui-monospace,Menlo,monospace}
+  #racelobby .ja{color:#7ce09a;font-size:11px;letter-spacing:.1em;min-width:54px}
+  #racelobby .nei{color:#7f8aa3;font-size:11px;letter-spacing:.1em;min-width:54px}
+  #racelobby .tips{color:#7f8aa3;font-size:11px;margin-top:12px;letter-spacing:.06em}
+  #racelobby .pott{margin-top:16px;font:bold 17px ui-monospace,Menlo,monospace;
+    color:#ffd98a;letter-spacing:.08em}
+  #racelobby .ned{margin-top:14px;font:bold 74px ui-monospace,Menlo,monospace;
+    color:#fff;text-shadow:0 0 34px rgba(255,226,106,.6)}
+  #racelobby .knapper{margin-top:18px;display:flex;gap:10px;justify-content:center}
+  #racelobby button{background:#243044;border:1px solid #46577a;color:#dbe6ff;
+    font:inherit;font-size:13px;padding:10px 20px;border-radius:6px;cursor:pointer;
+    letter-spacing:.08em}
+  #racelobby button:hover{background:#2f4160;border-color:#6a86bb}
+  #racelobby #klarknapp{background:#2c4a30;border-color:#4f8a55;color:#c9f0cd}
+  #racelobby #klarknapp:hover{background:#3a6340}
   #pekere{position:fixed;inset:0;z-index:6;pointer-events:none}
   .pk{position:fixed;transform:translate(-50%,-50%);
     background:rgba(12,15,22,.72);border:1px solid #6d7488;border-radius:6px;
@@ -185,7 +215,8 @@
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
 <div id="pekere"></div>
-<div id="racehud" style="display:none"></div>
+<div id="raceboard" style="display:none"></div>
+<div id="racelobby" style="display:none"></div>
 <div id="sikte"></div>
 <div id="butikk" style="display:none"></div>
 <div id="hotbar"></div>
@@ -3671,15 +3702,101 @@ function naerBane(x,z){
   return false;
 }
 
-/* ---- selve racet ---- */
-let race={aktiv:false,runde:0,cp:1,t0:0,tid:0,best:null,rundeT:0,sisteRunde:0};
-let raceTider=new Map();
+/* ---- selve racet -----------------------------------------------------
+   Lobby først: begge går til start, trykker B, ser hverandre og hvor mye
+   som står på spill, og melder seg klar. Deretter nedtelling, tre runder
+   og seks porter du MÅ gjennom i rekkefølge — bommer du, må du snu.    */
+let race={aktiv:false,runde:0,cp:1,t0:0,tid:0,best:null,rundeT:0,sisteRunde:0,
+          innsats:0,sendT:0};
+let raceTider=new Map();      // id -> {navn,tid}
+let raceStatus=new Map();     // id -> {navn,runde,cp,tid,ferdig}
+let lobby={aapen:false,deltakere:new Map(),nedtelling:0};
+let raceMark=null;
+
+function lagRaceMark(){
+  const g=new THREE.Group();
+  for(const sgn of [-1,1]){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.4,14,10,1,true),
+      new THREE.MeshBasicMaterial({color:0xffe26a,transparent:true,opacity:0.35,
+        side:THREE.DoubleSide,depthWrite:false}));
+    m.position.x=sgn*(BANE.bredde/2+1.2); m.position.y=7;
+    g.add(m);
+  }
+  const pil=new THREE.Mesh(new THREE.ConeGeometry(1.5,3.2,4),
+    new THREE.MeshBasicMaterial({color:0xffe26a,transparent:true,opacity:0.8}));
+  pil.rotation.x=Math.PI; pil.position.y=11; g.add(pil);
+  g.visible=false; scene.add(g);
+  return g;
+}
+
+/* ---- lobbyen ---- */
+function meg(){ return {id:net.id,navn:net.name,kr:kroner(),klar:false}; }
+function apneLobby(){
+  if(lobby.aapen)return;
+  lobby.aapen=true; lobby.nedtelling=0;
+  lobby.deltakere.set(net.id,meg());
+  nettKringkast({t:'race',fase:'join',navn:net.name,kr:kroner()});
+  tegnLobby();
+  document.getElementById('racelobby').style.display='flex';
+  document.exitPointerLock();
+}
+function lukkLobby(){
+  if(!lobby.aapen)return;
+  lobby.aapen=false;
+  document.getElementById('racelobby').style.display='none';
+  nettKringkast({t:'race',fase:'ut'});
+  lobby.deltakere.delete(net.id);
+  renderer.domElement.requestPointerLock();
+}
+function settKlar(){
+  const d=lobby.deltakere.get(net.id); if(!d)return;
+  d.klar=!d.klar; d.kr=kroner();
+  nettKringkast({t:'race',fase:'klar',navn:net.name,kr:d.kr,klar:d.klar});
+  tegnLobby(); sjekkAlleKlare();
+}
+function sjekkAlleKlare(){
+  if(!lobby.aapen||lobby.nedtelling>0)return;
+  const alle=[...lobby.deltakere.values()];
+  if(!alle.length||!alle.every(d=>d.klar))return;
+  lobby.nedtelling=3.0;
+  tegnLobby();
+}
+function tegnLobby(){
+  const el=document.getElementById('racelobby'); if(!el)return;
+  const alle=[...lobby.deltakere.values()];
+  const pott=alle.reduce((s2,d)=>s2+(d.kr||0),0);
+  let h='<div class="boks"><h2>🏁 RACE — '+BANE.runder+' RUNDER</h2>'+
+        '<div class="und">'+Math.round(bane?bane.lengde:0)+' m per runde &middot; '+
+        BANE.cpN+' porter &middot; vinneren tar hele potten</div>';
+  for(const d of alle)
+    h+='<div class="rad"><span class="nv">'+(d.id===net.id?'▶ ':'')+d.navn+'</span>'+
+       '<span class="kr">'+(d.kr||0).toLocaleString('nb-NO')+' kr</span>'+
+       '<span class="'+(d.klar?'ja':'nei')+'">'+(d.klar?'KLAR':'venter')+'</span></div>';
+  if(alle.length<2)
+    h+='<div class="tips">venter på flere … du kan starte alene for å ta tida</div>';
+  h+='<div class="pott">POTT: '+pott.toLocaleString('nb-NO')+' kr</div>';
+  if(lobby.nedtelling>0)
+    h+='<div class="ned">'+Math.ceil(lobby.nedtelling)+'</div>';
+  else
+    h+='<div class="knapper"><button id="klarknapp">'+
+       (lobby.deltakere.get(net.id)&&lobby.deltakere.get(net.id).klar?'IKKE KLAR':'JEG ER KLAR')+
+       '</button><button id="uteknapp">Gå ut</button></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+
 function raceStart(){
+  lobby.aapen=false;
+  document.getElementById('racelobby').style.display='none';
+  renderer.domElement.requestPointerLock();
   race.aktiv=true; race.runde=1; race.cp=1;
   race.t0=performance.now(); race.rundeT=race.t0; race.sisteRunde=0; race.tid=0;
-  raceTider.clear();
+  race.innsats=kroner(); race.sendT=0;
+  raceTider.clear(); raceStatus.clear();
+  for(const [id,d] of lobby.deltakere)
+    if(id!==net.id)raceStatus.set(id,{navn:d.navn,runde:1,cp:1,tid:0,ferdig:false});
   nettKringkast({t:'race',fase:'start',navn:net.name});
-  showToast('🏁 GO! '+BANE.runder+' runder');
+  showToast('🏁 GO!');
 }
 function raceFerdig(){
   const t=(performance.now()-race.t0)/1000;
@@ -3689,22 +3806,49 @@ function raceFerdig(){
   let beste=null;
   for(const [id,r] of raceTider) if(!beste||r.tid<beste.tid)beste={id:id,navn:r.navn,tid:r.tid};
   if(beste&&beste.tid<t){
-    const sum=kroner();
+    const sum=Math.min(race.innsats,kroner());
     if(sum>0){
-      pengeSum=0;
-      sendPenger(beste.id,sum,'tapte racet');
+      girPenger(-sum);
+      sendPenger(beste.id,sum,'vant racet');
       showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere. Du betalte '+
                 sum.toLocaleString('nb-NO')+' kr');
     } else showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere');
   } else showToast('🏆 '+t.toFixed(2)+' s — beste tid så langt!');
 }
 function taImotRace(d){
-  if(d.fase==='start'){
-    if(race.aktiv)showToast('🏁 '+d.navn+' kjører også');
+  const id=d.avId;
+  if(d.fase==='join'){
+    lobby.deltakere.set(id,{id:id,navn:d.navn,kr:d.kr,klar:false});
+    if(lobby.aapen){
+      // svar med min egen status så den nye ser meg
+      nettKringkast({t:'race',fase:'klar',navn:net.name,kr:kroner(),
+                     klar:!!(lobby.deltakere.get(net.id)||{}).klar});
+      tegnLobby(); showToast('🏁 '+d.navn+' ble med i racet');
+    }
     return;
   }
-  raceTider.set(d.avId,{navn:d.navn,tid:d.tid});
-  showToast('🏁 '+d.navn+' fullførte på '+d.tid.toFixed(2)+' s');
+  if(d.fase==='klar'){
+    const e=lobby.deltakere.get(id)||{id:id};
+    e.navn=d.navn; e.kr=d.kr; e.klar=!!d.klar;
+    lobby.deltakere.set(id,e);
+    if(lobby.aapen){ tegnLobby(); sjekkAlleKlare(); }
+    return;
+  }
+  if(d.fase==='ut'){ lobby.deltakere.delete(id); if(lobby.aapen)tegnLobby(); return; }
+  if(d.fase==='start'){
+    if(!race.aktiv&&!lobby.aapen)showToast('🏁 '+d.navn+' startet et race');
+    raceStatus.set(id,{navn:d.navn,runde:1,cp:1,tid:0,ferdig:false});
+    return;
+  }
+  if(d.fase==='pos'){
+    raceStatus.set(id,{navn:d.navn,runde:d.runde,cp:d.cp,tid:d.tid,ferdig:false});
+    return;
+  }
+  if(d.fase==='ferdig'){
+    raceTider.set(id,{navn:d.navn,tid:d.tid});
+    raceStatus.set(id,{navn:d.navn,runde:BANE.runder,cp:0,tid:d.tid,ferdig:true});
+    showToast('🏁 '+d.navn+' fullførte på '+d.tid.toFixed(2)+' s');
+  }
 }
 function sendPenger(til,sum,grunn){
   const pkt={t:'penger',til:til,sum:sum,fra:net.name,grunn:grunn||''};
@@ -3720,44 +3864,87 @@ function taImotPenger(d){
   showToast('🏆 +'+d.sum.toLocaleString('nb-NO')+' kr fra '+d.fra+
             (d.grunn?' — '+d.grunn:''));
 }
+
+/* ---- hver frame ---- */
+function raceFramgang(r,cp){ return r*BANE.cpN+cp; }
 function oppdaterRace(dt){
-  const el=document.getElementById('racehud');
-  if(!bane){ if(el)el.style.display='none'; return; }
+  const board=document.getElementById('raceboard');
+  if(!bane){ if(board)board.style.display='none'; return; }
+  if(!raceMark)raceMark=lagRaceMark();
   const sp=spillerPos();
   const dStart=Math.hypot(sp.x-bane.start.x,sp.z-bane.start.z);
-  if(!race.aktiv){
-    if(dStart<16&&drive.on) hint='🏁 Trykk B for å starte race — '+BANE.runder+' runder';
-    else if(dStart<16) hint='🏁 Sett deg i en bil og trykk B for race';
+
+  if(lobby.nedtelling>0){
+    lobby.nedtelling-=dt;
+    if(lobby.aapen)tegnLobby();
+    if(lobby.nedtelling<=0)raceStart();
   }
+  if(!race.aktiv&&!lobby.aapen&&lobby.nedtelling<=0&&dStart<18)
+    hint='🏁 Trykk B for å melde deg på race'+(drive.on?'':' (du trenger en bil)');
+
   if(race.aktiv){
-    const cp=bane.cps[race.cp%bane.cps.length];
-    if(Math.hypot(sp.x-cp.x,sp.z-cp.z)<BANE.bredde*1.15){
+    const cpI=race.cp%bane.cps.length;
+    const cp=bane.cps[cpI];
+    raceMark.visible=true;
+    raceMark.position.set(cp.x,terrainH(cp.x,cp.z),cp.z);
+    raceMark.rotation.y=Math.atan2(cp.nx,cp.nz);
+    const dcp=Math.hypot(sp.x-cp.x,sp.z-cp.z);
+    if(dcp<BANE.bredde*1.15){
       race.cp++;
-      if(race.cp%bane.cps.length===0){          // passerte start/mål
+      if(race.cp%bane.cps.length===0){
         const nå=performance.now();
         race.sisteRunde=(nå-race.rundeT)/1000; race.rundeT=nå;
-        if(race.runde>=BANE.runder){ raceFerdig(); }
+        if(race.runde>=BANE.runder){ raceMark.visible=false; raceFerdig(); }
         else { race.runde++; showToast('🏁 Runde '+race.runde+'/'+BANE.runder+
                ' — forrige '+race.sisteRunde.toFixed(2)+' s'); }
       }
+    } else {
+      // står du nærmere en SENERE port har du bommet og må snu
+      let naermere=false;
+      for(let k=1;k<=2;k++){
+        const q=bane.cps[(race.cp+k)%bane.cps.length];
+        if(Math.hypot(sp.x-q.x,sp.z-q.z)<dcp-25){naermere=true;break;}
+      }
+      if(naermere)hint='↩ Du bommet på port '+((cpI)+1)+' — kjør tilbake';
     }
-  }
-  if(el){
-    if(race.aktiv){
-      const t=(performance.now()-race.t0)/1000;
-      let h='<b>🏁 RUNDE '+race.runde+' / '+BANE.runder+'</b>'+
+    race.sendT-=dt;
+    if(race.sendT<=0){
+      race.sendT=0.4;
+      nettKringkast({t:'race',fase:'pos',navn:net.name,runde:race.runde,
+                     cp:race.cp,tid:(performance.now()-race.t0)/1000});
+    }
+  } else raceMark.visible=false;
+
+  if(board){
+    if(race.aktiv||(race.tid&&performance.now()-race.t0<race.tid*1000+12000)){
+      const t=race.aktiv?(performance.now()-race.t0)/1000:race.tid;
+      const meg2={navn:net.name+' (deg)',runde:race.aktiv?race.runde:BANE.runder,
+                  cp:race.cp,tid:t,ferdig:!race.aktiv,egen:true};
+      const liste=[meg2];
+      for(const [,r] of raceStatus) liste.push(r);
+      liste.sort((a,b)=>{
+        if(a.ferdig&&b.ferdig)return a.tid-b.tid;
+        if(a.ferdig)return -1; if(b.ferdig)return 1;
+        return raceFramgang(b.runde,b.cp)-raceFramgang(a.runde,a.cp);
+      });
+      let h='<b>🏁 RUNDE '+meg2.runde+' / '+BANE.runder+'</b>'+
             '<span class="tid">'+t.toFixed(2)+'</span>';
-      if(race.sisteRunde)h+='<span>forrige runde '+race.sisteRunde.toFixed(2)+' s</span>';
-      const nesteCp=bane.cps[race.cp%bane.cps.length];
-      h+='<span>neste port '+Math.round(Math.hypot(sp.x-nesteCp.x,sp.z-nesteCp.z))+' m</span>';
-      for(const [,r] of raceTider) h+='<span>'+r.navn+' '+r.tid.toFixed(2)+' s</span>';
-      el.innerHTML=h; el.style.display='block';
-    } else if(race.tid&&performance.now()-race.t0<race.tid*1000+9000){
-      let h='<b>🏁 '+race.tid.toFixed(2)+' s</b>';
-      if(race.best)h+='<span>beste: '+race.best.toFixed(2)+' s</span>';
-      for(const [,r] of raceTider) h+='<span>'+r.navn+' '+r.tid.toFixed(2)+' s</span>';
-      el.innerHTML=h; el.style.display='block';
-    } else el.style.display='none';
+      if(race.sisteRunde)h+='<span class="li">forrige runde '+race.sisteRunde.toFixed(2)+' s</span>';
+      if(race.aktiv){
+        const cp=bane.cps[race.cp%bane.cps.length];
+        h+='<span class="li">port '+((race.cp%bane.cps.length)+1)+'/'+BANE.cpN+
+           ' — '+Math.round(Math.hypot(sp.x-cp.x,sp.z-cp.z))+' m</span>';
+      }
+      h+='<div class="tavle">';
+      liste.forEach((r,i)=>{
+        h+='<div class="pl'+(r.egen?' min':'')+'"><span>'+(i+1)+'.</span>'+
+           '<span class="n">'+r.navn+'</span><span class="s">'+
+           (r.ferdig?r.tid.toFixed(2)+' s':'R'+r.runde+' P'+((r.cp%BANE.cpN)+1))+
+           '</span></div>';
+      });
+      h+='</div>';
+      board.innerHTML=h; board.style.display='block';
+    } else board.style.display='none';
   }
 }
 
@@ -4963,8 +5150,8 @@ addEventListener('keydown',e=>{
       else showToast('Bare verten kan lage ny by');
     }
   }
-  if(e.code==='KeyB'&&bane&&drive.on&&!race.aktiv&&
-     Math.hypot(drive.x-bane.start.x,drive.z-bane.start.z)<16) raceStart();
+  if(e.code==='KeyB'&&bane&&!race.aktiv&&!lobby.aapen&&
+     Math.hypot(spillerPos().x-bane.start.x,spillerPos().z-bane.start.z)<18) apneLobby();
   if(e.code==='KeyG'&&!drive.on)kastPenger();
   if(e.code==='KeyX'&&!drive.on){
     const f=inv.felt[inv.slot];
@@ -4991,6 +5178,12 @@ renderer.domElement.addEventListener('mousedown',e=>{
   const v2=inv.felt[inv.slot];
   if(v2&&v2.id==='hand')slaa(); else skyt();
 });
+document.getElementById('racelobby').addEventListener('click',e=>{
+  const k=e.target.closest('button'); if(!k)return;
+  if(k.id==='klarknapp')settKlar();
+  else if(k.id==='uteknapp')lukkLobby();
+});
+addEventListener('keydown',e=>{ if(lobby.aapen&&e.code==='Escape')lukkLobby(); });
 document.getElementById('butikk').addEventListener('click',e=>{
   const k=e.target.closest('button');
   if(k){ if(k.dataset.kjop)kjopVaapen(k.dataset.kjop);
@@ -5010,7 +5203,7 @@ document.addEventListener('pointerlockchange',()=>{
   const inne=document.pointerLockElement===renderer.domElement;
   // Butikken slipper musa med vilje. Uten dette unntaket sprang startskjermen
   // opp bak butikkvinduet, og byen gikk i kinomodus midt i handelen.
-  if(butikkAapen&&!inne)return;
+  if((butikkAapen||lobby.aapen)&&!inne)return;
   document.getElementById('overlay').style.display=inne?'none':'flex';
   kino=!inne;
   document.body.classList.toggle('kino',!inne);});
@@ -5054,7 +5247,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'hitboks-48',
+  ver:()=>'lobby-49',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5154,6 +5347,40 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  lobbyTest:()=>{
+    kino=false;
+    if(!bane)return {feil:'ingen bane'};
+    girPenger(50000);
+    P.fly=false; drive.on=false;
+    P.pos.set(bane.start.x,groundAt(bane.start.x,bane.start.z)+P.h,bane.start.z);
+    oppdaterRace(1/60);
+    const h1=hint;
+    apneLobby();
+    const apen=getComputedStyle(document.getElementById('racelobby')).display;
+    // en annen spiller blir med og melder seg klar
+    taImotRace({t:'race',fase:'join',avId:'SIM',navn:'Simon',kr:33000});
+    taImotRace({t:'race',fase:'klar',avId:'SIM',navn:'Simon',kr:33000,klar:true});
+    const tekst1=document.querySelector('#racelobby .boks').innerText.replace(/\s+/g,' ');
+    settKlar();
+    const ned=lobby.nedtelling;
+    for(let k=0;k<200;k++) oppdaterRace(1/60);
+    return {hint:h1,lobbyApen:apen,lobby:tekst1,nedtelling:+ned.toFixed(1),
+            raceStartet:race.aktiv,innsats:race.innsats};
+  },
+  avatarTest:()=>{
+    kino=false;
+    const o=addOther('AV1','Simon',2);
+    o.x=P.pos.x+4; o.z=P.pos.z; o.y=P.pos.y; o.tx=o.x;o.tz=o.z;o.ty=o.y; o.hp=100;
+    settSpillerHelse(o);
+    const deler=Object.keys(o.mesh.userData.deler||{});
+    netInterp(1/60);
+    const staaende=+o.mesh.rotation.x.toFixed(3);
+    o.hp=0; settSpillerHelse(o);
+    for(let k=0;k<60;k++) netInterp(1/60);
+    const falt=+o.mesh.rotation.x.toFixed(3);
+    dropOther('AV1');
+    return {deler:deler,staaende:staaende,etterSkudd:falt};
+  },
   // kjør rett i en bygningsvegg og mål hvor tett bilen stopper
   kollTest:()=>{
     kino=false;
@@ -6178,20 +6405,40 @@ function netSay(t,cls){ $('netStatus').innerHTML = cls?'<span class="'+cls+'">'+
 let toastT=0;
 function showToast(t){ $('mode').textContent=t; toastT=2.2; }
 
-/* ---- avatar ---- */
+/* ---- avatar ---------------------------------------------------------
+   Samme Mii-kropp som fotgjengerne i byen, bare med spillerfarge på
+   skjorta. Delene ligger i userData så gangen og fallet kan animeres.  */
+const AVG={
+  hode : new THREE.SphereGeometry(.235,14,11),
+  haar : new THREE.SphereGeometry(.252,14,10),
+  kropp: new THREE.CapsuleGeometry(.175,.30,4,10),
+  arm  : new THREE.CapsuleGeometry(.058,.22,3,7),
+  ben  : new THREE.CapsuleGeometry(.072,.26,3,7),
+  oye  : new THREE.SphereGeometry(.036,7,6)
+};
+AVG.arm.translate(0,-.14,0);
+AVG.ben.translate(0,-.17,0);
+AVG.haar.scale(1,.72,1); AVG.haar.translate(0,.075,0);
+
 function makeAvatar(name,ci){
   const g=new THREE.Group();
   const col=AV_COLS[ci%AV_COLS.length];
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,1.12,10),
-    new THREE.MeshLambertMaterial({color:col}));
-  body.position.y=0.56; g.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10),
-    new THREE.MeshLambertMaterial({color:0xf0c8a0}));
-  head.position.y=1.4; g.add(head);
-  // liten "nese" så man ser hvilken retning de kikker
-  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.2),
-    new THREE.MeshLambertMaterial({color:0x2a2f3a}));
-  nose.position.set(0,1.4,-0.3); g.add(nose);
+  const M=hex=>new THREE.MeshLambertMaterial({color:hex});
+  const hud=0xf0c8a0, bukse=0x2f3644;
+  const legg=(geo,mat,x,y,z)=>{
+    const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z);
+    m.castShadow=true; g.add(m); return m; };
+  const D={};
+  D.benV  =legg(AVG.ben ,M(bukse),-.105,.43,0);
+  D.benH  =legg(AVG.ben ,M(bukse), .105,.43,0);
+  D.kropp =legg(AVG.kropp,M(col) , 0,   .78,0);
+  D.armV  =legg(AVG.arm ,M(hud)  ,-.245,.92,0);
+  D.armH  =legg(AVG.arm ,M(hud)  , .245,.92,0);
+  D.hode  =legg(AVG.hode,M(hud)  , 0,  1.30,0);
+  D.haar  =legg(AVG.haar,M(0x2b2118),0,1.30,-.01);
+  legg(AVG.oye,M(0x241c16),-.085,1.32,.215);
+  legg(AVG.oye,M(0x241c16), .085,1.32,.215);
+  g.userData.deler=D;
 
   const cv=document.createElement('canvas'); cv.width=256; cv.height=64;
   const x=cv.getContext('2d');
@@ -6200,12 +6447,31 @@ function makeAvatar(name,ci){
   x.fillStyle='#fff'; x.fillText(name.slice(0,12),128,43);
   const spr=new THREE.Sprite(new THREE.SpriteMaterial({
     map:new THREE.CanvasTexture(cv),depthTest:false,transparent:true}));
-  spr.scale.set(2.4,0.6,1); spr.position.y=2.1; g.add(spr);
+  spr.scale.set(2.4,0.6,1); spr.position.y=2.15; g.add(spr);
+  g.userData.navn=spr;
 
-  const hb=lagHelseSprite(); hb.scale.set(1.7,0.27,1); hb.position.y=1.82;
+  const hb=lagHelseSprite(); hb.scale.set(1.7,0.27,1); hb.position.y=1.88;
   tegnHelse(hb,1); g.add(hb); g.userData.hb=hb;
 
   scene.add(g); return g;
+}
+// gange og fall. Faller de om, ligger de til de er på beina igjen.
+function animerAvatar(o,dt){
+  const g=o.mesh, D=g.userData.deler; if(!D)return;
+  const dod=(o.hp!==undefined&&o.hp<=0);
+  o.dodT=Math.max(0,Math.min(1,(o.dodT||0)+(dod?dt*2.2:-dt*3.0)));
+  const fall=o.dodT;
+  const fart=Math.hypot(o.x-(o.px||o.x),o.z-(o.pz||o.z))/Math.max(dt,1e-3);
+  o.px=o.x; o.pz=o.z;
+  o.fase=(o.fase||0)+Math.min(fart,7)*dt*3.4;
+  const sv=dod?0:Math.sin(o.fase)*Math.min(1,fart/3)*0.55;
+  D.benV.rotation.x= sv;  D.benH.rotation.x=-sv;
+  D.armV.rotation.x=-sv*0.75; D.armH.rotation.x=sv*0.75;
+  g.rotation.x=fall*1.45;
+  g.position.y=(o.y-1.75)-fall*0.62;
+  if(g.userData.navn){ g.userData.navn.material.opacity=1-fall*0.75; }
+  const hb=g.userData.hb;
+  if(hb)hb.material.opacity=1-fall*0.75;
 }
 function addOther(id,name,ci){
   const o={id,name:name||'?',col:ci||0,x:0,y:0,z:0,yaw:0,
@@ -6444,6 +6710,7 @@ function netInterp(dt){
     // pos.y er øyehøyde, så føttene ligger 1.75 lavere
     o.mesh.position.set(o.x,o.y-1.75,o.z);
     o.mesh.rotation.y=o.yaw;
+    animerAvatar(o,dt);
   }
 }
 
@@ -6524,7 +6791,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build hitboks-48';
+  document.getElementById('verline').textContent='build lobby-49';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
