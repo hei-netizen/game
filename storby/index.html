@@ -52,9 +52,9 @@
     background:rgba(255,255,255,.5)}
   #hotbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
     display:flex;gap:6px;pointer-events:none}
-  #hotbar .s{width:50px;height:50px;border-radius:6px;background:rgba(13,16,22,.72);
+  #hotbar .s{width:44px;height:44px;border-radius:6px;background:rgba(13,16,22,.72);
     border:1px solid #3a4155;position:relative;display:flex;align-items:center;
-    justify-content:center;font-size:23px;line-height:1;
+    justify-content:center;font-size:20px;line-height:1;
     box-shadow:0 6px 18px rgba(0,0,0,.5)}
   #hotbar .s.valgt{border-color:#ffd85e;background:rgba(40,34,14,.82);
     box-shadow:0 0 0 1px #ffd85e,0 6px 22px rgba(0,0,0,.6)}
@@ -172,7 +172,8 @@
 <div id="keys">
   <kbd>W A S D</kbd> gå &nbsp; <kbd>Shift</kbd> løp &nbsp; <kbd>Space</kbd> hopp<br>
   <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>Esc</kbd> slipp mus<br>
-  <kbd>1</kbd>&ndash;<kbd>8</kbd> / hjul velg ting &nbsp; <kbd>Venstreklikk</kbd> skyt &nbsp; <kbd>R</kbd> lad om &nbsp; <kbd>Shift</kbd>+<kbd>R</kbd> ny by
+  <kbd>1</kbd>&ndash;<kbd>9</kbd><kbd>0</kbd> / hjul velg ting &nbsp; <kbd>Venstreklikk</kbd> skyt/slå &nbsp; <kbd>Høyreklikk</kbd> sikte &nbsp; <kbd>R</kbd> lad om<br>
+  <kbd>G</kbd> kast penger &nbsp; <kbd>X</kbd> kast gjenstand &nbsp; <kbd>E</kbd> handle/rane &nbsp; <kbd>Shift</kbd>+<kbd>R</kbd> ny by
 </div>
 
 <div id="overlay" style="display:none">
@@ -644,6 +645,23 @@ function rampeHoyde(x,z,y){
     return {y:yy, u:lz/r.L, r:r};
   }
   return null;
+}
+// Gulvet i kloakktunnelen. Returnerer null utenfor. Sjakten under luka går
+// rett ned, tunnelen er flat og stiger til slutt opp til gatenivå.
+function kloakkGulv(x,z,fot){
+  if(!fengsel||!fengsel.tunnel)return null;
+  const T=fengsel.tunnel;
+  const iSjakt = fengsel.luke &&
+    Math.abs(x-fengsel.luke.x)<1.35 && Math.abs(z-fengsel.luke.z)<1.35;
+  const iTunnel = x>T.x0&&x<T.x1&&z>T.z0&&z<T.z1;
+  if(!iSjakt&&!iTunnel)return null;
+  // i tunnelen må du allerede være under bakken — ellers gjelder gata
+  if(!iSjakt&&fot>T.pad-0.6)return null;
+  if(iTunnel&&z>T.rampe0){
+    const u=(z-T.rampe0)/(T.rampe1-T.rampe0);
+    return T.gulv+(T.pad-0.05-T.gulv)*Math.min(1,u);
+  }
+  return T.gulv;
 }
 // bakkehøyde inkludert ramper — brukes av spilleren og bilen
 function bakkeH(x,z,y){
@@ -1572,10 +1590,43 @@ function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
   walls(vegg,lx+hr+0.45,lx+hr+2.35,pad+0.05,pad+0.17,lz-0.95,lz+0.95,1,1,1,[.34,.35,.38]);
   slab(vegg,lx+hr+0.45,lx+hr+2.35,pad+0.17,lz-0.95,lz+0.95,1,[.42,.43,.46]);
   fengsel.luke={x:lx,z:lz};
-  // der du kommer opp igjen — i gata rett utenfor muren
-  let ux=x, uz=z0-9;
-  for(let k=0;k<26&&!friPlass(ux,uz);k++) uz-=1.5;
-  fengsel.utgang={x:ux,z:uz};
+
+  // ---- kloakktunnelen ----
+  // Du skal faktisk gå gjennom den, ikke teleporteres. Gulvet ligger 3,4 m
+  // under fengselsgulvet, går bakover under ringmuren og stiger opp til
+  // gatenivå utenfor. Bakkehøyden slås opp i kloakkGulv().
+  const TB=1.7;                      // halv bredde
+  let ut2=z1+20;
+  while(ut2>z1+11&&!friPlass(x,ut2)) ut2-=1.5;
+  const KG=pad-3.4, rampStart=ut2-11;
+  fengsel.tunnel={x0:lx-TB,x1:lx+TB,z0:lz-1.5,z1:ut2,
+                  gulv:KG, pad:pad, rampe0:rampStart, rampe1:ut2};
+  const MORK2=[.30,.31,.34], VAT=[.24,.27,.28];
+  // gulv: flatt fram til rampen, så skrått opp
+  quad(vegg, lx-TB,KG,rampStart, lx+TB,KG,rampStart, lx+TB,KG,lz-1.5, lx-TB,KG,lz-1.5,
+       0,1,0, 0,0,2,7,VAT);
+  quad(vegg, lx-TB,pad-0.05,ut2, lx+TB,pad-0.05,ut2, lx+TB,KG,rampStart, lx-TB,KG,rampStart,
+       0,1,0, 0,0,2,4,VAT);
+  // vegger og tak
+  walls(vegg,lx-TB-0.35,lx-TB,KG,pad-0.55,lz-1.5,ut2,1,7,2,MORK2);
+  walls(vegg,lx+TB,lx+TB+0.35,KG,pad-0.55,lz-1.5,ut2,1,7,2,MORK2);
+  slab(vegg,lx-TB,lx+TB,pad-0.55,lz-1.5,rampStart,3,MORK2);
+  // sidevegger som kollisjon — de gjelder bare under bakken (top < pad)
+  addCol({x0:lx-TB-0.35,x1:lx-TB,z0:lz-1.6,z1:ut2,top:pad-0.30,kloakk:true});
+  addCol({x0:lx+TB,x1:lx+TB+0.35,z0:lz-1.6,z1:ut2,top:pad-0.30,kloakk:true});
+  addCol({x0:lx-TB-0.35,x1:lx+TB+0.35,z0:lz-1.9,z1:lz-1.5,top:pad-0.30,kloakk:true});
+  // rør langs veggen og et par lyspunkt
+  for(let zz=lz;zz<rampStart;zz+=5.5)
+    walls(vegg,lx-TB+0.05,lx-TB+0.35,pad-1.15,pad-0.85,zz,zz+5.2,1,2,1,[.36,.34,.30]);
+  fengsel.lys=[];
+  for(let zz=lz+3;zz<ut2-2;zz+=9){
+    const L=new THREE.PointLight(0xffe0a8,7,15,1.5);
+    L.position.set(lx,pad-0.95,zz); scene.add(L); fengsel.lys.push(L);
+  }
+  // åpning i gata der du kommer opp
+  quad(vegg, lx-TB,pad+0.04,ut2+0.9, lx+TB,pad+0.04,ut2+0.9,
+             lx+TB,pad+0.04,ut2-0.1, lx-TB,pad+0.04,ut2-0.1, 0,1,0,0,0,1,1,[.05,.05,.06]);
+  fengsel.utgang={x:lx,z:ut2+2.5};
 
   // ---- gårdsplass: basketkurv og to benker ----
   const bx=x-hb+9, bz=z-2;
@@ -1642,16 +1693,10 @@ function oppdaterFengsel(dt){
   if(innenfor&&!drive.on&&fengsel.luke){
     const L=fengsel.luke;
     const d=Math.hypot(P.pos.x-L.x,P.pos.z-L.z);
-    if(d<1.6){
-      fengsel.lukeT+=dt;
-      if(fengsel.lukeT>=0.7){
-        const u=fengsel.utgang;
-        P.pos.set(u.x,groundAt(u.x,u.z)+1.75,u.z); P.vel.set(0,0,0);
-        fengsel.lukeT=0; fengsel.fri=true; fengsel.dorAapen=false;
-        showToast('🕳 Du klatret ned i kloakken og kom opp utenfor muren');
-        return;
-      }
-      hint='🕳 Klatrer ned … '+Math.round(fengsel.lukeT/0.7*100)+' %';
+    if(P.pos.y-P.h<fengsel.pad-1.0){
+      hint='🕳 Følg kloakken framover — den kommer opp utenfor muren';
+    } else if(d<2.4){
+      hint='🕳 Gå oppi hullet — du faller ned i kloakken';
     } else {
       fengsel.lukeT=0;
       let a=Math.atan2(L.x-P.pos.x,L.z-P.pos.z)-(P.yaw+Math.PI);
@@ -3183,12 +3228,17 @@ function velgVaapenbutikk(){
   // Lyssøyle rett opp fra taket. Uten den var butikken umulig å finne uten
   // å stirre på minikartet hele veien.
   const cx=(best.x0+best.x1)/2, cz=(best.z0+best.z1)/2;
-  const sG=new THREE.CylinderGeometry(1.5,3.4,220,10,1,true);
-  const sM=new THREE.MeshBasicMaterial({color:0xffa63d,transparent:true,opacity:0.20,
-    side:THREE.DoubleSide,depthWrite:false});
-  vbSoyle=new THREE.Mesh(sG,sM);
-  vbSoyle.position.set(cx,best.top+112,cz);
-  vbSoyle.renderOrder=-1;
+  // To sylindre: en tydelig kjerne og en myk glorie rundt. Den forrige var
+  // så tynn at den forsvant i skylinja.
+  vbSoyle=new THREE.Group();
+  const H2=340;
+  for(const[r0,r1,op,farge] of [[3.0,4.6,0.42,0xffb84d],[8.0,12.0,0.14,0xff8a1e]]){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,H2,14,1,true),
+      new THREE.MeshBasicMaterial({color:farge,transparent:true,opacity:op,
+        side:THREE.DoubleSide,depthWrite:false}));
+    m.position.set(cx,best.pad+H2/2,cz);
+    vbSoyle.add(m);
+  }
   scene.add(vbSoyle);
 }
 
@@ -3239,11 +3289,13 @@ const TING={
   hand:  {navn:'Never',    ikon:'✊'},
   pistol:{navn:'Pistol',   ikon:'🔫'},
   hagle: {navn:'Hagle',    ikon:'💥'},
+  granat:{navn:'Håndgranat', ikon:'🧨'},
+  molotov:{navn:'Molotov',   ikon:'🔥'},
+  minigun:{navn:'Minigun',   ikon:'⚙️'},
   smg:   {navn:'Maskinpistol', ikon:'🔩'},
   rifle: {navn:'Automatrifle', ikon:'🪖'},
   snik:  {navn:'Snikskytter',  ikon:'🎯'},
   rakett:{navn:'Rakettkaster', ikon:'🚀'},
-  penger:{navn:'Penger',   ikon:'💵', stabel:true},
   kaffe: {navn:'Kaffe',    ikon:'☕', stabel:true},
   ol:    {navn:'Øl',       ikon:'🍺', stabel:true},
   bok:   {navn:'Bok',      ikon:'📕', stabel:true},
@@ -3252,16 +3304,19 @@ const TING={
 };
 // Åtte plasser: never, pistol, penger og fem ledige. Med seks kjøpbare våpen
 // gikk det ikke opp med seks plasser.
-const SLOTS=8;
+const SLOTS=10;
+// Pengene lå før på en av plassene i slinja og spiste opp en våpenplass.
+// Nå er de ren valuta i HUD-en, og kastes med G.
+let pengeSum=0;
 const inv={slot:1, felt:[{id:'hand',n:1},{id:'pistol',n:1,i:12,res:48},
-                         {id:'penger',n:0},null,null,null,null,null]};
+                         null,null,null,null,null,null,null,null]};
 let hbSkitten=true;
 function tegnHotbar(){
   const el=document.getElementById('hotbar'); if(!el)return;
   let h='';
   for(let i=0;i<SLOTS;i++){
     const f=inv.felt[i], t=f?TING[f.id]:null;
-    h+='<div class="s'+(i===inv.slot?' valgt':'')+'"><span class="nr">'+(i+1)+'</span>'+
+    h+='<div class="s'+(i===inv.slot?' valgt':'')+'"><span class="nr">'+((i+1)%10)+'</span>'+
        (t?t.ikon:'')+
        (f&&f.n>1?'<span class="ant">'+f.n+'</span>':'')+
        (i===inv.slot&&t?'<span class="nv">'+t.navn+'</span>':'')+'</div>';
@@ -3304,7 +3359,16 @@ const VAAPENSETT={
           zoom:3.2, form:{sleide:.46,lop:.70,kolbe:.40,mag:.16,tykk:1.0,kikkert:true}},
   rakett:{navn:'Rakettkaster', ikon:'🚀', mag:1,  res:6,   rate:1.60,  ladT:2.80,
           skade:150, kuler:1, spred:0.004, auto:false, rekkevidde:230, rek:3.6, pris:85000,
-          eksplosiv:10, form:{sleide:.30,lop:1.05,kolbe:.30,mag:0,tykk:2.0}}
+          eksplosiv:10, form:{sleide:.30,lop:1.05,kolbe:.30,mag:0,tykk:2.0}},
+  granat:{navn:'Håndgranat',   ikon:'🧨', mag:1,  res:5,   rate:0.90,  ladT:0.70,
+          skade:110, kuler:1, spred:0, auto:false, rekkevidde:0, rek:1.4, pris:11000,
+          kast:'granat', form:{sleide:.14,lop:0,kolbe:0,mag:0,tykk:1.1}},
+  molotov:{navn:'Molotov',     ikon:'🔥', mag:1,  res:5,   rate:0.95,  ladT:0.70,
+          skade:24,  kuler:1, spred:0, auto:false, rekkevidde:0, rek:1.2, pris:7000,
+          kast:'brann', form:{sleide:.18,lop:0,kolbe:0,mag:0,tykk:1.0}},
+  minigun:{navn:'Minigun',     ikon:'⚙️', mag:150,res:450, rate:0.042, ladT:3.40,
+          skade:11,  kuler:1, spred:0.030, auto:true,  rekkevidde:130, rek:0.5, pris:70000,
+          form:{sleide:.42,lop:.86,kolbe:.30,mag:.34,tykk:2.1}}
 };
 function erVaapen(id){ return !!VAAPENSETT[id]; }
 function aktivtVaapen(){ const f=inv.felt[inv.slot]; return (f&&VAAPENSETT[f.id])?f:null; }
@@ -3312,6 +3376,40 @@ function VD(){ const f=aktivtVaapen(); return f?VAAPENSETT[f.id]:null; }
 const VAAPEN=VAAPENSETT.pistol;                     // brukt av eldre kode
 const gun={lad:0, kd:0, rekyl:0, blits:0, auto:false};
 let vm=null, vmBase=null, vmLys=null;
+// Nevene som «våpen»: to knyttneven i bildekant, med et slag som svinger.
+function lagNever(){
+  const g=new THREE.Group();
+  const mH=new THREE.MeshLambertMaterial({color:0xc08a63,emissive:0x4a3324});
+  const b=(w,h,d,x,y,z,rx)=>{
+    const k=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mH);
+    k.position.set(x,y,z); if(rx)k.rotation.x=rx; g.add(k); return k; };
+  b(.150,.150,.170, 0,   -.02, -.10);          // knoke
+  b(.140,.120,.055, 0,    .03, -.20);          // fingrer
+  b(.130,.130,.330, .015,-.10,  .16, 0.22);    // underarm
+  return g;
+}
+const NEVE={rekkevidde:2.9, skade:32, rate:0.42};
+function slaa(){
+  if(gun.kd>0||drive.on||P.dodT>0)return;
+  gun.kd=NEVE.rate; gun.rekyl=2.6;
+  camera.getWorldPosition(_ko); camera.getWorldDirection(_kd);
+  let traff=false;
+  // nærmeste mål i en kjegle rett foran
+  for(const f of folkData){
+    if(f.dod||f.skjult)continue;
+    const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
+    const t=kuleMot(_ko,_kd,NEVE.rekkevidde,p.x,f.pad+0.95*f.h,p.z,0.95);
+    if(t>0){ treffPerson(f,NEVE.skade); gnist(p.x,f.pad+1.1,p.z,0xd63b3b);
+             traff=true; break; }
+  }
+  if(!traff)for(const o of others.values()){
+    const t=kuleMot(_ko,_kd,NEVE.rekkevidde,o.x,o.y-0.35,o.z,0.95);
+    if(t>0){ sendTreff(o.id,NEVE.skade);
+             o.hp=Math.max(0,(o.hp===undefined?100:o.hp)-NEVE.skade); settSpillerHelse(o);
+             gnist(o.x,o.y-0.3,o.z,0xd63b3b); showToast('👊 Slo '+o.name); traff=true; break; }
+  }
+  if(traff)politiVarme(3);
+}
 function lagVaapen(id){
   const V=VAAPENSETT[id], F=V.form, t=F.tykk;
   const g=new THREE.Group();
@@ -3368,7 +3466,7 @@ function lagPistol(){
 let vmId=null;
 function byggVm(id){
   if(vm){ camera.remove(vm); vm.traverse(o=>{if(o.geometry)o.geometry.dispose();}); }
-  vm=lagVaapen(id); vmId=id;
+  vm=(id==='hand')?lagNever():lagVaapen(id); vmId=id;
   vm.position.copy(vmBase); vm.rotation.set(-0.03,-0.52,0.07);
   vm.scale.setScalar(1.35);
   camera.add(vm);
@@ -3431,7 +3529,7 @@ function oppdaterHelsestolper(dt){
     const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
     if(Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>60)continue;
     const spr=taHelseSprite(); if(!spr)break;
-    const maks=f.betjent?52:VAAPEN.skade;
+    const maks=f.betjent?52:FOLK_HP;
     tegnHelse(spr,(f.hp===undefined?maks:f.hp)/maks,f.betjent?'#7db4ff':null);
     spr.position.set(p.x,f.pad+1.72*f.h,p.z); spr.visible=true;
   }
@@ -3483,6 +3581,7 @@ function skyt(){
   const f=aktivtVaapen(); if(!f||gun.lad>0||gun.kd>0||drive.on||P.dodT>0)return;
   const V=VAAPENSETT[f.id];
   if(f.i<=0){ showToast(V.ikon+' Tomt magasin — R for å lade'); gun.kd=0.25; return; }
+  if(V.kast){ kastGjenstand(f,V); return; }
   f.i--; gun.kd=V.rate; gun.rekyl=V.rek; gun.blits=0.055; hbSkitten=true;
   P.pitch=Math.min(1.5,P.pitch+0.016*V.rek);      // rekyl i sikte
 
@@ -3552,6 +3651,74 @@ function skuddLinje(V,_ko,_kd,forste){
   if(forste)politiVarme(2.0);       // skudd i gata blir hørt
 }
 
+/* ---- granat og molotov: kastes i bue, virker der de lander ---- */
+let kastede=[], branner=[];
+function kastGjenstand(f,V){
+  f.i--; gun.kd=V.rate; gun.rekyl=V.rek; hbSkitten=true;
+  camera.getWorldPosition(_ko); camera.getWorldDirection(_kd);
+  const brann=V.kast==='brann';
+  const m=new THREE.Mesh(
+    brann?new THREE.CylinderGeometry(0.09,0.12,0.30,7):new THREE.SphereGeometry(0.13,8,6),
+    new THREE.MeshLambertMaterial({color:brann?0xd8c47a:0x3f4a34,
+      emissive:brann?0x5a3a10:0x101408}));
+  m.position.copy(_ko).addScaledVector(_kd,0.8);
+  scene.add(m);
+  kastede.push({o:m,vx:_kd.x*23,vy:_kd.y*23+4.2,vz:_kd.z*23,
+                t:0,type:V.kast,skade:V.skade});
+  showToast(V.ikon+' '+V.navn+' kastet');
+}
+function oppdaterKastede(dt){
+  for(let i=kastede.length-1;i>=0;i--){
+    const k=kastede[i]; k.t+=dt;
+    k.vy-=19*dt;
+    k.o.position.x+=k.vx*dt; k.o.position.y+=k.vy*dt; k.o.position.z+=k.vz*dt;
+    k.o.rotation.x+=8*dt; k.o.rotation.z+=5*dt;
+    const gy=groundAt(k.o.position.x,k.o.position.z)+0.12;
+    const landet=k.o.position.y<=gy;
+    if(landet){ k.o.position.y=gy; k.vx*=0.45; k.vz*=0.45; k.vy=-k.vy*0.28; }
+    if((k.type==='brann'&&landet)||(k.type==='granat'&&k.t>1.9)){
+      const p=k.o.position;
+      if(k.type==='brann') tennBrann(p.x,gy,p.z);
+      else eksplosjon(p.x,p.y,p.z,8.5,k.skade);
+      scene.remove(k.o); k.o.geometry.dispose(); kastede.splice(i,1);
+    } else if(k.t>9){ scene.remove(k.o); k.o.geometry.dispose(); kastede.splice(i,1); }
+  }
+}
+function tennBrann(x,y,z){
+  const L=new THREE.PointLight(0xff8a2a,26,22,1.6);
+  L.position.set(x,y+1.4,z); scene.add(L);
+  branner.push({x:x,y:y,z:z,t:0,lys:L,puff:0,tikk:0});
+  showToast('🔥 Brann');
+}
+function oppdaterBranner(dt){
+  for(let i=branner.length-1;i>=0;i--){
+    const b=branner[i]; b.t+=dt; b.puff-=dt; b.tikk-=dt;
+    b.lys.intensity=26*(1-b.t/9)*(0.7+Math.random()*0.5);
+    if(b.puff<=0){
+      b.puff=0.055;
+      const m=new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(.35,.95),0),
+        new THREE.MeshBasicMaterial({color:Math.random()<.5?0xff6a1e:0xffc24a,
+          transparent:true,opacity:.85}));
+      m.position.set(b.x+rnd(-2.6,2.6),b.y+rnd(.1,1.6),b.z+rnd(-2.6,2.6));
+      m.userData.krymp=true; effekt(m,0.55);
+    }
+    if(b.tikk<=0){                       // brenner alt som står i den
+      b.tikk=0.5;
+      for(const f of folkData){
+        if(f.dod||f.skjult)continue;
+        const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
+        if(Math.hypot(p.x-b.x,p.z-b.z)<3.4) treffPerson(f,24);
+      }
+      for(const o of others.values())
+        if(Math.hypot(o.x-b.x,o.z-b.z)<3.4){ sendTreff(o.id,18);
+          o.hp=Math.max(0,(o.hp===undefined?100:o.hp)-18); settSpillerHelse(o); }
+      if(Math.hypot(P.pos.x-b.x,P.pos.z-b.z)<3.4) skadeSpiller(16);
+      if(drive.on&&Math.hypot(drive.x-b.x,drive.z-b.z)<3.8) smell(3.5);
+    }
+    if(b.t>9){ scene.remove(b.lys); branner.splice(i,1); }
+  }
+}
+
 // rakettene tar alt innenfor radien
 function eksplosjon(x,y,z,radius,skade){
   const L=new THREE.PointLight(0xffa33a,120,radius*5,1.7);
@@ -3578,9 +3745,10 @@ function eksplosjon(x,y,z,radius,skade){
   if(dm2<radius) skadeSpiller(Math.round(skade*(1-dm2/radius)));
   politiVarme(14);
 }
+const FOLK_HP=60;                  // to nevestøt, tre pistolskudd
 function treffPerson(f,skade){
   skade=skade||26;
-  f.hp=(f.hp===undefined?skade:f.hp)-skade;
+  f.hp=(f.hp===undefined?(f.betjent?52:FOLK_HP):f.hp)-skade;
   f.trefT=2.5;                      // viser helsestolpe over hodet en stund
   if(f.betjent){
     if(f.hp>0)return;
@@ -3589,6 +3757,7 @@ function treffPerson(f,skade){
     drepPerson(f); politiVarme(-6); visStjerner();
     showToast('🚓 Betjent ute av spill');
   } else {
+    if(f.hp>0)return;               // tåler to nevestøt eller tre pistolskudd
     drepPerson(f); politiVarme(11);
   }
 }
@@ -3655,7 +3824,7 @@ function skadeSpiller(n){
 function doSpiller(){
   P.dodT=2.2;
   const tapt=kroner();
-  if(tapt>0){ inv.felt[2].n=0; hbSkitten=true;
+  if(tapt>0){ pengeSum=0;
     showToast('💀 Du døde — mistet '+tapt.toLocaleString('nb-NO')+' kr'); }
   else showToast('💀 Du døde');
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
@@ -3825,7 +3994,8 @@ function paakjorsel(){
 let musNede=false;
 function oppdaterVaapen(dt){
   const f=aktivtVaapen(), V=f?VAAPENSETT[f.id]:null;
-  if(f&&vmId!==f.id)byggVm(f.id);
+  const valgt=inv.felt[inv.slot];
+  if(valgt&&(VAAPENSETT[valgt.id]||valgt.id==='hand')&&vmId!==valgt.id)byggVm(valgt.id);
   if(gun.kd>0)gun.kd-=dt;
   // helautomatisk: hold inne museknappen
   if(musNede&&V&&V.auto&&gun.kd<=0&&gun.lad<=0&&!drive.on)skyt();
@@ -3848,7 +4018,8 @@ function oppdaterVaapen(dt){
   }
   gun.rekyl=Math.max(0,gun.rekyl-dt*7);
   if(vm){
-    const vis=harPistol()&&!drive.on&&P.dodT<=0&&!kino;
+    const vis=(!!f||inv.felt[inv.slot]&&inv.felt[inv.slot].id==='hand')&&
+              !drive.on&&P.dodT<=0&&!kino;
     vm.visible=vis;
     if(vis){
       const gange=Math.hypot(P.vel.x,P.vel.z);
@@ -3878,6 +4049,9 @@ function oppdaterVaapen(dt){
       am.innerHTML='<small>'+V.navn+'</small><br>'+(gun.lad>0?'…':f.i)+
                    ' <small>/ '+f.res+'</small>';
       am.className=f.i===0?'tom':'';
+    } else if(valgt&&valgt.id==='hand'&&!drive.on){
+      am.innerHTML='<small>Never</small><br>👊';
+      am.className='';
     } else am.innerHTML='';
   }
   const ph=document.getElementById('pengerhud');
@@ -3885,7 +4059,7 @@ function oppdaterVaapen(dt){
     let h2='💵 '+kroner().toLocaleString('nb-NO')+' kr';
     if(klubb&&klubb.inne&&!folgerHer)
       h2+='<small>kastet '+kastet.toLocaleString('nb-NO')+' / '+
-          FOLGE_KRAV.toLocaleString('nb-NO')+' kr &middot; velg 💵 og venstreklikk</small>';
+          FOLGE_KRAV.toLocaleString('nb-NO')+' kr &middot; trykk G for å kaste</small>';
     else if(folgerHer) h2+='<small>💃 hun følger etter deg</small>';
     ph.innerHTML=h2;
   }
@@ -3903,9 +4077,9 @@ function oppdaterVaapen(dt){
    danserne i klubben blir én av dem med deg ut.                          */
 const KAST=100, FOLGE_KRAV=3000;
 let kastet=0, folgerHer=null, sedler=[];
-function harPengerValgt(){ const f=inv.felt[inv.slot]; return !!f&&f.id==='penger'; }
-function girPenger(n){ inv.felt[2].n+=n; hbSkitten=true; }
-function kroner(){ return inv.felt[2]?inv.felt[2].n:0; }
+function harPengerValgt(){ return false; }   // penger kastes med G, ikke fra slinja
+function girPenger(n){ pengeSum=Math.max(0,pengeSum+n); }
+function kroner(){ return pengeSum; }
 
 const _sedGeo=new THREE.PlaneGeometry(0.22,0.11);
 function kastPenger(){
@@ -4079,9 +4253,15 @@ addEventListener('keydown',e=>{
       else showToast('Bare verten kan lage ny by');
     }
   }
+  if(e.code==='KeyG'&&!drive.on)kastPenger();
+  if(e.code==='KeyX'&&!drive.on){
+    const f=inv.felt[inv.slot];
+    if(f&&f.id!=='hand'){ showToast('🗑 '+TING[f.id].navn+' kastet');
+      inv.felt[inv.slot]=null; hbSkitten=true; }
+  }
   if(e.code.startsWith('Digit')){
     const n=+e.code.slice(5);
-    if(n>=1&&n<=SLOTS)velgSlot(n-1);
+    velgSlot(n===0?9:n-1);          // 0 er tiende plass
   }
   if(e.code==='Space')e.preventDefault();
 });
@@ -4093,7 +4273,8 @@ renderer.domElement.addEventListener('mousedown',e=>{
   if(e.button===2){ musHoyre=true; return; }
   if(e.button!==0)return;
   musNede=true;
-  if(harPengerValgt())kastPenger(); else skyt();
+  const v2=inv.felt[inv.slot];
+  if(v2&&v2.id==='hand')slaa(); else skyt();
 });
 document.getElementById('butikk').addEventListener('click',e=>{
   const k=e.target.closest('button');
@@ -4155,7 +4336,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'mclaren-35',
+  ver:()=>'kloakk-37',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4181,6 +4362,52 @@ window.__dbg={
   bx:(i)=>bygg[i],
   kl:()=>klubb, fg:()=>fengsel,
   ramper:()=>ramper.length,
+  // slå ned nærmeste fotgjenger og se at det faller penger
+  slagTest:()=>{
+    kino=false;
+    let best=null,bd=1e9;
+    for(const f of folkData){
+      if(f.dod||f.skjult||f.dans||f.betjent)continue;
+      const p=folkPos(f); const d=Math.hypot(p.x-P.pos.x,p.z-P.pos.z);
+      if(d<bd){bd=d;best={f:f,p:p};}
+    }
+    if(!best)return null;
+    const p=best.p;
+    P.fly=false; drive.on=false;
+    P.pos.set(p.x,groundAt(p.x,p.z)+P.h,p.z-1.6);
+    P.yaw=Math.PI; P.pitch=-0.10;
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    inv.slot=0; gun.kd=0;
+    const bunterFor=bunter.length;
+    let slag=0;
+    for(let k=0;k<6&&!best.f.dod;k++){ gun.kd=0; slaa(); slag++; }
+    const kr0=kroner();
+    for(let k=0;k<200;k++) oppdaterBunter(1/60);
+    return {slag:slag,dod:!!best.f.dod,nyeBunter:bunter.length-bunterFor+ (kroner()>kr0?1:0),
+            krFor:kr0,krEtter:kroner()};
+  },
+  // kast granat og molotov
+  kastTest:()=>{
+    kino=false; drive.on=false; P.fly=false;
+    girPenger(300000);
+    kjopVaapen('granat'); kjopVaapen('molotov'); kjopVaapen('minigun');
+    const ut={};
+    for(const id of ['granat','molotov','minigun']){
+      const i=inv.felt.findIndex(f=>f&&f.id===id);
+      ut[id]=(i>=0)?'slot '+(i+1):'IKKE KJØPT';
+      if(i<0)continue;
+      inv.slot=i; gun.kd=0; gun.lad=0;
+      const f=inv.felt[i], for_=f.i;
+      camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+      camera.updateMatrixWorld(true);
+      skyt();
+      ut[id]+=' ('+for_+'→'+f.i+')';
+    }
+    for(let k=0;k<260;k++){ oppdaterKastede(1/60); oppdaterBranner(1/60); }
+    ut.branner=branner.length; ut.kastede=kastede.length;
+    return ut;
+  },
   vbPos:()=>vaapenbutikk?{x:Math.round((vaapenbutikk.x0+vaapenbutikk.x1)/2),z:Math.round((vaapenbutikk.z0+vaapenbutikk.z1)/2),side:vaapenbutikk.side,soyle:!!vbSoyle}:null,
   sideBilde:(type)=>{
     kino=false;
@@ -4293,16 +4520,22 @@ window.__dbg={
   // gå ned i kloakkhullet uten å trykke på noe
   kloakkTest:()=>{
     kino=false; arrester();
-    const start={x:Math.round(P.pos.x),z:Math.round(P.pos.z),
-                 tilHull:+Math.hypot(P.pos.x-fengsel.luke.x,P.pos.z-fengsel.luke.z).toFixed(1)};
-    oppdaterFengsel(1/60);
-    const pek=hint;
-    // gå de siste meterne
-    const L=fengsel.luke;
-    P.pos.set(L.x,groundAt(L.x,L.z)+P.h,L.z);
-    for(let k=0;k<120;k++){ oppdaterFengsel(1/60); if(fengsel.fri)break; }
-    return {start:start,peker:pek,fri:fengsel.fri,
-            uteAvFengselet:Math.hypot(P.pos.x-fengsel.x,P.pos.z-fengsel.z)>28};
+    const L=fengsel.luke, T=fengsel.tunnel;
+    P.pos.set(L.x,groundAt(L.x,L.z)+P.h,L.z); P.vel.set(0,0,0); P.fly=false;
+    for(let k=0;k<180;k++) update(1/60);            // fall ned i sjakten
+    const nede=P.pos.y-P.h;
+    P.yaw=Math.PI;                                  // framover = +Z
+    keys['KeyW']=true;
+    let ute=false, sek=0;
+    for(let k=0;k<60*45;k++){
+      update(1/60); oppdaterFengsel(1/60); sek=k/60;
+      if(P.pos.z>T.z1+1.0&&P.pos.y-P.h>fengsel.pad-0.6){ute=true;break;}
+    }
+    keys['KeyW']=false;
+    return {faltTil:+nede.toFixed(1), fengselGulv:+fengsel.pad.toFixed(1),
+            tunnelGulv:+T.gulv.toFixed(1), ute:ute, sekunder:+sek.toFixed(1),
+            fri:fengsel.fri, hp:Math.round(P.hp),
+            slutt:{x:Math.round(P.pos.x),z:Math.round(P.pos.z),y:Math.round(P.pos.y)}};
   },
   // skyt en politibil i stykker og se at varmen faller
   politiUtTest:()=>{
@@ -4454,7 +4687,7 @@ window.__dbg={
     P.pitch=Math.atan2(py-(P.pos.y),Math.hypot(p.x-ox,p.z-oz));
     camera.position.copy(P.pos); camera.rotation.set(0,0,0);
     camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
-    const for_=best.f.dod; gun.kd=0; gun.lad=0;
+    const for_=best.f.dod; inv.slot=1; gun.kd=0; gun.lad=0;
     skyt();
     return {for:for_,etter:!!best.f.dod,avstand:+bd.toFixed(1),ammo:gun.i};
   },
@@ -4735,7 +4968,12 @@ function update(dt){
     P.pos.x+=P.vel.x*dt;P.pos.z+=P.vel.z*dt;P.pos.y+=P.vel.y*dt;
 
     const list=nearby(P.pos.x,P.pos.z).concat(innKol), feet=P.pos.y-P.h;
+    // Er du nede i kloakken gjelder bare tunnelens egne vegger — ellers ville
+    // fengselsmuren over deg stoppet deg midt i tunnelen.
+    const iKloakk=kloakkGulv(P.pos.x,P.pos.z,feet)!==null;
     for(const b of list){
+      if(iKloakk&&!b.kloakk)continue;
+      if(!iKloakk&&b.kloakk)continue;
       if(feet+.05>=b.top)continue;
       if(b.dor&&fengsel&&fengsel.dorAapen)continue;   // vaktrunde: cella er åpen
       if(b.av)continue;                               // bygget er åpnet innenfra
@@ -4755,6 +4993,8 @@ function update(dt){
       }
     }
     let g=bakkeH(P.pos.x,P.pos.z,P.pos.y-P.h);
+    const kl=kloakkGulv(P.pos.x,P.pos.z,P.pos.y-P.h);
+    if(kl!==null)g=kl;
     for(const b of list)
       if(P.pos.x>b.x0-.3&&P.pos.x<b.x1+.3&&P.pos.z>b.z0-.3&&P.pos.z<b.z1+.3)
         if(b.top>g&&P.pos.y-P.h>=b.top-.8)g=b.top;
@@ -4762,9 +5002,9 @@ function update(dt){
       // Fallskade. Under ~11 m/s ned er det bare et dunk; over det gjør det
       // vondt, og et fall fra taket tar deg.
       const ned=-P.vel.y;
-      if(ned>11&&P.dodT<=0){
-        const sk=Math.round((ned-11)*5.2);
-        if(sk>0){ skadeSpiller(sk); showToast(ned>20?'💀 Stygt fall':'🤕 Du landet hardt'); }
+      if(ned>13.5&&P.dodT<=0){
+        const sk=Math.round((ned-13.5)*5.6);
+        if(sk>0){ skadeSpiller(sk); showToast(ned>22?'💀 Stygt fall':'🤕 Du landet hardt'); }
       }
       P.pos.y=g+P.h;P.vel.y=0;P.onGround=true;
     } else P.onGround=false;
@@ -5250,7 +5490,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -5308,7 +5548,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build mclaren-35';
+  document.getElementById('verline').textContent='build kloakk-37';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
