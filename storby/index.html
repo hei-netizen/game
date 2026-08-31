@@ -2790,9 +2790,11 @@ function enterExit(){
      Math.hypot(P.pos.x-fengsel.luke.x,P.pos.z-fengsel.luke.z)<1.9)return;
   if(!drive.on&&aktivtBygg&&aktivtBygg.kasse&&
      Math.hypot(P.pos.x-aktivtBygg.kasse.x,P.pos.z-aktivtBygg.kasse.z)<2.4)return;
-  if(!drive.on&&aktivtBygg&&aktivtBygg.disk&&
-     Math.hypot(P.pos.x-aktivtBygg.disk.x,P.pos.z-aktivtBygg.disk.z)<3.4){
-    apneButikk(); return; }
+  // E hvor som helst inne i en våpenbutikk — å måtte finne akkurat disken
+  // var altfor pirkete.
+  if(!drive.on&&aktivtBygg&&aktivtBygg.type==='vaapen'&&
+     P.pos.x>aktivtBygg.x0&&P.pos.x<aktivtBygg.x1&&
+     P.pos.z>aktivtBygg.z0&&P.pos.z<aktivtBygg.z1){ apneButikk(); return; }
   if(drive.on){
     const ex=drive.x+Math.cos(drive.head)*2.6, ez=drive.z-Math.sin(drive.head)*2.6;
   P.pos.set(ex,groundAt(ex,ez)+1.75,ez);
@@ -3219,18 +3221,8 @@ function lagVbSkilt(best){
   skilt.position.set(sx,best.pad+4.3,sz);
   skilt.rotation.y=ROT[best.side];
   scene.add(skilt); vbTing.push(skilt);
-
-  // lyssøyle: tydelig kjerne + myk glorie, hele veien fra bakken
-  const cx=(best.x0+best.x1)/2, cz=(best.z0+best.z1)/2, H2=340;
-  const grp=new THREE.Group();
-  for(const[r0,r1,op,farge] of [[3.0,4.6,0.42,0xffb84d],[8.0,12.0,0.14,0xff8a1e]]){
-    const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,H2,14,1,true),
-      new THREE.MeshBasicMaterial({color:farge,transparent:true,opacity:op,
-        side:THREE.DoubleSide,depthWrite:false}));
-    m.position.set(cx,best.pad+H2/2,cz);
-    grp.add(m);
-  }
-  scene.add(grp); vbTing.push(grp);
+  // Lyssøyla er fjernet: den var stygg, og innenfra sto den midt i butikken.
+  // Skjermpekeren og de fem butikkene gjør jobben i stedet.
 }
 
 // Fem butikker spredt utover, én i hver kant og én i sentrum. Med bare én
@@ -4219,10 +4211,10 @@ function tegnButikk(){
 function apneButikk(){
   if(butikkAapen)return;
   butikkAapen=true;
-  document.exitPointerLock();
   document.getElementById('butikk').style.display='flex';
   document.getElementById('overlay').style.display='none';
   tegnButikk();
+  document.exitPointerLock();
 }
 function lukkButikk(){
   if(!butikkAapen)return;
@@ -4255,8 +4247,8 @@ function kjopAmmo(id){
 function oppdaterButikk(){
   const b=aktivtBygg;
   if(butikkAapen)return;
-  if(!b||!b.disk||drive.on||P.dodT>0)return;
-  if(Math.hypot(P.pos.x-b.disk.x,P.pos.z-b.disk.z)<3.4)
+  if(!b||b.type!=='vaapen'||drive.on||P.dodT>0)return;
+  if(P.pos.x>b.x0&&P.pos.x<b.x1&&P.pos.z>b.z0&&P.pos.z<b.z1)
     hint='🔫 Trykk E for å handle våpen';
 }
 
@@ -4340,6 +4332,9 @@ addEventListener('wheel',e=>{
 document.getElementById('overlay').addEventListener('click',()=>renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange',()=>{
   const inne=document.pointerLockElement===renderer.domElement;
+  // Butikken slipper musa med vilje. Uten dette unntaket sprang startskjermen
+  // opp bak butikkvinduet, og byen gikk i kinomodus midt i handelen.
+  if(butikkAapen&&!inne)return;
   document.getElementById('overlay').style.display=inne?'none':'flex';
   kino=!inne;
   document.body.classList.toggle('kino',!inne);});
@@ -4383,7 +4378,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'butikk-38',
+  ver:()=>'butikk-39',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4457,6 +4452,18 @@ window.__dbg={
   },
   vbPos:()=>vaapenbutikker.map(q=>({x:Math.round((q.x0+q.x1)/2),
                                     z:Math.round((q.z0+q.z1)/2),side:q.side})),
+  // gå inn i butikken slik en spiller gjør det
+  gaTilButikk:()=>{
+    kino=false; butikkAapen=false; drive.on=false; P.fly=false;
+    const b=vaapenbutikker[0]; if(!b)return null;
+    const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
+    P.pos.set(mx,groundAt(mx,mz)+P.h,mz);
+    oppdaterInteriør(); oppdaterButikk();
+    girPenger(200000);
+    return {type:b.type,hint:hint,inne:!!aktivtBygg&&aktivtBygg.type==='vaapen',
+            kr:kroner()};
+  },
+  eierVaapen:()=>inv.felt.filter(f=>f&&VAAPENSETT[f.id]).map(f=>f.id),
   pekerTest:()=>{
     kino=false; butikkAapen=false;
     const n=naermesteVb(); if(!n)return null;
@@ -5615,7 +5622,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build butikk-38';
+  document.getElementById('verline').textContent='build butikk-39';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
