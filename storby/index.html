@@ -22,6 +22,13 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
+  #peker{position:fixed;z-index:6;pointer-events:none;transform:translate(-50%,-50%);
+    background:rgba(12,15,22,.80);border:1px solid #ffb84d;border-radius:7px;
+    padding:5px 10px;text-align:center;line-height:1.25;
+    box-shadow:0 4px 18px rgba(0,0,0,.6)}
+  #peker b{display:block;font-size:12px;color:#ffd98a;letter-spacing:.10em}
+  #peker span{display:block;font-size:11px;color:#9fb0d0}
+  #peker.ute{border-color:#ff8a1e;background:rgba(40,22,8,.86)}
   #butikk{position:fixed;inset:0;z-index:30;display:none;align-items:center;
     justify-content:center;background:rgba(5,7,11,.88);cursor:pointer}
   #butikk .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
@@ -150,6 +157,7 @@
 
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
+<div id="peker" style="display:none"></div>
 <div id="sikte"></div>
 <div id="butikk" style="display:none"></div>
 <div id="hotbar"></div>
@@ -3190,22 +3198,9 @@ function build(){
    Ett av byggene nær sentrum gjøres om til våpenbutikk. Den bruker den samme
    interiørmotoren som alle andre bygg, får neonskilt på fasaden og en egen
    bokstav på kartet, slik at den faktisk er til å finne.               */
-let vaapenbutikk=null, vbSkilt=null, vbSoyle=null;
-function velgVaapenbutikk(){
-  if(vbSkilt){ scene.remove(vbSkilt); vbSkilt=null; }
-  if(vbSoyle){ scene.remove(vbSoyle); vbSoyle=null; }
-  vaapenbutikk=null;
-  let best=null,bd=1e9;
-  for(const b of bygg){
-    const w=b.x1-b.x0, d=b.z1-b.z0;
-    if(w<12||d<12||w>24||d>24)continue;
-    const q=Math.hypot((b.x0+b.x1)/2,(b.z0+b.z1)/2);
-    if(q<bd){bd=q;best=b;}
-  }
-  if(!best)return;
-  best.type='vaapen'; best.ranet=true;      // kassa her lar seg ikke rane
-  vaapenbutikk=best;
+let vaapenbutikk=null, vaapenbutikker=[], vbTing=[];
 
+function lagVbSkilt(best){
   const cv=document.createElement('canvas'); cv.width=512; cv.height=128;
   const g=cv.getContext('2d');
   g.fillStyle='#120a12'; g.fillRect(0,0,512,128);
@@ -3215,31 +3210,83 @@ function velgVaapenbutikk(){
   g.font='bold 20px ui-monospace,Menlo,monospace';
   g.fillStyle='#ff6b95'; g.fillText('KJØP OG AMMO',256,104);
   const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
-  vbSkilt=new THREE.Mesh(new THREE.PlaneGeometry(6.2,1.55),
+  const skilt=new THREE.Mesh(new THREE.PlaneGeometry(6.2,1.55),
     new THREE.MeshBasicMaterial({color:0xffffff,map:tex,side:THREE.DoubleSide}));
   const ROT={z1:0,z0:Math.PI,x1:Math.PI/2,x0:-Math.PI/2};
   let sx=(best.x0+best.x1)/2, sz=(best.z0+best.z1)/2;
   if(best.side==='z0')sz=best.z0-0.16; else if(best.side==='z1')sz=best.z1+0.16;
   else if(best.side==='x0')sx=best.x0-0.16; else sx=best.x1+0.16;
-  vbSkilt.position.set(sx,best.pad+4.3,sz);
-  vbSkilt.rotation.y=ROT[best.side];
-  scene.add(vbSkilt);
+  skilt.position.set(sx,best.pad+4.3,sz);
+  skilt.rotation.y=ROT[best.side];
+  scene.add(skilt); vbTing.push(skilt);
 
-  // Lyssøyle rett opp fra taket. Uten den var butikken umulig å finne uten
-  // å stirre på minikartet hele veien.
-  const cx=(best.x0+best.x1)/2, cz=(best.z0+best.z1)/2;
-  // To sylindre: en tydelig kjerne og en myk glorie rundt. Den forrige var
-  // så tynn at den forsvant i skylinja.
-  vbSoyle=new THREE.Group();
-  const H2=340;
+  // lyssøyle: tydelig kjerne + myk glorie, hele veien fra bakken
+  const cx=(best.x0+best.x1)/2, cz=(best.z0+best.z1)/2, H2=340;
+  const grp=new THREE.Group();
   for(const[r0,r1,op,farge] of [[3.0,4.6,0.42,0xffb84d],[8.0,12.0,0.14,0xff8a1e]]){
     const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,H2,14,1,true),
       new THREE.MeshBasicMaterial({color:farge,transparent:true,opacity:op,
         side:THREE.DoubleSide,depthWrite:false}));
     m.position.set(cx,best.pad+H2/2,cz);
-    vbSoyle.add(m);
+    grp.add(m);
   }
-  scene.add(vbSoyle);
+  scene.add(grp); vbTing.push(grp);
+}
+
+// Fem butikker spredt utover, én i hver kant og én i sentrum. Med bare én
+// var den nesten umulig å snuble over.
+function velgVaapenbutikk(){
+  for(const t of vbTing) scene.remove(t);
+  vbTing=[]; vaapenbutikker=[]; vaapenbutikk=null;
+  const mål=[[0,0],[-HW*0.45,-HD*0.45],[HW*0.45,-HD*0.45],
+             [-HW*0.45,HD*0.45],[HW*0.45,HD*0.45]];
+  for(const [mx,mz] of mål){
+    let best=null,bd=1e9;
+    for(const b of bygg){
+      if(b.type==='vaapen')continue;
+      const w=b.x1-b.x0, d=b.z1-b.z0;
+      if(w<12||d<12||w>26||d>26)continue;
+      const q=Math.hypot((b.x0+b.x1)/2-mx,(b.z0+b.z1)/2-mz);
+      if(q<bd){bd=q;best=b;}
+    }
+    if(!best)continue;
+    best.type='vaapen'; best.ranet=true;
+    vaapenbutikker.push(best);
+    lagVbSkilt(best);
+  }
+  vaapenbutikk=vaapenbutikker[0]||null;
+}
+function naermesteVb(){
+  const sp=spillerPos();
+  let b=null,bd=1e9;
+  for(const q of vaapenbutikker){
+    const d=Math.hypot((q.x0+q.x1)/2-sp.x,(q.z0+q.z1)/2-sp.z);
+    if(d<bd){bd=d;b=q;}
+  }
+  return b?{b:b,d:bd,x:(b.x0+b.x1)/2,z:(b.z0+b.z1)/2}:null;
+}
+
+/* ---- skjermpeker mot nærmeste butikk ---------------------------------
+   Et merke som følger butikken på skjermen og limes til kanten med en pil
+   når den er utenfor bildet. Uten den måtte man lete på minikartet.     */
+const _pv=new THREE.Vector3();
+function oppdaterPeker(){
+  const el=document.getElementById('peker'); if(!el)return;
+  const n=naermesteVb();
+  if(!n||kino||butikkAapen){ el.style.display='none'; return; }
+  if(aktivtBygg&&aktivtBygg.type==='vaapen'){ el.style.display='none'; return; }
+  _pv.set(n.x,n.b.pad+7,n.z).project(camera);
+  const bak=_pv.z>1;
+  let px=(_pv.x*0.5+0.5)*innerWidth, py=(-_pv.y*0.5+0.5)*innerHeight;
+  if(bak){ px=innerWidth-px; py=innerHeight*0.94; }
+  const m=64;
+  const kx=Math.max(m,Math.min(innerWidth-m,px));
+  const ky=Math.max(m,Math.min(innerHeight-m,py));
+  const utenfor=bak||kx!==px||ky!==py;
+  el.style.display='block';
+  el.style.left=kx+'px'; el.style.top=ky+'px';
+  el.innerHTML='<b>🔫 VÅPEN</b><span>'+Math.round(n.d)+' m'+(utenfor?' ➤':'')+'</span>';
+  el.className=utenfor?'ute':'';
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
@@ -4336,7 +4383,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'kloakk-37',
+  ver:()=>'butikk-38',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4408,7 +4455,26 @@ window.__dbg={
     ut.branner=branner.length; ut.kastede=kastede.length;
     return ut;
   },
-  vbPos:()=>vaapenbutikk?{x:Math.round((vaapenbutikk.x0+vaapenbutikk.x1)/2),z:Math.round((vaapenbutikk.z0+vaapenbutikk.z1)/2),side:vaapenbutikk.side,soyle:!!vbSoyle}:null,
+  vbPos:()=>vaapenbutikker.map(q=>({x:Math.round((q.x0+q.x1)/2),
+                                    z:Math.round((q.z0+q.z1)/2),side:q.side})),
+  pekerTest:()=>{
+    kino=false; butikkAapen=false;
+    const n=naermesteVb(); if(!n)return null;
+    // still deg 150 m unna med ryggen til
+    P.fly=false; drive.on=false;
+    const px=n.x, pz=n.z+150;
+    P.pos.set(px,groundAt(px,pz)+P.h,pz);
+    P.yaw=Math.PI; P.pitch=0;                      // ser bort fra butikken
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    oppdaterPeker();
+    const bak=document.getElementById('peker').outerHTML.slice(0,200);
+    P.yaw=0;                                       // ser mot butikken
+    camera.rotation.set(0,0,0); camera.rotateY(P.yaw); camera.updateMatrixWorld(true);
+    oppdaterPeker();
+    const fram=document.getElementById('peker').outerHTML.slice(0,200);
+    return {antallButikker:vaapenbutikker.length,ryggTil:bak,motButikken:fram};
+  },
   sideBilde:(type)=>{
     kino=false;
     const px=P.pos.x, pz=P.pos.z, gy=groundAt(px,pz);
@@ -5103,8 +5169,8 @@ function drawMinimap(){
   };
   if(!poi&&bygg.length)lagPoi();
   if(poi)for(const q of poi) merke(q.x,q.z,q.farge,q.bok,4);
-  if(vaapenbutikk) merke((vaapenbutikk.x0+vaapenbutikk.x1)/2,
-                         (vaapenbutikk.z0+vaapenbutikk.z1)/2,'#ffb84d','W');
+  for(const q of vaapenbutikker)
+    merke((q.x0+q.x1)/2,(q.z0+q.z1)/2,'#ffb84d','W',6);
   if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
   if(fengsel)merke(fengsel.x,fengsel.z,'#eef2f8','F');   // hvit, ikke blå som bilprikkene
 
@@ -5490,7 +5556,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -5524,10 +5590,11 @@ function loop(now){
                     Math.round(Math.hypot(klubb.x-sp.x,klubb.z-sp.z))+' m '+pil(klubb.x,klubb.z)+'<br>';
       if(fengsel)h+='<span style="color:#eef2f8">F</span> fengsel '+
                     Math.round(Math.hypot(fengsel.x-sp.x,fengsel.z-sp.z))+' m '+pil(fengsel.x,fengsel.z);
-      if(vaapenbutikk){
-        const vx=(vaapenbutikk.x0+vaapenbutikk.x1)/2, vz=(vaapenbutikk.z0+vaapenbutikk.z1)/2;
-        h+=(h?'<br>':'')+'<span style="color:#ffb84d">W</span> våpenbutikk '+
-           Math.round(Math.hypot(vx-sp.x,vz-sp.z))+' m '+pil(vx,vz);
+      {
+        const n=naermesteVb();
+        if(n) h+=(h?'<br>':'')+'<span style="color:#ffb84d">W</span> våpenbutikk '+
+                 Math.round(n.d)+' m '+pil(n.x,n.z)+
+                 ' <span style="color:#5d667c">('+vaapenbutikker.length+' i byen)</span>';
       }
       if(poi){
         const n=poi.map(q=>({q:q,d:Math.hypot(q.x-sp.x,q.z-sp.z)}))
@@ -5548,7 +5615,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build kloakk-37';
+  document.getElementById('verline').textContent='build butikk-38';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
