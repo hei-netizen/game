@@ -1708,8 +1708,12 @@ function dorPunkt(b){
   if(b.side==='x0')return {x:b.x0,z:mz};
   return {x:b.x1,z:mz};
 }
+let interiorTikk=0;
 function oppdaterInteriør(){
   if(drive.on){ if(aktivtBygg)rivInteriør(); return; }
+  // 1800 bygg gjennomsøkt hver frame er unødvendig — fire ganger i sekundet
+  // er mer enn nok til å rekke å åpne en dør du går mot.
+  if(aktivtBygg&&(++interiorTikk%8)) return;
   const px=P.pos.x, pz=P.pos.z;
   if(aktivtBygg){
     const d=dorPunkt(aktivtBygg);
@@ -2303,10 +2307,30 @@ function settFolkFarge(i){
 }
 
 const _fd=new THREE.Object3D();
+const FOLK_SYN=165;         // lenger unna er de under én piksel uansett
 function oppdaterFolk(dt){
   if(!folkData.length||!folkM.hode)return;
+  const kx=camera.position.x, kz=camera.position.z, R2=FOLK_SYN*FOLK_SYN;
   for(let i=0;i<folkData.length;i++){
     const f=folkData[i];
+    // Grovsjekk på avstand FØR alt annet. Uten den skrev vi 12 matriser for
+    // hver av 340 personer hver eneste frame, også for dem på andre siden
+    // av byen — det var den dyreste enkeltposten i loopen.
+    if(!f.skjult){
+      const px=f.man||f.dans?f.x:(f.x0+f.x1)*0.5;
+      const pz=f.man||f.dans?f.z:(f.z0+f.z1)*0.5;
+      const dd=(px-kx)*(px-kx)+(pz-kz)*(pz-kz);
+      if(dd>R2){
+        if(!f.varFjern){ f.varFjern=true;
+          _fd.position.set(0,-500,0); _fd.rotation.set(0,0,0);
+          _fd.scale.setScalar(0.0001); _fd.updateMatrix();
+          for(const k in folkM) folkM[k].setMatrixAt(i,_fd.matrix);
+        }
+        if(!f.dans&&!f.man&&!f.dod) f.t+=f.fart*f.dir*dt;   // de går videre
+        continue;
+      }
+      f.varFjern=false;
+    }
     if(f.skjult){                       // ubrukt betjentplass — parkert utenfor
       if(!f.varSkjult){ f.varSkjult=true;
         _fd.position.set(0,-500,0); _fd.rotation.set(0,0,0); _fd.scale.setScalar(0.001);
@@ -2528,14 +2552,17 @@ function lakker(obj,lakk){
   let i=0;
   obj.traverse(o=>{
     if(!o.isMesh||!o.material)return;
-    const m=Array.isArray(o.material)?o.material:[o.material];
-    o.material=m.map(mat=>{
+    // Bilene ble usynlige: en mesh med ETT materiale fikk et array med ett
+    // element, og uten grupper i geometrien tegnes det ingenting.
+    const varArray=Array.isArray(o.material);
+    const m=varArray?o.material:[o.material];
+    const nye=m.map(mat=>{
       const c=mat.clone();
       const l=(c.color.r*0.3+c.color.g*0.6+c.color.b*0.1);
       if(l>0.16) c.color.setHex((i++%5===0)?lakk.aksent:lakk.hoved);
       return c;
     });
-    if(!Array.isArray(o.material))o.material=o.material[0];
+    o.material=varArray?nye:nye[0];
   });
 }
 function placeHero(t,n){
@@ -3204,7 +3231,7 @@ const CARP={
   // på fullt ratt i 80 km/t — 57 graders sladd og farten halvert. Understyrt
   // grunnoppsett gjør at den holder linja, og håndbrekket er det som løsner
   // bakenden når du faktisk VIL sladde.
-  Cf:56000, Cr:66000,
+  Cf:56000, Cr:54000,
   mu:1.45,
   muHand:0.42,             // håndbrekk løsner bakenden, men slipper den ikke helt
   effekt:135000, effektBoost:210000,   // W — trekkraften faller med farten
@@ -3221,14 +3248,14 @@ const CARP={
 // Multiplikatorer per klasse. CP er settet som fysikken faktisk leser, og
 // settes på nytt hver gang du setter deg inn i en bil.
 const BILSTIL={
-  race:  {effekt:1.62,effektBoost:1.52,maksTrekk:1.34,mu:1.07,Cf:1.34,Cr:1.18,
-          M:0.80,I:0.74,ratt:1.26,cLuft:0.84,brems:1.28,girTak:1.30,
-          sladdDemp:0.80,muHand:0.86,cRull:0.82},
+  race:  {effekt:1.62,effektBoost:1.52,maksTrekk:1.22,mu:1.07,Cf:1.12,Cr:1.30,
+          M:0.80,I:0.74,ratt:1.26,cLuft:0.84,brems:1.28,girTak:1.18,
+          girDemp:1.35,sladdDemp:0.90,muHand:0.86,cRull:0.82},
   // McLaren-en skal være raskest i byen: mest effekt, minst luftmotstand,
   // letteste karosseri.
-  hyper: {effekt:2.15,effektBoost:2.05,maksTrekk:1.55,mu:1.14,Cf:1.46,Cr:1.32,
-          M:0.72,I:0.66,ratt:1.32,cLuft:0.72,brems:1.42,girTak:1.36,
-          sladdDemp:0.86,muHand:0.90,cRull:0.72},
+  hyper: {effekt:2.15,effektBoost:2.05,maksTrekk:1.28,mu:1.14,Cf:1.14,Cr:1.60,
+          M:0.72,I:0.66,ratt:1.32,cLuft:0.72,brems:1.42,girTak:1.16,
+          girDemp:1.75,sladdDemp:0.95,muHand:0.90,cRull:0.72},
   tung:  {effekt:0.70,maksTrekk:0.94,mu:0.90,Cf:0.78,Cr:0.88,M:1.58,I:1.75,
           ratt:0.80,cLuft:1.38,brems:0.84,girTak:0.82},
   vanlig:{}
@@ -3279,6 +3306,15 @@ function carStep(h,th,hand,boost){
     Fdrag=Math.min(CP.maksTrekk,P/Math.max(Math.abs(vx),3.0))*(1-drive.skade/100*0.45);
   } else if(th<0&&vx<=0.6) Fdrag=-CP.revers;
 
+  /* Antispinn. Uten dette spiste full gass hele friksjonssirkelen bak i
+     en sving, og da hadde dekket ingenting igjen til sidekraft — McLaren-en
+     gikk rundt på 4 meters radius uansett hvor lite man styrte. Går bare
+     inn når bakenden ALLEREDE har slippvinkel, og kobles helt ut med
+     håndbrekket, så donuts og burnouts er urørt. */
+  if(!hand&&Fdrag>0){
+    const tak=maksBak*(1-Math.min(0.58,Math.abs(aR)*1.9));
+    Fdrag=Math.min(Fdrag,Math.max(maksBak*0.42,tak));
+  }
   const Fbak=cl(Fdrag,-maksBak,maksBak);               // det dekket faktisk overfører
   drive.spinn=cl((Math.abs(Fdrag)-maksBak)/Math.max(1,maksBak),0,1);
   // Rest av friksjonsbudsjettet til sidekraft. Gulvet gjør at et spinnende dekk
@@ -3301,7 +3337,7 @@ function carStep(h,th,hand,boost){
   // Ekstra demping som slår inn med sladdvinkelen. Uten den kunne bilen
   // fortsatt pendle seg selv rundt på fullt ratt.
   const sladd=Math.abs(Math.atan2(vy,Math.max(Math.abs(vx),2)));
-  const stab=hand?0:CP.girDemp*Math.min(1.25,sladd*2.0);
+  const stab=hand?0:CP.girDemp*Math.min(0.55,sladd*1.1);
   const moment=Math.cos(d)*Ff*CP.b-Fr*CP.c-(CP.girDemp+stab)*yr;   // demping = kontroll
   const dynYaw=drive.yawrate+(moment/CP.I)*h;
 
@@ -3330,9 +3366,20 @@ function updateDrive(dt){
   const boost=!!(keys['ShiftLeft']||keys['ShiftRight']);
   const D=Math.min(dt,0.05);
 
-  // ratt settes én gang per frame
-  const maxRatt=CP.ratt/(1+(Math.abs(drive.vx)/16)*(Math.abs(drive.vx)/16));
-  drive.steer+=(st*maxRatt-drive.steer)*Math.min(1,D*7);
+  /* Rattet begrenses av GREPET, ikke av en gjettet fartskurve.
+     I sykkelmodellen gir rattvinkel d ved farten v en sideakselerasjon
+     a = v*v*d/L. Løser man for a = mu*g blir maks nyttig rattvinkel
+     d = mu*g*L/v*v. Utenfor den kan bilen uansett ikke svinge — den bare
+     mister bakenden. Ved å legge taket der blir halvt ratt halv sving i
+     ALLE farter, og fullt ratt ligger akkurat på grensa.
+     Før dette gjorde halvt ratt i 80 km/t nesten ingenting, mens fullt
+     ratt i 108 km/t kastet bilen rundt: 10 m radius og 29 graders sladd. */
+  const Lakse=CP.b+CP.c, vAbs=Math.abs(drive.vx);
+  const aMaks=Math.min(CP.mu,CARP.mu*1.06)*9.81*1.55;   // litt over, så man kan presse
+  const dGrep=vAbs>5 ? aMaks*Lakse/(vAbs*vAbs) : 99;
+  const maxRatt=Math.min(CP.ratt,Math.max(0.085,dGrep));
+  drive.maxRatt=maxRatt;
+  drive.steer+=(st*maxRatt-drive.steer)*Math.min(1,D*8);
 
   // Kreftene mettes, og da blir eksplisitt Euler ustabil ved store slippvinkler
   // — den destruerte fart. Derfor deles steget i biter på ~5 ms.
@@ -3435,12 +3482,14 @@ function updateDrive(dt){
 /* ---------------------------- RENDERER ---------------------------------- */
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+// 1,7 ganger pikselforholdet er over fire ganger så mange piksler som 1,0
+// på en retina-skjerm. 1,35 ser praktisk talt likt ut og koster mye mindre.
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.35));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;   // filmisk kurve i stedet for flat clipping
 renderer.toneMappingExposure=1.22;
 renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.type=THREE.PCFShadowMap;   // myk skygge kostet mer enn den ga
 document.body.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
@@ -3464,7 +3513,7 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(2600,40,20),skyM);scene.add(sk
 
 const hemi=new THREE.HemisphereLight(0x6d6a92,0x33261d,0.55);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffb066,3.4);
-sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
 sun.shadow.camera.left=-210;sun.shadow.camera.right=210;
 sun.shadow.camera.top=210;sun.shadow.camera.bottom=-210;
 sun.shadow.camera.near=1;sun.shadow.camera.far=1200;
@@ -3659,7 +3708,9 @@ function pekerMål(){
   if(bane)    legg('ba',bane.x,bane.z,bane.pad+8,'🏁','#ffe26a');
   return ut;
 }
+let pekerTikk=0;
 function oppdaterPeker(){
+  if(++pekerTikk%3) return;              // DOM-skriving hver frame er dyrt
   const boks=document.getElementById('pekere'); if(!boks)return;
   if(kino||butikkAapen){ boks.style.display='none'; return; }
   boks.style.display='block';
@@ -4421,7 +4472,10 @@ function taHelseSprite(){
   const s2=lagHelseSprite(); s2.userData.brukt=true; helsePool.push(s2); scene.add(s2);
   return s2;
 }
+let stolpeTikk=0;
 function oppdaterHelsestolper(dt){
+  if(++stolpeTikk%3) return;
+  dt*=3;
   for(const s2 of helsePool){ s2.userData.brukt=false; s2.visible=false; }
   for(let i=0;i<folkData.length;i++){
     const f=folkData[i];
@@ -4874,8 +4928,11 @@ function lagPlukk(){
   plukkM.instanceColor.needsUpdate=true;
   scene.add(plukkM);
 }
+let plukkTikk=0;
 function oppdaterPlukk(dt){
   if(!plukkM)return;
+  if(++plukkTikk%3) return;              // 20 Hz holder for roterende kasser
+  dt*=3;
   const sp=spillerPos();
   const t=performance.now()*0.001;
   for(let i=0;i<plukk.length;i++){
@@ -5570,7 +5627,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'damer-56',
+  ver:()=>'kjoring-57',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5670,6 +5727,53 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  racerSjekk:()=>parked.filter(p=>p.racer).map(p=>{
+    let n=0,arr=0,synl=0;
+    p.obj.traverse(o=>{ if(o.isMesh){ n++;
+      if(Array.isArray(o.material))arr++;
+      if(o.visible&&o.material)synl++; }});
+    return {lakk:p.lakk,mesher:n,arrayMat:arr,medMaterial:synl,
+            objSynlig:p.obj.visible,iScenen:!!p.obj.parent};
+  }),
+  /* Kjøretest som ligner faktisk kjøring: delvis rattutslag, ikke fullt.
+     Måler svingradius, hvor mye fart som er igjen, om girfarten er stabil
+     (ikke divergerende) og hvor fort den retter seg opp når du slipper. */
+  sving2:(fart,ratt,type,hand)=>{
+    kino=false;
+    if(!parked.length)return null;
+    settBilstil(type||'sedan');
+    drive.on=true; drive.car=parked[0]; drive.nocol=true;
+    drive.x=0; drive.z=0; drive.y=groundAt(0,0);
+    drive.head=0; drive.vx=fart; drive.vy=0; drive.yawrate=0; drive.steer=0;
+    drive.skade=0; drive.luft=false; drive.vv=0;
+    // hold rattet delvis inne ved å styre steer direkte etter update
+    let maxSlip=0, maxYaw=0, sumYaw=0, n=0, sisteYaw=0, hakk=0;
+    keys['KeyW']=true; if(hand)keys['Space']=true;
+    for(let k=0;k<180;k++){
+      keys['KeyA']=true;
+      updateDrive(1/60);
+      // skaler ned til ønsket andel av maks
+      drive.steer=Math.sign(drive.steer)*Math.min(Math.abs(drive.steer),ratt*(drive.maxRatt||1));
+      maxSlip=Math.max(maxSlip,drive.slip);
+      maxYaw=Math.max(maxYaw,Math.abs(drive.yawrate));
+      if(k>60){ sumYaw+=Math.abs(drive.yawrate); n++;
+                if(Math.abs(Math.abs(drive.yawrate)-sisteYaw)>0.25)hakk++; }
+      sisteYaw=Math.abs(drive.yawrate);
+    }
+    keys['KeyA']=false; if(hand)keys['Space']=false;
+    const snittYaw=n?sumYaw/n:0;
+    const v=Math.abs(drive.vx);
+    const radius=snittYaw>0.02?v/snittYaw:9999;
+    let ramme=0;
+    for(let k=0;k<300;k++){ updateDrive(1/60); ramme++;
+      if(drive.slip<0.05&&Math.abs(drive.yawrate)<0.10)break; }
+    keys['KeyW']=false;
+    const ut={radius:Math.round(radius), sladd:+(maxSlip*57.3).toFixed(1),
+              girSnitt:+snittYaw.toFixed(2), girTopp:+maxYaw.toFixed(2),
+              ustabil:hakk, kmt:Math.round(v*3.6), rettOpp:+(ramme/60).toFixed(2)};
+    drive.nocol=false; drive.on=false; drive.car=null;
+    return ut;
+  },
   damaDrapTest:()=>{
     net.name='Jona'; net.navnOk=true;
     if(!folgere.length)return {feil:'ingen dame'};
@@ -7248,7 +7352,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build damer-56';
+  document.getElementById('verline').textContent='build kjoring-57';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
