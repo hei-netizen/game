@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>STORBY</title>
+<title>GRAND THEFT NORGE</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;overflow:hidden;background:#0b0d12;
@@ -22,13 +22,17 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
-  #peker{position:fixed;z-index:6;pointer-events:none;transform:translate(-50%,-50%);
-    background:rgba(12,15,22,.80);border:1px solid #ffb84d;border-radius:7px;
-    padding:5px 10px;text-align:center;line-height:1.25;
-    box-shadow:0 4px 18px rgba(0,0,0,.6)}
-  #peker b{display:block;font-size:12px;color:#ffd98a;letter-spacing:.10em}
-  #peker span{display:block;font-size:11px;color:#9fb0d0}
-  #peker.ute{border-color:#ff8a1e;background:rgba(40,22,8,.86)}
+  #pekere{position:fixed;inset:0;z-index:6;pointer-events:none}
+  .pk{position:fixed;transform:translate(-50%,-50%);
+    background:rgba(12,15,22,.72);border:1px solid #6d7488;border-radius:6px;
+    padding:2px 6px;text-align:center;line-height:1.2;opacity:.85;
+    box-shadow:0 3px 12px rgba(0,0,0,.5)}
+  .pk b{display:block;font-size:11px}
+  .pk span{display:block;font-size:9px;color:#9fb0d0;letter-spacing:.04em}
+  .pk.stor{background:rgba(12,15,22,.84);border-color:#ffb84d;padding:5px 10px;opacity:1}
+  .pk.stor b{font-size:12px;color:#ffd98a;letter-spacing:.10em}
+  .pk.stor span{font-size:11px}
+  .pk.ute{opacity:1}
   #butikk{position:fixed;inset:0;z-index:30;display:none;align-items:center;
     justify-content:center;background:rgba(5,7,11,.88);cursor:pointer}
   #butikk .boks{background:#11141b;border:1px solid #3a4457;border-radius:12px;
@@ -47,6 +51,8 @@
   #butikk button:hover{background:#2f4160;border-color:#6a86bb}
   #butikk button i{font-style:normal;color:#7ce09a;font-size:11px}
   #butikk .eid{color:#7ce09a;font-size:12px;min-width:104px;text-align:center}
+  #butikk .beh{color:#8b93a6;font:11px ui-monospace,Menlo,monospace;min-width:56px;
+    text-align:right}
   #butikk .luk{margin-top:18px;color:#7f8aa3;font-size:11px;text-align:center;
     letter-spacing:.08em}
   #butikk kbd{background:#222836;border:1px solid #3d4457;padding:1px 5px;
@@ -102,7 +108,7 @@
   body.kino #hotbar,body.kino #ammo,body.kino #helse,body.kino #pengerhud,
   body.kino #stjerner,body.kino #jakt,body.kino #players{display:none!important}
   #overlay .box{text-align:center;max-width:600px}
-  #overlay h1{font-size:64px;letter-spacing:.3em;font-weight:800;margin-bottom:6px;
+  #overlay h1{font-size:44px;letter-spacing:.16em;font-weight:800;margin-bottom:6px;
     background:linear-gradient(180deg,#fff,#7d90b8);-webkit-background-clip:text;
     -webkit-text-fill-color:transparent;background-clip:text}
   #overlay .sub{color:#7f8aa3;font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:30px}
@@ -157,7 +163,7 @@
 
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
-<div id="peker" style="display:none"></div>
+<div id="pekere"></div>
 <div id="sikte"></div>
 <div id="butikk" style="display:none"></div>
 <div id="hotbar"></div>
@@ -186,8 +192,8 @@
 
 <div id="overlay" style="display:none">
   <div class="box">
-    <h1>STORBY</h1>
-    <div class="sub">3 &times; 2 km prosedural by</div>
+    <h1>GRAND THEFT NORGE</h1>
+    <div class="sub">3 &times; 2 km prosedural storby &middot; ingen bompenger</div>
     <div id="nameRow"><input id="pname" maxlength="12" placeholder="Navnet ditt" autocomplete="off"></div>
     <div class="stats" id="ostats"></div>
     <div class="cta">Klikk for å spille</div>
@@ -610,6 +616,7 @@ function parapet(b,x0,x1,y,z0,z1,h,e,col){
 // med oppoverfart som svarer til stigningen.
 let ramper=[];
 let bilkjop=null;      // plassen der stjålne biler selges
+let bane=null;         // racerbanen
 function rampe(b,x,z,yaw,L,W,H,pad,col){
   const sh=Math.sin(yaw), ch=Math.cos(yaw);   // brukes òg til kollisjonsboksen
   const P2=(lz,lx,y)=>[x+lz*sh+lx*ch, y, z+lz*ch-lx*sh];
@@ -3365,33 +3372,60 @@ function naermesteVb(){
   return b?{b:b,d:bd,x:(b.x0+b.x1)/2,z:(b.z0+b.z1)/2}:null;
 }
 
-/* ---- skjermpeker mot nærmeste butikk ---------------------------------
-   Et merke som følger butikken på skjermen og limes til kanten med en pil
-   når den er utenfor bildet. Uten den måtte man lete på minikartet.     */
+/* ---- skjermpekere mot alle stedene ------------------------------------
+   Ett merke per sted som følger punktet på skjermen og limes til kanten
+   med en pil når det er utenfor bildet. Våpenbutikken har det store
+   merket, resten får små prikker så det ikke blir rot.                 */
 const _pv=new THREE.Vector3();
-function oppdaterPeker(){
-  const el=document.getElementById('peker'); if(!el)return;
+let pekerEl={};
+function pekerMål(){
+  const ut=[];
   const n=naermesteVb();
-  if(!n||kino||butikkAapen){ el.style.display='none'; return; }
-  if(aktivtBygg&&aktivtBygg.type==='vaapen'){ el.style.display='none'; return; }
-  _pv.set(n.x,n.b.pad+7,n.z).project(camera);
-  const bak=_pv.z>1;
-  let px=(_pv.x*0.5+0.5)*innerWidth, py=(-_pv.y*0.5+0.5)*innerHeight;
-  if(bak){ px=innerWidth-px; py=innerHeight*0.94; }
-  const m=64;
-  const kx=Math.max(m,Math.min(innerWidth-m,px));
-  const ky=Math.max(m,Math.min(innerHeight-m,py));
-  const utenfor=bak||kx!==px||ky!==py;
-  el.style.display='block';
-  el.style.left=kx+'px'; el.style.top=ky+'px';
-  el.innerHTML='<b>🔫 VÅPEN</b><span>'+Math.round(n.d)+' m'+(utenfor?' ➤':'')+'</span>';
-  el.className=utenfor?'ute':'';
+  if(n&&!(aktivtBygg&&aktivtBygg.type==='vaapen'))
+    ut.push({k:'vb',x:n.x,y:n.b.pad+7,z:n.z,d:n.d,tekst:'🔫 VÅPEN',stor:true});
+  const sp=spillerPos();
+  const legg=(k,x,z,y,ikon,farge)=>{
+    const d=Math.hypot(x-sp.x,z-sp.z);
+    ut.push({k:k,x:x,y:y,z:z,d:d,tekst:ikon,farge:farge});
+  };
+  if(klubb)   legg('kl',klubb.x,klubb.z,klubb.pad+8,'💃','#ff5fa2');
+  if(fengsel) legg('fe',fengsel.x,fengsel.z,fengsel.pad+9,'🚔','#dfe6f2');
+  if(bilkjop) legg('bk',bilkjop.x,bilkjop.z,bilkjop.pad+6,'🚗💰','#8ce0ff');
+  if(bane)    legg('ba',bane.x,bane.z,bane.pad+8,'🏁','#ffe26a');
+  return ut;
+}
+function oppdaterPeker(){
+  const boks=document.getElementById('pekere'); if(!boks)return;
+  if(kino||butikkAapen){ boks.style.display='none'; return; }
+  boks.style.display='block';
+  const mål=pekerMål(), sett={};
+  for(const m of mål){
+    sett[m.k]=1;
+    let el=pekerEl[m.k];
+    if(!el){ el=document.createElement('div'); el.className=m.stor?'pk stor':'pk';
+             boks.appendChild(el); pekerEl[m.k]=el; }
+    _pv.set(m.x,m.y,m.z).project(camera);
+    const bak=_pv.z>1;
+    let px=(_pv.x*0.5+0.5)*innerWidth, py=(-_pv.y*0.5+0.5)*innerHeight;
+    if(bak){ px=innerWidth-px; py=innerHeight*0.93; }
+    const marg=m.stor?64:40;
+    const kx=Math.max(marg,Math.min(innerWidth-marg,px));
+    const ky=Math.max(marg,Math.min(innerHeight-marg,py));
+    const utenfor=bak||kx!==px||ky!==py;
+    el.style.display='block';
+    el.style.left=kx+'px'; el.style.top=ky+'px';
+    if(m.farge)el.style.borderColor=m.farge;
+    el.innerHTML='<b>'+m.tekst+'</b><span>'+Math.round(m.d)+' m'+(utenfor?' ➤':'')+'</span>';
+    el.classList.toggle('ute',utenfor);
+  }
+  for(const k in pekerEl) if(!sett[k]) pekerEl[k].style.display='none';
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
 const P={pos:new THREE.Vector3(0,1.75,0),vel:new THREE.Vector3(),yaw:0,pitch:0,
          onGround:false,fly:false,h:1.75,r:.6,
-         hp:100,dodT:0,skadeT:99,blod:0};
+         hp:100,dodT:0,skadeT:99,blod:0,
+         sisteSkytter:null,sisteSkytterNavn:'',sisteSkytterT:0};
 // Startskjermen viser byen ovenfra i stedet for en svart flate. Kameraet går
 // sakte rundt sentrum til du klikker deg inn.
 let kino=true, kinoT=0;
@@ -3970,6 +4004,11 @@ function skadeSpiller(n){
 }
 function doSpiller(){
   P.dodT=2.2;
+  if(P.sisteSkytter&&P.sisteSkytterT>0){
+    sendBytte(P.sisteSkytter);
+    showToast('💀 '+(P.sisteSkytterNavn||'Noen')+' tok alt du hadde');
+  }
+  P.sisteSkytter=null;
   if(folgerHer){
     folgerHer.folger=false; folgerHer.man=false; folgerHer.dans=true;
     folgerHer=null; kastet=0;
@@ -3978,7 +4017,7 @@ function doSpiller(){
   const tapt=kroner();
   if(tapt>0){ pengeSum=0;
     showToast('💀 Du døde — mistet '+tapt.toLocaleString('nb-NO')+' kr'); }
-  else showToast('💀 Du døde');
+  else if(!P.sisteSkytter) showToast('💀 Du døde');
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
   frigiBetjenter();
   politi.varme=0; politi.stjerner=0; politi.pagrepT=0; politi.tilstand='rolig';
@@ -4161,6 +4200,8 @@ function oppdaterVaapen(dt){
   if(sk)sk.style.display=(vilZoom&&camera.fov<45)?'block':'none';
   if(gun.blits>0){ gun.blits-=dt; vmLys.intensity=gun.blits>0?26:0; }
   else if(vmLys) vmLys.intensity=0;
+  // Går magasinet tomt lades det av seg selv, så lenge du har reserve.
+  if(f&&V&&f.i<=0&&f.res>0&&gun.lad<=0&&gun.kd<=0&&!drive.on) gun.lad=V.ladT;
   if(gun.lad>0){
     gun.lad-=dt;
     if(gun.lad<=0&&f&&V){
@@ -4192,6 +4233,7 @@ function oppdaterVaapen(dt){
     if(P.skadeT>6&&P.hp<100) P.hp=Math.min(100,P.hp+16*dt);
   }
   if(P.blod>0)P.blod=Math.max(0,P.blod-dt*1.6);
+  if(P.sisteSkytterT>0){ P.sisteSkytterT-=dt; if(P.sisteSkytterT<=0)P.sisteSkytter=null; }
   const rd=document.getElementById('roddblink');
   if(rd) rd.style.opacity=(P.dodT>0?0.72:Math.max(P.blod*0.55,(100-P.hp)/100*0.22)).toFixed(3);
   if(hbSkitten){ tegnHotbar(); hbSkitten=false; }
@@ -4342,14 +4384,15 @@ function butikkRader(){
   for(const id in VAAPENSETT){
     const V=VAAPENSETT[id];
     const eid=inv.felt.find(f=>f&&f.id===id);
-    const ammoPris=Math.max(300,Math.round(V.mag*V.skade*1.1));
+    const ap=ammoPris(V);
     h+='<div class="rad"><div class="ik">'+V.ikon+'</div>'+
        '<div class="nv"><b>'+V.navn+'</b><small>'+V.skade+' skade &middot; '+
        V.mag+' i mag &middot; '+(V.auto?'helauto':V.kuler>1?V.kuler+' korn':'enkeltskudd')+
        (V.zoom?' &middot; kikkert':'')+(V.eksplosiv?' &middot; eksplosiv':'')+'</small></div>'+
        (eid
-         ? '<button data-ammo="'+id+'">Ammo +'+Math.round(V.mag*1.4)+'<br><i>'+
-           ammoPris.toLocaleString('nb-NO')+' kr</i></button>'
+         ? '<button data-ammo="'+id+'">Ammo +'+ammoMengde(V)+'<br><i>'+
+           ap.toLocaleString('nb-NO')+' kr</i></button>'+
+           '<span class="beh">'+eid.i+' / '+eid.res+'</span>'
          : (V.pris===0?'<span class="eid">eier</span>'
             :'<button data-kjop="'+id+'">Kjøp<br><i>'+
               V.pris.toLocaleString('nb-NO')+' kr</i></button>'))+
@@ -4391,13 +4434,21 @@ function kjopVaapen(id){
   showToast(V.ikon+' '+V.navn+' kjøpt');
   tegnButikk();
 }
+function ammoPris(V){ return Math.max(300,Math.round(V.mag*V.skade*1.1)); }
+function ammoMengde(V){ return Math.max(4,Math.round(V.mag*2)); }
 function kjopAmmo(id){
   const V=VAAPENSETT[id], f=inv.felt.find(x=>x&&x.id===id);
-  if(!f)return;
-  const pris=Math.max(300,Math.round(V.mag*V.skade*1.1));
-  if(kroner()<pris){ showToast('Ikke nok penger'); tegnButikk(); return; }
-  girPenger(-pris); f.res+=Math.round(V.mag*1.4); hbSkitten=true;
-  showToast('📦 Ammo til '+V.navn+' ('+f.res+' i reserve)');
+  if(!f){ showToast('Du eier ikke '+V.navn); return; }
+  const pris=ammoPris(V);
+  if(kroner()<pris){ showToast('Ikke nok penger — '+pris.toLocaleString('nb-NO')+' kr'); tegnButikk(); return; }
+  girPenger(-pris);
+  f.res+=ammoMengde(V);
+  // Fyll magasinet med det samme. Før måtte man lade manuelt etterpå, og da
+  // så det ut som om man ikke fikk noe for pengene.
+  const tar=Math.min(V.mag-f.i,f.res);
+  f.i+=tar; f.res-=tar; gun.lad=0; hbSkitten=true;
+  showToast('📦 +'+ammoMengde(V)+' skudd til '+V.navn+'  —  magasin '+f.i+'/'+V.mag+
+            ', reserve '+f.res);
   tegnButikk();
 }
 function naerUtstilt(){
@@ -4418,8 +4469,8 @@ function oppdaterButikk(){
   const u=naerUtstilt();
   if(u){
     const V=VAAPENSETT[u.id], eier=!!inv.felt.find(f=>f&&f.id===u.id);
-    hint=eier?('📦 '+V.navn+' — E for ammo ('+
-               Math.max(300,Math.round(V.mag*V.skade*1.1)).toLocaleString('nb-NO')+' kr)')
+    hint=eier?('📦 '+V.navn+' — E for +'+ammoMengde(V)+' skudd ('+
+               ammoPris(V).toLocaleString('nb-NO')+' kr)')
              :('🔫 E for å kjøpe '+V.navn+' — '+V.pris.toLocaleString('nb-NO')+' kr');
   } else hint='🔫 Trykk E for hele våpenlista';
 }
@@ -4550,7 +4601,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'dama-42',
+  ver:()=>'gtn-44',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4649,6 +4700,23 @@ window.__dbg={
     P.yaw=Math.PI; P.pitch=-0.02;
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
+  slot:(i)=>inv.felt[i],
+  byttTest:()=>{
+    kino=false;
+    // late som noen andre nettopp døde og ga meg alt
+    const kr0=kroner(), for_=inv.felt.filter(f=>f&&VAAPENSETT[f.id]).length;
+    taImotBytte({t:'bytte',til:net.id,fra:'Simon',kr:41000,
+                 vapen:[{id:'rifle',i:12,res:60},{id:'minigun',i:150,res:300}],
+                 dama:true});
+    return {krFor:kr0,krEtter:kroner(),
+            vapenFor:for_,vapenEtter:inv.felt.filter(f=>f&&VAAPENSETT[f.id]).length,
+            harDama:!!folgerHer,
+            damaBlond:folgerHer?('#'+folgerHer.haar.toString(16)):null};
+  },
+  pekere:()=>{oppdaterPeker();
+    return [...document.querySelectorAll('#pekere .pk')]
+      .filter(e=>e.style.display!=='none')
+      .map(e=>e.textContent);},
   bilkjopPos:()=>bilkjop?{x:Math.round(bilkjop.x),z:Math.round(bilkjop.z),r:bilkjop.r}:null,
   selgTest:(type)=>{
     kino=false;
@@ -5619,12 +5687,58 @@ function settSpillerHelse(o){
   if(o.mesh&&o.mesh.userData.hb)
     tegnHelse(o.mesh.userData.hb,(o.hp===undefined?100:o.hp)/100);
 }
+/* ---- byttet ----------------------------------------------------------
+   Blir du skutt av en annen spiller, sender du hele beholdningen din til
+   den som tok deg: penger, våpen og dama. Klienten din er den eneste som
+   vet hva du har, så den må sende det selv.                            */
+function sendBytte(til){
+  const vapen=[];
+  for(const f of inv.felt) if(f&&VAAPENSETT[f.id]&&f.id!=='pistol')
+    vapen.push({id:f.id,i:f.i,res:f.res});
+  const pkt={t:'bytte',til:til,fra:net.name,kr:kroner(),vapen:vapen,dama:!!folgerHer};
+  if(net.isHost){ const c=net.conns.get(til); if(c&&c.open)c.send(pkt); }
+  else if(net.hostConn&&net.hostConn.open) net.hostConn.send(pkt);
+}
+function taImotBytte(d){
+  if(d.til!==net.id){
+    if(net.isHost){ const c=net.conns.get(d.til); if(c&&c.open)c.send(d); }
+    return;
+  }
+  let tekst='💀 Du tok '+(d.fra||'noen')+':';
+  if(d.kr>0){ girPenger(d.kr); tekst+=' '+d.kr.toLocaleString('nb-NO')+' kr'; }
+  let n=0;
+  for(const v of d.vapen||[]){
+    if(!VAAPENSETT[v.id])continue;
+    const eid=inv.felt.find(f=>f&&f.id===v.id);
+    if(eid){ eid.res+=v.i+v.res; n++; continue; }
+    let plass=-1;
+    for(let i=0;i<SLOTS;i++) if(!inv.felt[i]){plass=i;break;}
+    if(plass<0)continue;
+    inv.felt[plass]={id:v.id,n:1,i:v.i,res:v.res}; n++;
+  }
+  if(n)tekst+=', '+n+' våpen';
+  if(d.dama&&!folgerHer){
+    const kand=folkData.filter(f=>f.dans&&!f.dod);
+    if(kand.length){
+      const hun=kand[0];
+      hun.dans=false; hun.man=true; hun.folger=true; hun.dame=true;
+      hun.langtHaar=true; hun.haar=0xE8D07A; hun.yaw=0; hun.fase=0;
+      hun.x=P.pos.x+1.5; hun.z=P.pos.z+1.5; hun.pad=groundAt(hun.x,hun.z);
+      settFolkFarge(folkData.indexOf(hun));
+      folgerHer=hun; kastet=FOLGE_KRAV;
+      tekst+=' og dama';
+    }
+  }
+  hbSkitten=true;
+  showToast(tekst);
+}
+
 /* ---- PvP: treff sendes gjennom verten ----------------------------------
    Skytteren regner ut treffet lokalt og sender det videre. Er du vert,
    leverer du rett til den det gjelder; er du klient, går det via verten.
    Ingen autoritetssjekk — dette er et lekespill mellom kompiser.        */
 function sendTreff(mal,sk){
-  const pkt={t:'treff',mal:mal,sk:sk,fra:net.name};
+  const pkt={t:'treff',mal:mal,sk:sk,fra:net.name,fraId:net.id};
   if(net.isHost){
     const c=net.conns.get(mal);
     if(c&&c.open)c.send(pkt);
@@ -5632,6 +5746,7 @@ function sendTreff(mal,sk){
 }
 function taImotTreff(d){
   if(d.mal===net.id){
+    P.sisteSkytter=d.fraId; P.sisteSkytterNavn=d.fra; P.sisteSkytterT=10;
     skadeSpiller(d.sk);
     showToast('🩸 '+(d.fra||'Noen')+' skjøt deg');
   } else if(net.isHost){
@@ -5685,6 +5800,7 @@ function connectAsClient(){
 
     net.hostConn.on('data',d=>{
       if(d.t==='treff'){ taImotTreff(d); return; }
+      if(d.t==='bytte'){ taImotBytte(d); return; }
       if(d.t!=='w') return;
       // vertens by er fasit
       if(d.seed!==undefined&&d.seed!==SEED){ SEED=d.seed; build(); spawn(); }
@@ -5735,6 +5851,7 @@ function becomeHost(){
         const o=others.get(c.peer)||addOther(c.peer,d.n,d.c);
         takeState(o,d);
       } else if(d.t==='treff') taImotTreff(d);
+        else if(d.t==='bytte') taImotBytte(d);
     });
     const bye=()=>{ net.conns.delete(c.peer); dropOther(c.peer); };
     c.on('close',bye); c.on('error',bye);
@@ -5864,7 +5981,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build dama-42';
+  document.getElementById('verline').textContent='build gtn-44';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
