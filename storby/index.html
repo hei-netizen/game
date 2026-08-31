@@ -113,7 +113,7 @@
   body.mobil #landemerker,
   body.mobil #helsetall,
   body.mobil #pengerhud small{display:none!important}
-  body.mobil #hud{top:auto;bottom:92px;left:50%;right:auto;
+  body.mobil #hud{top:auto;bottom:74px;left:50%;right:auto;
     transform:translateX(-50%);text-align:center;width:max-content;max-width:60vw}
   body.mobil #hud>div{display:none}
   body.mobil #hud>#mode{display:block;font-size:13px;color:#ffd875;
@@ -124,12 +124,16 @@
   body.mobil #raceboard .li{font-size:9.5px}
   body.mobil #raceboard .pl{font-size:9.5px}
   body.mobil #raceboard .tid{font-size:23px}
-  body.mobil #hotbar{bottom:8px;left:12px;transform:none;gap:4px}
-  body.mobil #hotbar .s{width:36px;height:36px;font-size:17px}
+  /* Slinja midt nederst med store nok ruter til en tommel. Den lå i venstre
+     hjørne, der stikka tar fingeren først. */
+  body.mobil #hotbar{bottom:10px;left:50%;transform:translateX(-50%);gap:7px;
+    pointer-events:auto}
+  body.mobil #hotbar .s{width:50px;height:50px;font-size:23px}
+  body.mobil #hotbar .s.valgt{box-shadow:0 0 0 2px #ffd85e,0 6px 22px rgba(0,0,0,.6)}
   body.mobil #hotbar .s .nr{font-size:8px}
   body.mobil #hotbar .s .nv{display:none}
-  body.mobil #helse{width:132px;height:10px;bottom:50px;left:12px;transform:none}
-  body.mobil #pengerhud{left:12px;bottom:70px;transform:none;text-align:left;font-size:13px}
+  body.mobil #helse{width:132px;height:11px;bottom:14px;left:12px;transform:none}
+  body.mobil #pengerhud{left:12px;bottom:32px;transform:none;text-align:left;font-size:13px}
   body.mobil #nyheter{top:126px;width:190px;font-size:10px}
   body.mobil #hud{font-size:10px}
   body.mobil #district{font-size:14px}
@@ -5818,6 +5822,8 @@ window.__dbg={
   },
   slot:(i)=>inv.felt[i],
   mobil:()=>MOBIL,
+  valgtSlot:()=>inv.slot,
+  tegnHb:()=>tegnHotbar(),
   hoyreTest:()=>{
     kino=false; drive.on=false; P.fly=false; P.dodT=0;
     P.pos.set(0,groundAt(0,0)+P.h,0); P.vel.set(0,0,0); P.yaw=0; P.pitch=0;
@@ -7609,7 +7615,7 @@ addEventListener('orientationchange',()=>setTimeout(sjekkRetning,250));
 /* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
    Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
    nyere enn den innebygde, lastes sida om én gang. */
-const BUILD='styring-64';
+const BUILD='hotbar-65';
 function sjekkNyVersjon(){
   fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
     .then(r=>r.ok?r.text():null)
