@@ -2374,9 +2374,10 @@ function oppdaterFolk(dt){
     sett('oyeH',  .085,1.32, .215, 0);
     // Kvinnefigurene har byste og langt hår. Alle andre får skala 0 på de to
     // delene, så de koster ingenting utover to tegnekall.
-    const dS=f.dame?S:0.0001, lS=f.langtHaar?S:0.0001;
-    sett('brystV',-.088,.95,.135, 0, dS);
-    sett('brystH', .088,.95,.135, 0, dS);
+    const dS=f.dame?S*(f.brystSkala||1):0.0001, lS=f.langtHaar?S:0.0001;
+    const bo=.088*(f.brystSkala||1);
+    sett('brystV',-bo,.95,.135*(f.brystSkala||1), 0, dS);
+    sett('brystH', bo,.95,.135*(f.brystSkala||1), 0, dS);
     sett('haarLang',0,1.34,-.07, 0, lS);
   }
   for(const k in folkM) folkM[k].instanceMatrix.needsUpdate=true;
@@ -2516,12 +2517,48 @@ async function loadHeroCars(){
   const el=document.getElementById('herocar');
   if(el)el.textContent=parked.filter(p=>HERO_CARS.indexOf(p.type)>=0).length?'· McLaren står ved startpunktet':'';
 }
+/* Racerlakk. Materialene i GLB-en deles mellom alle kopiene, så de må
+   klones før fargen røres — ellers blir hver McLaren i byen omlakkert.
+   Mørke deler (dekk, glass, grill) står urørt.                        */
+const RACERLAKK=[
+  {navn:'#7 rød',  hoved:0xd8232a, aksent:0xf2f2f2},
+  {navn:'#3 blå',  hoved:0x1746b8, aksent:0xffd21e}
+];
+function lakker(obj,lakk){
+  let i=0;
+  obj.traverse(o=>{
+    if(!o.isMesh||!o.material)return;
+    const m=Array.isArray(o.material)?o.material:[o.material];
+    o.material=m.map(mat=>{
+      const c=mat.clone();
+      const l=(c.color.r*0.3+c.color.g*0.6+c.color.b*0.1);
+      if(l>0.16) c.color.setHex((i++%5===0)?lakk.aksent:lakk.hoved);
+      return c;
+    });
+    if(!Array.isArray(o.material))o.material=o.material[0];
+  });
+}
 function placeHero(t,n){
   const ax=streetsX.find(s=>s.art&&s.p>-200)||streetsX[0];
   const az=streetsZ.find(s=>s.art&&s.p>-200)||streetsZ[0];
   spawnRealCar(t,ax.p+5.5,az.p+11,0);            // én rett ved der du starter
-  let lagt=1,forsok=0;
-  while(lagt<n&&forsok++<200){
+  let lagt=1;
+  // to lakkerte racere står klare i startboksene på banen
+  if(bane&&bane.start){
+    const S=bane.start;
+    const nx=-S.dz, nz=S.dx;                     // på tvers av veien
+    const yaw=Math.atan2(S.dx,S.dz)+CAR_YAW;
+    RACERLAKK.forEach((lakk,k)=>{
+      const sgn=k?1:-1;
+      const px=S.x+nx*sgn*3.6-S.dx*7, pz=S.z+nz*sgn*3.6-S.dz*7;
+      const p2=spawnRealCar(t,px,pz,yaw);
+      lakker(p2.obj,lakk);
+      p2.racer=true; p2.lakk=lakk.navn;
+      lagt++;
+    });
+  }
+  let forsok=0;
+  while(lagt<n+2&&forsok++<200){
     const b=blocks[rndi(0,blocks.length-1)];
     if(!b||b.d===D_PARK)continue;
     spawnRealCar(t,(b.x0+b.x1)/2,b.z0-3.2,0);
@@ -3149,7 +3186,8 @@ function enterExit(){
   drive.skade=0;drive.rist=0;drive.rull=0;drive.stamp=0;
   drive.luft=false;drive.vv=0;drive.luftT=0;drive.nese=0;
   settBilstil(best.type);
-  if(drive.klasse==='hyper')showToast('🏎 McLaren — byens raskeste bil');
+  if(best.racer)showToast('🏎 Racer '+best.lakk+' — banens kjappeste');
+  else if(drive.klasse==='hyper')showToast('🏎 McLaren — byens raskeste bil');
   else if(drive.klasse==='race')showToast('🏁 Racer — mer effekt, kvikkere ratt, løsere bak');
   P.fly=false;showMode();
 }
@@ -3715,9 +3753,18 @@ function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
       }
       if(i%2===0)                       // stolpe annenhver
         walls(kantBuf,ax2-0.11,ax2+0.11,y0,y0+1.30,az2-0.11,az2+0.11,1,1,1,[.42,.44,.48]);
-      addCol({x0:Math.min(ax2,bx2)-0.35,x1:Math.max(ax2,bx2)+0.35,
-              z0:Math.min(az2,bz2)-0.35,z1:Math.max(az2,bz2)+0.35,
-              top:Math.max(y0,y1)+1.3});
+      // Én boks per segment ble en diger firkant på skrå strekk — den dekket
+      // halve banen og føltes som en usynlig vegg. Nå legges det små bokser
+      // tett langs selve rekkverket i stedet.
+      {
+        const seg=Math.hypot(bx2-ax2,bz2-az2), n2=Math.max(1,Math.ceil(seg/2.0));
+        for(let k=0;k<n2;k++){
+          const u=(k+0.5)/n2;
+          const kx=ax2+(bx2-ax2)*u, kz=az2+(bz2-az2)*u;
+          addCol({x0:kx-0.45,x1:kx+0.45,z0:kz-0.45,z1:kz+0.45,
+                  top:terrainH(kx,kz)+1.3});
+        }
+      }
     }
     // kantstein i rødt og hvitt
     const kf=(i%2)?[1.35,.30,.28]:[1.5,1.5,1.5];
@@ -4254,7 +4301,7 @@ function slaa(){
     if(f.dod||f.skjult)continue;
     const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
     const t=kuleMot(_ko,_kd,NEVE.rekkevidde,p.x,f.pad+0.95*f.h,p.z,0.95);
-    if(t>0){ treffPerson(f,NEVE.skade); gnist(p.x,f.pad+1.1,p.z,0xd63b3b);
+    if(t>0){ treffPerson(f,NEVE.skade,'slått ned'); gnist(p.x,f.pad+1.1,p.z,0xd63b3b);
              traff=true; break; }
   }
   if(!traff)for(const o of others.values()){
@@ -4490,7 +4537,7 @@ function skuddLinje(V,_ko,_kd,forste){
   if(V.eksplosiv){ eksplosjon(best.x,best.y,best.z,V.eksplosiv,V.skade); }
   else if(best.hva==='person'){
     gnist(best.x,best.y,best.z,0xd63b3b);
-    treffPerson(best.mal,V.skade);
+    treffPerson(best.mal,V.skade,'skutt med '+V.navn.toLowerCase());
   } else if(best.hva==='spiller'){
     gnist(best.x,best.y,best.z,0xd63b3b);
     sendTreff(best.mal.id,V.skade);
@@ -4567,7 +4614,7 @@ function oppdaterBranner(dt){
       for(const f of folkData){
         if(f.dod||f.skjult)continue;
         const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
-        if(Math.hypot(p.x-b.x,p.z-b.z)<3.4) treffPerson(f,24);
+        if(Math.hypot(p.x-b.x,p.z-b.z)<3.4) treffPerson(f,24,'brent opp');
       }
       for(const o of others.values())
         if(Math.hypot(o.x-b.x,o.z-b.z)<3.4){ sendTreff(o.id,18);
@@ -4592,7 +4639,7 @@ function eksplosjon(x,y,z,radius,skade){
   for(const f of folkData){
     if(f.dod||f.skjult)continue;
     const p=f.man?{x:f.x,z:f.z}:(f.dans?{x:f.x,z:f.z}:folkPos(f));
-    if(Math.hypot(p.x-x,p.z-z)<radius) treffPerson(f,skade);
+    if(Math.hypot(p.x-x,p.z-z)<radius) treffPerson(f,skade,'sprengt');
   }
   for(const b of politi.biler.slice())
     if(Math.hypot(b.x-x,b.z-z)<radius) treffPolitibil(b,9);
@@ -4606,7 +4653,7 @@ function eksplosjon(x,y,z,radius,skade){
   politiVarme(14);
 }
 const FOLK_HP=60;                  // to nevestøt, tre pistolskudd
-function treffPerson(f,skade){
+function treffPerson(f,skade,aarsak){
   skade=skade||26;
   f.hp=(f.hp===undefined?(f.betjent?52:FOLK_HP):f.hp)-skade;
   f.trefT=2.5;                      // viser helsestolpe over hodet en stund
@@ -4614,14 +4661,18 @@ function treffPerson(f,skade){
     if(f.hp>0)return;
     // En betjent som er ute av spill er én forfølger mindre — derfor senker
     // det jakten i stedet for å tenne den.
-    drepPerson(f); politiVarme(-6); visStjerner();
+    drepPerson(f,aarsak||'skutt'); politiVarme(-6); visStjerner();
     showToast('🚓 Betjent ute av spill');
   } else {
     if(f.hp>0)return;               // tåler to nevestøt eller tre pistolskudd
-    drepPerson(f); politiVarme(11);
+    drepPerson(f,aarsak||'skutt'); politiVarme(11);
   }
 }
-function drepPerson(f){
+function drepPerson(f,aarsak){
+  if(f.folger){
+    meldNyhet('Dama til '+net.name+' ble '+(aarsak||'drept'),'#ff5fa2');
+    slippDame(f,false);
+  }
   f.dod=true; f.dodT=0; f.man=false;
   // De legger igjen lommeboka. Det er dette som gjør at man i det hele tatt
   // kan spare opp til de dyre våpnene.
@@ -4710,10 +4761,11 @@ function doSpiller(){
   }
   for(let i=0;i<SLOTS;i++) if(inv.felt[i]&&inv.felt[i].id!=='hand') inv.felt[i]=null;
   inv.slot=0; hbSkitten=true;
-  if(folgerHer){
-    folgerHer.folger=false; folgerHer.man=false; folgerHer.dans=true;
-    folgerHer=null; kastet=0;
-    showToast('💔 Du døde — dama gikk tilbake til klubben');
+  if(folgere.length){
+    const n=folgere.length;
+    while(folgere.length)slippDame(folgere[0],true);
+    kastet=0;
+    showToast('💔 Du døde — '+(n>1?(n+' damer gikk'):'dama gikk')+' tilbake til klubben');
   }
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
   frigiBetjenter();
@@ -4888,7 +4940,7 @@ function paakjorsel(){
     // smal og lang; folk ble påkjørt på sida og ikke rett foran.
     const lx=-dx*sh+dz*ch, lz=dx*ch+dz*sh;
     if(Math.abs(lx)<2.4&&Math.abs(lz)<1.10){
-      drepPerson(f);
+      drepPerson(f,'påkjørt');
       f.kastX=(dx/(Math.hypot(dx,dz)||1)); f.kastZ=(dz/(Math.hypot(dx,dz)||1));
       f.kast=Math.min(1.5,fart*0.10);
       if(f.betjent){ politiVarme(-6); visStjerner();
@@ -4979,10 +5031,13 @@ function oppdaterVaapen(dt){
   const ph=document.getElementById('pengerhud');
   if(ph){
     let h2='💵 '+kroner().toLocaleString('nb-NO')+' kr';
-    if(klubb&&klubb.inne&&!folgerHer)
-      h2+='<small>kastet '+kastet.toLocaleString('nb-NO')+' / '+
-          FOLGE_KRAV.toLocaleString('nb-NO')+' kr &middot; trykk G for å kaste</small>';
-    else if(folgerHer) h2+='<small>💃 hun følger etter deg</small>';
+    if(klubb&&klubb.inne)
+      h2+='<small>💃 '+folgere.length+' med deg &middot; '+
+          kastet.toLocaleString('nb-NO')+' / '+
+          ((folgere.length+1)*FOLGE_KRAV).toLocaleString('nb-NO')+
+          ' kr &middot; G kaster '+KAST+' kr</small>';
+    else if(folgere.length)
+      h2+='<small>💃 '+folgere.length+' dame'+(folgere.length>1?'r':'')+' følger deg</small>';
     ph.innerHTML=h2;
   }
   const hl=document.getElementById('helse');
@@ -4997,8 +5052,9 @@ function oppdaterVaapen(dt){
    rane kassa i butikker, barer og banker — det siste koster stjerner. Har
    du pengene framme kaster venstreklikk en hundrelapp; kaster du nok på
    danserne i klubben blir én av dem med deg ut.                          */
-const KAST=100, FOLGE_KRAV=3000;
-let kastet=0, folgerHer=null, sedler=[];
+const KAST=200, FOLGE_KRAV=2600;
+let kastet=0, folgere=[], sedler=[];
+function antDamer(){ return folgere.length; }
 function harPengerValgt(){ return false; }   // penger kastes med G, ikke fra slinja
 function girPenger(n){ pengeSum=Math.max(0,pengeSum+n); }
 function kroner(){ return pengeSum; }
@@ -5023,29 +5079,56 @@ function kastPenger(){
   scene.add(m);
   sedler.push({o:m,vx:_kd.x*6.5+rnd(-.6,.6),vy:2.2,vz:_kd.z*6.5+rnd(-.6,.6),
                sn:rnd(4,9),t:0});
-  // traff du en danser?
+  // Traff du en danser? Siktet var altfor smalt før — kastet du uten å
+  // treffe presist skjedde det ingenting, uten noen beskjed om hvorfor.
   let truffet=null,bt=1e9;
   for(const f of folkData){
-    if(!f.dans&&!f.folger)continue;
-    if(f.folger)continue;
-    const t=kuleMot(_ko,_kd,14,f.x,f.pad+1.0,f.z,1.1);
+    if(!f.dans||f.folger)continue;
+    const t=kuleMot(_ko,_kd,20,f.x,f.pad+1.05,f.z,2.0);
     if(t>0&&t<bt){bt=t;truffet=f;}
   }
+  if(!truffet){                      // ellers teller nærmeste danser innen 7 m
+    let bd=7;
+    for(const f of folkData){
+      if(!f.dans||f.folger)continue;
+      const d=Math.hypot(f.x-P.pos.x,f.z-P.pos.z);
+      if(d<bd){bd=d;truffet=f;}
+    }
+  }
+  if(!truffet) showToast('💸 Ingen danser i nærheten — gå nærmere scena');
   if(truffet){
     kastet+=KAST;
     truffet.jubel=1.2;
-    if(kastet>=FOLGE_KRAV&&!folgerHer){
-      folgerHer=truffet;
-      truffet.dans=false; truffet.man=true; truffet.folger=true;
-      truffet.yaw=0; truffet.fase=0;
-      truffet.dame=true; truffet.langtHaar=true;
-      truffet.haar=0xE8D07A;                 // langt blondt hår
-      truffet.h=Math.max(truffet.h,1.02);
-      settFolkFarge(folkData.indexOf(truffet));
-      showToast('💃 Hun blir med deg');
-    } else if(kastet<FOLGE_KRAV)
-      showToast('💵 '+kastet+' / '+FOLGE_KRAV+' kr kastet');
+    // Hver FOLGE_KRAV kroner blir én danser til med deg ut.
+    const fortjent=Math.floor(kastet/FOLGE_KRAV);
+    if(fortjent>folgere.length&&!truffet.folger){
+      gjorTilDame(truffet);
+      folgere.push(truffet);
+      showToast(folgere.length===1?'💃 Hun blir med deg'
+               :'💃 Enda en blir med — du har '+folgere.length+' nå');
+      meldNyhet(net.name+' fikk med seg dame nr. '+folgere.length,'#ff5fa2');
+    } else {
+      const neste=(folgere.length+1)*FOLGE_KRAV;
+      showToast('💵 '+kastet.toLocaleString('nb-NO')+' kr kastet — '+
+                Math.ceil((neste-kastet)/KAST)+' kast til neste dame');
+    }
   }
+}
+function gjorTilDame(f){
+  f.dans=false; f.man=true; f.folger=true; f.dame=true;
+  f.langtHaar=true; f.yaw=0; f.fase=0;
+  f.haar=0xE8D07A;                    // langt blondt hår
+  f.skjorte=0xFF5FA2; f.bukse=0xFF5FA2;   // rosa bikini
+  f.brystSkala=1.55;
+  f.h=Math.max(f.h,1.02);
+  f.hp=undefined;
+  settFolkFarge(folkData.indexOf(f));
+}
+function slippDame(f,tilbakeTilKlubb){
+  const i=folgere.indexOf(f); if(i>=0)folgere.splice(i,1);
+  f.folger=false; f.man=false; f.brystSkala=1;
+  if(tilbakeTilKlubb)f.dans=true;
+  settFolkFarge(folkData.indexOf(f));
 }
 function oppdaterSedler(dt){
   for(let i=sedler.length-1;i>=0;i--){
@@ -5061,18 +5144,22 @@ function oppdaterSedler(dt){
   }
 }
 function oppdaterFolger(dt){
-  if(!folgerHer)return;
-  const f=folgerHer;
+  if(!folgere.length)return;
   const sp=drive.on?{x:drive.x,z:drive.z}:{x:P.pos.x,z:P.pos.z};
-  const dx=sp.x-f.x, dz=sp.z-f.z, d=Math.hypot(dx,dz)||1;
-  f.yaw=Math.atan2(dx,dz)+Math.PI;
-  if(d>2.4){
-    const v=Math.min(6.4,1.8+d*0.55);
-    const nx=f.x+dx/d*v*dt, nz=f.z+dz/d*v*dt;
-    if(friPlass(nx,nz)||d>10){ f.x=nx; f.z=nz; f.pad=groundAt(nx,nz); }
-    f.fase+=dt*5.4;
+  for(let i=folgere.length-1;i>=0;i--){
+    const f=folgere[i];
+    if(f.dod){ slippDame(f,false); continue; }
+    const hold=2.4+i*1.5;                       // de går på rekke bak deg
+    const dx=sp.x-f.x, dz=sp.z-f.z, d=Math.hypot(dx,dz)||1;
+    f.yaw=Math.atan2(dx,dz)+Math.PI;
+    if(d>hold){
+      const v=Math.min(6.6,1.8+d*0.55);
+      const nx=f.x+dx/d*v*dt, nz=f.z+dz/d*v*dt;
+      if(friPlass(nx,nz)||d>10){ f.x=nx; f.z=nz; f.pad=groundAt(nx,nz); }
+      f.fase+=dt*5.4;
+    }
+    if(d>55){ f.x=sp.x-dx/d*(hold+1); f.z=sp.z-dz/d*(hold+1); f.pad=groundAt(f.x,f.z); }
   }
-  if(d>55){ f.x=sp.x-dx/d*3; f.z=sp.z-dz/d*3; f.pad=groundAt(f.x,f.z); }
 }
 
 /* ---- ting som ligger på bakken --------------------------------------
@@ -5483,7 +5570,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'racebane-52',
+  ver:()=>'damer-56',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5566,7 +5653,7 @@ window.__dbg={
               haar:'#'+f.haar.toString(16),hoyde:+f.h.toFixed(2)};
     // dø og se at hun forsvinner
     P.hp=1; skadeSpiller(50);
-    ut.etterDod={folger:!!folgerHer,hunDanserIgjen:!!f.dans};
+    ut.etterDod={folger:folgere.length,hunDanserIgjen:!!f.dans};
     P.dodT=0; P.hp=100;
     return ut;
   },
@@ -5583,6 +5670,56 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  damaDrapTest:()=>{
+    net.name='Jona'; net.navnOk=true;
+    if(!folgere.length)return {feil:'ingen dame'};
+    const f=folgere[0];
+    treffPerson(f,999,'skutt med hagle');
+    const f2=folgere[0];
+    if(f2)treffPerson(f2,999,'påkjørt');
+    return {igjen:folgere.length,
+            feed:[...document.querySelectorAll('#nyheter .ny')].map(e=>e.textContent)};
+  },
+  // står det noe i veien midt på banen?
+  baneFritt:()=>{
+    if(!bane)return null;
+    let blokk=0, provd=0;
+    for(const p of bane.pts){
+      for(const u of [-0.5,-0.25,0,0.25,0.5]){
+        const i=bane.pts.indexOf(p), q=bane.pts[(i+1)%bane.pts.length];
+        const dx=q.x-p.x, dz=q.z-p.z, L=Math.hypot(dx,dz)||1;
+        const nx=-dz/L, nz=dx/L;
+        const x=p.x+nx*u*BANE.bredde, z=p.z+nz*u*BANE.bredde;
+        provd++;
+        if(!friPlass(x,z))blokk++;
+      }
+    }
+    return {provd:provd,blokkert:blokk};
+  },
+  klubbKast:()=>{
+    kino=false;
+    if(!klubb)return null;
+    const d=folkData.filter(f=>f.dans);
+    if(!d.length)return null;
+    girPenger(40000); kastet=0; while(folgere.length)slippDame(folgere[0],true);
+    const m=d[0];
+    P.fly=false; drive.on=false;
+    P.pos.set(m.x+3.5, m.pad+P.h, m.z+3.5);       // står ved sida, ikke rett foran
+    P.yaw=1.0; P.pitch=0.3;                        // ser bevisst feil vei
+    camera.position.copy(P.pos); camera.rotation.set(0,0,0);
+    camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
+    oppdaterKlubb(0.016);
+    const inne=klubb.inne;
+    let n=0;
+    for(let k=0;k<45;k++){ kastPenger(); n++; }
+    return {inneIKlubben:inne,kast:n,kastet:kastet,damer:folgere.length,
+            bikini:folgere[0]?('#'+folgere[0].skjorte.toString(16)):null,
+            byste:folgere[0]?folgere[0].brystSkala:null,
+            krIgjen:kroner()};
+  },
+  racere:()=>parked.filter(p=>p.racer).map(p=>({lakk:p.lakk,type:p.type,
+    x:Math.round(p.x),z:Math.round(p.z),
+    tilStart:bane?Math.round(Math.hypot(p.x-bane.start.x,p.z-bane.start.z)):null})),
   kjorNedSpiller:()=>{
     kino=false; net.name='Elias'; net.navnOk=true;
     if(!parked.length)return {feil:'ingen bil'};
@@ -5758,8 +5895,8 @@ window.__dbg={
                  dama:true});
     return {krFor:kr0,krEtter:kroner(),
             vapenFor:for_,vapenEtter:inv.felt.filter(f=>f&&VAAPENSETT[f.id]).length,
-            harDama:!!folgerHer,
-            damaBlond:folgerHer?('#'+folgerHer.haar.toString(16)):null};
+            harDama:folgere.length>0,
+            damaBlond:folgere[0]?('#'+folgere[0].haar.toString(16)):null};
   },
   pekere:()=>{oppdaterPeker();
     return [...document.querySelectorAll('#pekere .pk')]
@@ -6180,7 +6317,7 @@ window.__dbg={
     camera.position.copy(P.pos); camera.rotation.set(0,0,0);
     camera.rotateY(P.yaw); camera.rotateX(P.pitch); camera.updateMatrixWorld(true);
     for(let k=0;k<40;k++) kastPenger();
-    return {dansere:d.length,kastet:kastet,folger:!!folgerHer,kr:kroner()};
+    return {dansere:d.length,kastet:kastet,folger:folgere.length>0,kr:kroner()};
   },
   bilstil:(t)=>{settBilstil(t);return {klasse:drive.klasse,effekt:CP.effekt,ratt:+CP.ratt.toFixed(3),M:CP.M};},
   // politibetjent ut av bilen, skyter på deg, og lar seg skyte tilbake
@@ -6511,8 +6648,9 @@ function drawMinimap(){
   for(const p of parked){                                // parkerte — kan kjøres
     const hero=HERO_CARS.indexOf(p.type)>=0;
     const race=!hero&&RACE_CARS.indexOf(p.type)>=0;
-    mc.fillStyle=p.erPoliti?'#4d9dff':(hero?'#ff9a3c':race?'#ff5f5f':'#6cf09a');
-    const r=p.erPoliti?2.6:(hero||race?2.5:1.5);
+    mc.fillStyle=p.racer?'#ffe26a':p.erPoliti?'#4d9dff':
+                 (hero?'#ff9a3c':race?'#ff5f5f':'#6cf09a');
+    const r=p.erPoliti?2.6:(p.racer?3.0:(hero||race?2.5:1.5));
     mc.fillRect((p.x+HW)*SX-r,(p.z+HD)*SZ-r,r*2,r*2);
   }
   // landemerker: rosa K = nattklubb, hvit F = fengsel, resten er bygg du kan gå inn i
@@ -6806,7 +6944,8 @@ function sendBytte(til){
   const vapen=[];
   for(const f of inv.felt) if(f&&VAAPENSETT[f.id]&&f.id!=='pistol')
     vapen.push({id:f.id,i:f.i,res:f.res});
-  const pkt={t:'bytte',til:til,fra:net.name,kr:kroner(),vapen:vapen,dama:!!folgerHer};
+  const pkt={t:'bytte',til:til,fra:net.name,kr:kroner(),vapen:vapen,
+             dama:folgere.length};
   if(net.isHost){ const c=net.conns.get(til); if(c&&c.open)c.send(pkt); }
   else if(net.hostConn&&net.hostConn.open) net.hostConn.send(pkt);
 }
@@ -6828,18 +6967,18 @@ function taImotBytte(d){
     inv.felt[plass]={id:v.id,n:1,i:v.i,res:v.res}; n++;
   }
   if(n)tekst+=', '+n+' våpen';
-  if(d.dama&&!folgerHer){
-    const kand=folkData.filter(f=>f.dans&&!f.dod);
-    if(kand.length){
-      const hun=kand[0];
-      hun.dans=false; hun.man=true; hun.folger=true; hun.dame=true;
-      hun.langtHaar=true; hun.haar=0xE8D07A; hun.yaw=0; hun.fase=0;
-      hun.x=P.pos.x+1.5; hun.z=P.pos.z+1.5; hun.pad=groundAt(hun.x,hun.z);
-      settFolkFarge(folkData.indexOf(hun));
-      folgerHer=hun; kastet=FOLGE_KRAV;
-      tekst+=' og dama';
-    }
+  const vil=(typeof d.dama==='number')?d.dama:(d.dama?1:0);
+  let tatt=0;
+  for(let k=0;k<vil;k++){
+    const kand=folkData.filter(f=>f.dans&&!f.dod&&!f.folger);
+    if(!kand.length)break;
+    const hun=kand[0];
+    gjorTilDame(hun);
+    hun.x=P.pos.x+1.5+k; hun.z=P.pos.z+1.5; hun.pad=groundAt(hun.x,hun.z);
+    folgere.push(hun); tatt++;
   }
+  if(tatt){ kastet=Math.max(kastet,folgere.length*FOLGE_KRAV);
+            tekst+=' og '+(tatt>1?(tatt+' damer'):'dama'); }
   hbSkitten=true;
   showToast(tekst);
 }
@@ -7109,7 +7248,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build racebane-52';
+  document.getElementById('verline').textContent='build damer-56';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
