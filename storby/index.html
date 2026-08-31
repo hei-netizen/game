@@ -2781,6 +2781,7 @@ const R_PARK=144, R_TRAF=440;      // ~12 m og ~21 m, kvadrert
 function nearestCar(){
   let best=null,bd=R_PARK,tr=null,td=R_TRAF;
   for(const p of parked){
+    if(p.fjernstyrt)continue;              // en annen spiller sitter i den
     const d=(p.x-P.pos.x)*(p.x-P.pos.x)+(p.z-P.pos.z)*(p.z-P.pos.z);
     if(d<bd){bd=d;best=p;}
   }
@@ -2995,6 +2996,7 @@ function sjekkBilkrasj(){
 function oppdaterLose(dt){
   for(const p of parked){
     if(drive.on&&drive.car===p)continue;
+    if(p.fjernstyrt)continue;          // styres av en annen spiller
     if(p.erPoliti)continue;            // styres av jakt-logikken
     if(!p.vx&&!p.vz&&!p.spin)continue;
     const fx=p.x,fz=p.z;
@@ -3830,6 +3832,21 @@ function oppdaterPeker(){
    har dårligst tid betaler den beste alt han har.                       */
 const BANE={R:150, bredde:16, N:72, runder:3, cpN:6};
 function baneForm(a){ return 1 + 0.23*Math.sin(3*a+0.6) + 0.11*Math.cos(2*a-1.1); }
+/* Står du på asfalten (eller i et race), kan ingenting drepe deg. Banen er
+   en radiell sløyfe rundt bane.x/z, så vi trenger ikke gå gjennom alle 72
+   punktene — vinkelen ut til deg gir radien banen har akkurat der.      */
+const BANE_FRISONE=BANE.bredde*0.5+7;      // asfalt pluss litt grus utenfor
+function paaBanen(x,z){
+  if(!bane)return false;
+  const dx=x-bane.x, dz=z-bane.z, d=Math.hypot(dx,dz);
+  if(d>BANE.R*1.45+BANE_FRISONE||d<BANE.R*0.6-BANE_FRISONE)return false;
+  return Math.abs(d-BANE.R*baneForm(Math.atan2(dz,dx)))<=BANE_FRISONE;
+}
+function udodelig(){
+  if(race.aktiv||lobby.nedtelling>0)return true;   // et race skal aldri ende i et lik
+  const sp=drive.on?{x:drive.x,z:drive.z}:{x:P.pos.x,z:P.pos.z};
+  return paaBanen(sp.x,sp.z);
+}
 
 function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
   bane=null;
@@ -4869,6 +4886,7 @@ function treffPolitibil(b,n){
 /* ---- spilleren tåler noe, men ikke mye ---- */
 function skadeSpiller(n){
   if(P.dodT>0)return;
+  if(udodelig()){ P.hp=Math.max(P.hp,1); return; }   // på banen tar du ikke skade
   P.hp=Math.max(0,P.hp-n); P.skadeT=0; P.blod=1;
   if(P.hp<=0) doSpiller();
 }
@@ -6091,6 +6109,100 @@ window.__dbg={
     return {hint:h1,lobbyApen:apen,lobby:tekst1,nedtelling:+ned.toFixed(1),
             raceStartet:race.aktiv,innsats:race.innsats};
   },
+  /* Setter en falsk medspiller i bil med to damer etter seg, og sjekker at
+     karosseriet faktisk havner i scenen, at kroppen hans skjules, og at
+     damene dukker opp og går inn mot ham.                              */
+  bilDameTest:()=>{
+    kino=false;
+    const antallFor=parked.length;
+    const o=addOther('BD1','Simon',2);
+    const x=P.pos.x+12, z=P.pos.z, gy=groundAt(x,z);
+    takeState(o,{n:'Simon',x:x,y:gy+1.4,z:z,yaw:0,hp:100,
+                 b:NETT_BILER.indexOf('sedan')+1,bh:0.4,by:gy,lk:0,d:2});
+    o.x=o.tx;o.y=o.ty;o.z=o.tz;o.bh=o.tbh;o.by=o.tby;
+    for(let k=0;k<120;k++) netInterp(1/60);
+    const bil=o.laant?o.laant.obj:null;
+    const kropp=o.mesh.userData.kropper;
+    const d0=o.dameM[0], d1=o.dameM[1];
+    const avst=g=>+Math.hypot(g.position.x-o.x,g.position.z-o.z).toFixed(2);
+    const ut={
+      harBil:!!bil, laant:!!o.laant, nyBil:parked.length-antallFor,
+      bilY:bil?+bil.position.y.toFixed(2):null,
+      bilAvvik:bil?+Math.hypot(bil.position.x-o.x,bil.position.z-o.z).toFixed(3):null,
+      bilRotY:bil?+bil.rotation.y.toFixed(2):null,
+      bilIScenen:bil?!!bil.parent:false,
+      kroppSkjult:kropp.every(m=>!m.visible),
+      navnSynlig:o.mesh.userData.navn.visible,
+      damer:o.dameM.length,
+      dameIScenen:!!(d0&&d0.parent)&&!!(d1&&d1.parent),
+      dameAvst:[avst(d0),avst(d1)],
+      dameY:+d0.position.y.toFixed(2), bakken:+gy.toFixed(2)
+    };
+    // ut av bilen igjen: karosseriet skal bli stående, kroppen komme fram
+    takeState(o,{n:'Simon',x:x,y:gy+1.75,z:z,yaw:0,hp:100,b:0,bh:0,by:0,lk:0,d:0});
+    for(let k=0;k<60;k++) netInterp(1/60);
+    ut.etterUtstig={bilStaarIgjen:bil?!!bil.parent&&bil.visible:false,
+                    bilPos:bil?[+bil.position.x.toFixed(1),+bil.position.z.toFixed(1)]:null,
+                    kroppTilbake:kropp.every(m=>m.visible),
+                    damer:o.dameM.length, ledigIgjen:!o.laant};
+    dropOther('BD1');
+    ut.ryddet={damerIScenen:o.dameM.length};
+    return ut;
+  },
+  /* Samme, men han setter seg inn i en bil som allerede står parkert hos
+     oss: da skal DEN bilen kjøre, ikke en ny kopi ved siden av.         */
+  laanBilTest:()=>{
+    kino=false;
+    const q=parked.find(b=>!b.erPoliti&&!b.fjernstyrt);
+    if(!q)return {feil:'ingen parkert bil'};
+    const antallFor=parked.length, start=[q.x,q.z];
+    const o=addOther('LB1','Simon',3);
+    takeState(o,{n:'Simon',x:q.x,y:groundAt(q.x,q.z)+1.4,z:q.z,yaw:0,hp:100,
+                 b:NETT_BILER.indexOf(q.type)+1,bh:0,by:groundAt(q.x,q.z),lk:0,d:0});
+    o.x=o.tx;o.y=o.ty;o.z=o.tz;o.bh=o.tbh;o.by=o.tby;
+    netInterp(1/60);
+    const laantRiktig=(o.laant===q);
+    // han kjører 40 m av gårde
+    const nx=q.x+40, nz=q.z;
+    for(let k=0;k<240;k++){
+      takeState(o,{n:'Simon',x:nx,y:groundAt(nx,nz)+1.4,z:nz,yaw:0,hp:100,
+                   b:NETT_BILER.indexOf(q.type)+1,bh:0,by:groundAt(nx,nz),lk:0,d:0});
+      netInterp(1/60);
+    }
+    const flyttet=+Math.hypot(q.obj.position.x-start[0],q.obj.position.z-start[1]).toFixed(1);
+    const laastForDeg=!!q.fjernstyrt;
+    // han går ut igjen
+    takeState(o,{n:'Simon',x:nx,y:groundAt(nx,nz)+1.75,z:nz,yaw:0,hp:100,b:0,bh:0,by:0,lk:0,d:0});
+    netInterp(1/60);
+    const ut={laantRiktig:laantRiktig, ingenKopi:parked.length-antallFor,
+              bilFlyttet:flyttet, laastMensHanKjorte:laastForDeg,
+              staarIgjen:[+q.x.toFixed(0),+q.z.toFixed(0)],
+              ledigEtterpa:!q.fjernstyrt, synlig:q.obj.visible};
+    dropOther('LB1');
+    return ut;
+  },
+  /* Ingenting skal kunne drepe deg på banen. */
+  baneTest:()=>{
+    kino=false;
+    if(!bane)return {feil:'ingen bane'};
+    P.dodT=0; P.hp=100; drive.on=false; race.aktiv=false; lobby.nedtelling=0;
+    const r=BANE.R*baneForm(0);
+    P.pos.set(bane.x+r,groundAt(bane.x+r,bane.z)+1.75,bane.z);
+    const paa=paaBanen(P.pos.x,P.pos.z);
+    skadeSpiller(500);
+    const paaBanenHp=P.hp, dodPaaBanen=P.dodT>0;
+    // midt inne i sirkelen, altså utenfor asfalten
+    P.pos.set(bane.x,groundAt(bane.x,bane.z)+1.75,bane.z);
+    const utenfor=!paaBanen(P.pos.x,P.pos.z);
+    P.hp=100; skadeSpiller(40);
+    const utenforHp=P.hp;
+    // og under et race, uansett hvor du er
+    race.aktiv=true; P.hp=100; skadeSpiller(500);
+    const iRaceHp=P.hp; race.aktiv=false;
+    P.hp=100; P.dodT=0; P.blod=0;
+    return {paaAsfalt:paa, hpEtter500PaaBanen:paaBanenHp, dodPaaBanen:dodPaaBanen,
+            utenforBanen:utenfor, hpEtter40Utenfor:utenforHp, hpIRace:iRaceHp};
+  },
   avatarTest:()=>{
     kino=false;
     const o=addOther('AV1','Simon',2);
@@ -7170,9 +7282,10 @@ function makeAvatar(name,ci){
   const col=AV_COLS[ci%AV_COLS.length];
   const M=hex=>new THREE.MeshLambertMaterial({color:hex});
   const hud=0xf0c8a0, bukse=0x2f3644;
+  const kropper=[];
   const legg=(geo,mat,x,y,z)=>{
     const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z);
-    m.castShadow=true; g.add(m); return m; };
+    m.castShadow=true; g.add(m); kropper.push(m); return m; };
   const D={};
   D.benV  =legg(AVG.ben ,M(bukse),-.105,.43,0);
   D.benH  =legg(AVG.ben ,M(bukse), .105,.43,0);
@@ -7184,6 +7297,7 @@ function makeAvatar(name,ci){
   legg(AVG.oye,M(0x241c16),-.085,1.32,.215);
   legg(AVG.oye,M(0x241c16), .085,1.32,.215);
   g.userData.deler=D;
+  g.userData.kropper=kropper;   // skjules når han sitter i bil
 
   const cv=document.createElement('canvas'); cv.width=256; cv.height=64;
   const x=cv.getContext('2d');
@@ -7221,17 +7335,29 @@ function animerAvatar(o,dt){
 function addOther(id,name,ci){
   const o={id,name:name||'?',col:ci||0,x:0,y:0,z:0,yaw:0,
            tx:0,ty:0,tz:0,tyaw:0,mesh:makeAvatar(name||'?',ci||0),
+           bilIdx:0,lakkIdx:0,bh:0,tbh:0,by:0,tby:0,
+           laant:null,damer:0,dameM:[],
            last:performance.now()};
   others.set(id,o); plist(); return o;
 }
 function dropOther(id){
   const o=others.get(id);
-  if(o){ scene.remove(o.mesh); others.delete(id); plist(); }
+  if(!o)return;
+  scene.remove(o.mesh);
+  if(o.laant) frigiLaantBil(o);
+  if(o.dameM) for(const g of o.dameM) scene.remove(g);
+  o.dameM=[];
+  others.delete(id); plist();
 }
 function takeState(o,d){
   o.tx=d.x; o.ty=d.y; o.tz=d.z; o.tyaw=d.yaw;
   o.name=d.n; o.last=performance.now();
   if(d.hp!==undefined&&d.hp!==o.hp){ o.hp=d.hp; settSpillerHelse(o); }
+  // bil: 0 = til fots, ellers indeks inn i NETT_BILER pluss én
+  o.tbh=d.bh||0; o.tby=d.by||0;
+  const bi=d.b|0, lk=d.lk|0;
+  if(bi!==o.bilIdx||lk!==o.lakkIdx) byttAnnenBil(o,bi,lk);
+  o.damer=d.d|0;
 }
 function settSpillerHelse(o){
   if(o.mesh&&o.mesh.userData.hb)
@@ -7298,8 +7424,10 @@ function sendTreff(mal,sk){
 function taImotTreff(d){
   if(d.mal===net.id){
     P.sisteSkytter=d.fraId; P.sisteSkytterNavn=d.fra; P.sisteSkytterT=10;
+    const skjermet=udodelig();
     skadeSpiller(d.sk);
-    showToast('🩸 '+(d.fra||'Noen')+' skjøt deg');
+    showToast(skjermet ? '🏁 '+(d.fra||'Noen')+' skjøt deg — banen skjermer deg'
+                       : '🩸 '+(d.fra||'Noen')+' skjøt deg');
   } else if(net.isHost){
     const c=net.conns.get(d.mal);
     if(c&&c.open)c.send(d);
@@ -7425,11 +7553,14 @@ function becomeHost(){
 
 function netTick(){
   const me={n:net.name,c:net.col,x:P.pos.x,y:P.pos.y,z:P.pos.z,yaw:P.yaw,
-             hp:Math.round(P.hp)};
+             hp:Math.round(P.hp),
+             b:minBilIdx(), bh:drive.on?drive.head:0, by:drive.on?drive.y:0,
+             lk:minLakkIdx(), d:folgere.length};
   if(net.isHost){
     const arr=[{id:net.id,...me}];
     for(const [id,o] of others)
-      arr.push({id,n:o.name,c:o.col,x:o.tx,y:o.ty,z:o.tz,yaw:o.tyaw,hp:o.hp});
+      arr.push({id,n:o.name,c:o.col,x:o.tx,y:o.ty,z:o.tz,yaw:o.tyaw,hp:o.hp,
+                b:o.bilIdx,bh:o.tbh,by:o.tby,lk:o.lakkIdx,d:o.damer});
     const pkt={t:'w',seed:SEED,p:arr};
     for(const [id,c] of [...net.conns]){
       if(c.open) c.send(pkt);
@@ -7444,6 +7575,165 @@ function netTick(){
   }
 }
 
+/* ---- andres biler ----------------------------------------------------
+   Pakken sier bare HVILKEN biltype den andre kjører, ikke hvilken bil.
+   Vi låner den nærmeste parkerte bilen av samme type — det er nesten alltid
+   nøyaktig den bilen han satte seg inn i, og da blir ikke tvillingen stående
+   igjen på plassen sin. Finner vi ingen (han kapret en fra trafikken, eller
+   byen er bygget litt ulikt på mobil), setter vi ut en ny av samme type.
+   Mens han sitter i den er den låst — du kan ikke sette deg inn i den.  */
+const NETT_BILER=CAR_TYPES.concat(HERO_CARS);
+function minBilIdx(){
+  if(!drive.on||!drive.car)return 0;
+  return NETT_BILER.indexOf(drive.car.type)+1;
+}
+function minLakkIdx(){
+  if(!drive.on||!drive.car||!drive.car.lakk)return 0;
+  return RACERLAKK.findIndex(l=>l.navn===drive.car.lakk)+1;
+}
+function laanBil(o,type){
+  let best=null,bd=100;                       // innenfor 10 m
+  for(const q of parked){
+    if(q.type!==type||q.fjernstyrt||q.erPoliti)continue;
+    if(drive.on&&drive.car===q)continue;      // den sitter DU i
+    const d=(q.x-o.x)*(q.x-o.x)+(q.z-o.z)*(q.z-o.z);
+    if(d<bd){bd=d;best=q;}
+  }
+  if(!best)return null;
+  best.fjernstyrt=o.id; best.vx=best.vz=best.spin=0;
+  o.laant=best; return best;
+}
+/* Han gikk ut: bilen blir stående der han forlot den, og er ledig igjen. */
+function frigiLaantBil(o){
+  const q=o.laant; if(!q)return;
+  o.laant=null; q.fjernstyrt=null;
+  q.x=(o.bilX!==undefined?o.bilX:o.x); q.z=(o.bilZ!==undefined?o.bilZ:o.z);
+  q.yaw=(o.bh||0)+CAR_YAW;
+  q.vx=q.vz=q.spin=0;
+  q.obj.position.set(q.x,groundAt(q.x,q.z)+(q.yoff||0),q.z);
+  settBilRotasjon(q.obj,q.x,q.z,q.yaw-CAR_YAW,0,0);
+  q.obj.visible=true;
+}
+/* Fant vi ingen å låne, lager vi en ekte bil i stedet for en kulisse. Da
+   blir den stående igjen — og kjørbar — den dagen han går ut av den.   */
+function lagLaanebil(o,type){
+  if(!carSrc[type])return null;
+  const q=spawnRealCar(type,o.x,o.z,(o.bh||0)+CAR_YAW);
+  if(o.lakkIdx&&RACERLAKK[o.lakkIdx-1]){
+    lakker(q.obj,RACERLAKK[o.lakkIdx-1]);
+    q.racer=true; q.lakk=RACERLAKK[o.lakkIdx-1].navn;
+  }
+  q.fjernstyrt=o.id; o.laant=q; return q;
+}
+/* Byttet bil, eller gikk inn/ut. Selve karosseriet settes opp i
+   oppdaterAnnenBil, for GLB-en kan være ulastet akkurat her.            */
+function byttAnnenBil(o,bilIdx,lakkIdx){
+  if(o.laant) frigiLaantBil(o);
+  o.bilIdx=bilIdx; o.lakkIdx=lakkIdx;
+  o.bh=o.tbh||0; o.by=o.tby||0;      // snapp, ikke gli inn fra forrige verdi
+}
+function settKroppSynlig(o,vis){
+  const k=o.mesh.userData.kropper; if(!k)return;
+  if(o.kroppSynlig===vis)return;
+  o.kroppSynlig=vis;
+  for(const m of k) m.visible=vis;
+}
+function oppdaterAnnenBil(o){
+  // ny by bygget under beina på oss: den lånte bilen finnes ikke lenger
+  if(o.laant&&!o.laant.obj.parent){ o.laant.fjernstyrt=null; o.laant=null; }
+  if(!o.bilIdx){
+    if(o.laant) frigiLaantBil(o);
+    settKroppSynlig(o,true);
+    return;
+  }
+  const type=NETT_BILER[o.bilIdx-1];
+  if(!type)return;
+  if(!o.laant && !laanBil(o,type) && !lagLaanebil(o,type))
+    return;                                    // modellen er ikke lastet ennå
+  const obj=o.laant.obj, yoff=o.laant.yoff||0;
+  const gy=o.by||groundAt(o.x,o.z);
+  obj.visible=true;
+  obj.position.set(o.x,gy+yoff,o.z);
+  settBilRotasjon(obj,o.x,o.z,o.bh,0,0);
+  o.bilX=o.x; o.bilZ=o.z;
+  o.laant.x=o.x; o.laant.z=o.z; o.laant.yaw=o.bh+CAR_YAW;
+  settKroppSynlig(o,false);                    // han sitter inni
+}
+
+/* ---- andres damer ----------------------------------------------------
+   Bare ANTALLET sendes over nettet. Hver maskin simulerer selv at de går
+   på rekke bak eieren, med nøyaktig samme regler som dine egne følger.  */
+const DAMEG={
+  hode : new THREE.SphereGeometry(.235,14,11),
+  haar : new THREE.SphereGeometry(.252,14,10),
+  haarL: new THREE.BoxGeometry(.30,.54,.15),
+  kropp: new THREE.CapsuleGeometry(.175,.30,4,10),
+  arm  : new THREE.CapsuleGeometry(.058,.22,3,7),
+  ben  : new THREE.CapsuleGeometry(.072,.26,3,7),
+  oye  : new THREE.SphereGeometry(.036,7,6),
+  bryst: new THREE.SphereGeometry(.098,9,7)
+};
+DAMEG.haarL.translate(0,-.27,0);
+DAMEG.arm.translate(0,-.14,0);
+DAMEG.ben.translate(0,-.17,0);
+DAMEG.haar.scale(1,.72,1); DAMEG.haar.translate(0,.075,0);
+const DAMEM={
+  hud  : new THREE.MeshLambertMaterial({color:0xf0c8a0}),
+  rosa : new THREE.MeshLambertMaterial({color:0xFF5FA2}),
+  haar : new THREE.MeshLambertMaterial({color:0xE8D07A}),
+  oye  : new THREE.MeshLambertMaterial({color:0x241c16})
+};
+const DAME_BRYST=1.55;              // samme byste som gjorTilDame gir
+function makeDame(){
+  const g=new THREE.Group();
+  const legg=(geo,mat,x,y,z,sc)=>{
+    const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z);
+    if(sc)m.scale.setScalar(sc);
+    m.castShadow=true; g.add(m); return m; };
+  const D={};
+  D.benV=legg(DAMEG.ben,DAMEM.rosa,-.105,.43,0);
+  D.benH=legg(DAMEG.ben,DAMEM.rosa, .105,.43,0);
+  legg(DAMEG.kropp,DAMEM.rosa,0,.78,0);
+  D.armV=legg(DAMEG.arm,DAMEM.hud,-.245,.92,0);
+  D.armH=legg(DAMEG.arm,DAMEM.hud, .245,.92,0);
+  legg(DAMEG.hode,DAMEM.hud,0,1.30,0);
+  legg(DAMEG.haar,DAMEM.haar,0,1.30,-.01,1.16);
+  legg(DAMEG.haarL,DAMEM.haar,0,1.34,-.07);
+  legg(DAMEG.oye,DAMEM.oye,-.085,1.32,.215);
+  legg(DAMEG.oye,DAMEM.oye, .085,1.32,.215);
+  const bo=.088*DAME_BRYST, bz=.135*DAME_BRYST;
+  legg(DAMEG.bryst,DAMEM.rosa,-bo,.95,bz,DAME_BRYST);
+  legg(DAMEG.bryst,DAMEM.rosa, bo,.95,bz,DAME_BRYST);
+  g.userData.deler=D; g.userData.fase=0;
+  return g;
+}
+function oppdaterAndresDamer(o,dt){
+  const vil=o.damer|0;
+  if(!o.dameM)o.dameM=[];
+  while(o.dameM.length<vil){
+    const g=makeDame();
+    g.userData.x=o.x-1.5-o.dameM.length; g.userData.z=o.z;
+    scene.add(g); o.dameM.push(g);
+  }
+  while(o.dameM.length>vil){ scene.remove(o.dameM.pop()); }
+  for(let i=0;i<o.dameM.length;i++){
+    const g=o.dameM[i], u=g.userData;
+    const hold=2.4+i*1.5;                     // samme rekke som dine egne
+    const dx=o.x-u.x, dz=o.z-u.z, d=Math.hypot(dx,dz)||1;
+    let gaar=0;
+    if(d>hold){
+      const v=Math.min(6.6,1.8+d*0.55);
+      u.x+=dx/d*v*dt; u.z+=dz/d*v*dt; u.fase+=dt*5.4; gaar=1;
+    }
+    if(d>55){ u.x=o.x-dx/d*(hold+1); u.z=o.z-dz/d*(hold+1); }
+    g.rotation.y=Math.atan2(dx,dz)+Math.PI;
+    g.position.set(u.x,groundAt(u.x,u.z)+Math.abs(Math.sin(u.fase))*0.035,u.z);
+    const D=u.deler, sv=Math.sin(u.fase)*0.55*gaar;
+    D.benV.rotation.x= sv;  D.benH.rotation.x=-sv;
+    D.armV.rotation.x=-sv*0.75; D.armH.rotation.x=sv*0.75;
+  }
+}
+
 // glatt ut andres bevegelse mellom pakkene
 function netInterp(dt){
   const k=Math.min(1,dt*12);
@@ -7453,10 +7743,17 @@ function netInterp(dt){
     while(da>Math.PI) da-=Math.PI*2;
     while(da<-Math.PI) da+=Math.PI*2;
     o.yaw+=da*k;
+    let db=(o.tbh||0)-(o.bh||0);
+    while(db>Math.PI) db-=Math.PI*2;
+    while(db<-Math.PI) db+=Math.PI*2;
+    o.bh=(o.bh||0)+db*k;
+    o.by=(o.by||0)+((o.tby||0)-(o.by||0))*k;
     // pos.y er øyehøyde, så føttene ligger 1.75 lavere
     o.mesh.position.set(o.x,o.y-1.75,o.z);
     o.mesh.rotation.y=o.yaw;
     animerAvatar(o,dt);
+    oppdaterAnnenBil(o);
+    oppdaterAndresDamer(o,dt);
   }
 }
 
@@ -7615,7 +7912,7 @@ addEventListener('orientationchange',()=>setTimeout(sjekkRetning,250));
 /* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
    Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
    nyere enn den innebygde, lastes sida om én gang. */
-const BUILD='hotbar-65';
+const BUILD='mp-bil-damer-66';
 function sjekkNyVersjon(){
   fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
     .then(r=>r.ok?r.text():null)
