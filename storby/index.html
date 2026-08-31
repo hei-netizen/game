@@ -2625,7 +2625,7 @@ function sporEtterHjul(){
 // Bil mot bil og bil mot bygg. Treffer du en bil i trafikken blir den tatt ut
 // av strømmen og gjort om til et ekte objekt med egen fart, så den blir dyttet
 // og spinner videre i stedet for å bare stå der.
-const KRASJ_R=2.05;                    // grov kollisjonsradius per bil
+const KRASJ_R=1.65;                    // grov kollisjonsradius per bil
 function friPlass(x,z){
   for(const b of nearby(x,z))
     if(x>b.x0-0.7&&x<b.x1+0.7&&z>b.z0-0.7&&z<b.z1+0.7)return false;
@@ -3224,14 +3224,15 @@ function updateDrive(dt){
   const nx=drive.x+wx*Math.min(dt,0.05), nz=drive.z+wz*Math.min(dt,0.05);
   let hit=false;
   const paaRampe=rampeHoyde(drive.x,drive.z,drive.y);
-  // Treffboksen var 1,8 m bredere enn bilen på hver side og strakk seg
-  // 2 m ut foran og bak. Nå ligger den tett på karosseriet.
-  if(!drive.nocol)for(const o of [-1.75,0,1.75]){
+  // Treffboksen er strammet inn to ganger. Prøvepunktene dekker 3 m av de
+  // 4,5 m bilen er lang, og marginen er nede i 15 cm — bilen kan så vidt
+  // skrape borti et hjørne uten at det teller som et smell.
+  if(!drive.nocol)for(const o of [-1.5,0,1.5]){
     const px=nx+fx*o,pz=nz+fz*o;
     for(const b of nearby(px,pz)){
       if(drive.luft&&drive.y>b.top+0.4)continue;    // du flyr over det
       if(b.rampe&&(drive.luft||(paaRampe&&paaRampe.r===b.rampe)))continue;
-      if(px>b.x0-0.45&&px<b.x1+0.45&&pz>b.z0-0.45&&pz<b.z1+0.45){hit=true;break;}
+      if(px>b.x0-0.15&&px<b.x1+0.15&&pz>b.z0-0.15&&pz<b.z1+0.15){hit=true;break;}
     }
     if(hit)break;
   }
@@ -5053,7 +5054,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'race-47',
+  ver:()=>'hitboks-48',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5153,6 +5154,26 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  // kjør rett i en bygningsvegg og mål hvor tett bilen stopper
+  kollTest:()=>{
+    kino=false;
+    if(!parked.length)return null;
+    const b=bygg.find(q=>q.side==='z0'&&(q.x1-q.x0)>12);
+    drive.on=true; drive.car=parked[0]; settBilstil('sedan');
+    drive.x=(b.x0+b.x1)/2; drive.z=b.z0-40; drive.head=0;
+    drive.y=groundAt(drive.x,drive.z);
+    drive.vx=20;drive.vy=0;drive.yawrate=0;drive.steer=0;drive.skade=0;
+    drive.hits=0;drive.luft=false;
+    keys['KeyW']=true;
+    let n=0;
+    for(let k=0;k<60*8&&drive.on;k++){ updateDrive(1/60); n++; }
+    keys['KeyW']=false;
+    const ut={stoppetForan:+(b.z0-drive.z).toFixed(2),
+              smell:drive.hits||0, skade:Math.round(drive.skade),
+              kjorteGjennom:drive.z>b.z0, framer:n};
+    drive.on=false; drive.car=null;
+    return ut;
+  },
   banePos:()=>bane?{x:Math.round(bane.x),z:Math.round(bane.z),
     punkter:bane.pts.length,porter:bane.cps.length,
     lengde:Math.round(bane.lengde),start:[Math.round(bane.start.x),Math.round(bane.start.z)]}:null,
@@ -6503,7 +6524,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build race-47';
+  document.getElementById('verline').textContent='build hitboks-48';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
