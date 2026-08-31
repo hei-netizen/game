@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GRAND THEFT NORGE</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;overflow:hidden;background:#0b0d12;
@@ -288,7 +291,7 @@
 
 <div id="keys">
   <kbd>W A S D</kbd> gå &nbsp; <kbd>Shift</kbd> løp &nbsp; <kbd>Space</kbd> hopp<br>
-  <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>F</kbd> fly &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>Esc</kbd> slipp mus<br>
+  <kbd>E</kbd> inn/ut av bil &nbsp; <kbd>N</kbd> natt/dag &nbsp; <kbd>T</kbd> skygger &nbsp; <kbd>Esc</kbd> slipp mus<br>
   <kbd>1</kbd>&ndash;<kbd>9</kbd><kbd>0</kbd> / hjul velg ting &nbsp; <kbd>Venstreklikk</kbd> skyt/slå &nbsp; <kbd>Høyreklikk</kbd> sikte &nbsp; <kbd>R</kbd> lad om<br>
   <kbd>G</kbd> kast penger &nbsp; <kbd>X</kbd> kast gjenstand &nbsp; <kbd>E</kbd> handle/rane &nbsp; <kbd>B</kbd> race &nbsp; <kbd style="background:#3a4a2c">I</kbd> info
 </div>
@@ -4196,7 +4199,7 @@ function oppdaterRace(dt){
 
 /* ---------------------------- SPILLER ----------------------------------- */
 const P={pos:new THREE.Vector3(0,1.75,0),vel:new THREE.Vector3(),yaw:0,pitch:0,
-         onGround:false,fly:false,h:1.75,r:.6,
+         onGround:false,fly:false,h:1.75,r:.6,   // fly brukes bare av testkroken
          hp:100,dodT:0,skadeT:99,blod:0,
          sisteSkytter:null,sisteSkytterNavn:'',sisteSkytterT:0,
          dodAv:'',dodKr:0};
@@ -4228,7 +4231,7 @@ function showMode(){
                (drive.slip>0.22?'  ·  💨 SLADD':'')+
                (drive.skade>2?'  ·  🔧 '+Math.round(drive.skade)+' % skade':'')+
                '  ·  E ut  ·  Space håndbrekk  ·  Shift boost'
-  : P.fly    ? '✈ FLY-MODUS (F for å lande)' : '';
+  : '';
 }
 
 /* ================= INVENTAR, PISTOL OG KAMP ==============================
@@ -5303,7 +5306,7 @@ const INFO_HTML=`
     <div>
       <h3>Bevegelse</h3>
       <p><kbd>W A S D</kbd> gå &middot; <kbd>Shift</kbd> løp &middot; <kbd>Space</kbd> hopp</p>
-      <p><kbd>E</kbd> inn/ut av bil &middot; <kbd>F</kbd> fly &middot; <kbd>N</kbd> natt/dag</p>
+      <p><kbd>E</kbd> inn/ut av bil &middot; <kbd>N</kbd> natt/dag &middot; <kbd>T</kbd> skygger</p>
       <p>I bil: <kbd>Space</kbd> håndbrekk &middot; <kbd>Shift</kbd> boost</p>
       <h3>Våpen</h3>
       <p><kbd>1</kbd>–<kbd>9</kbd><kbd>0</kbd> eller musehjul velger</p>
@@ -5508,7 +5511,6 @@ function oppdaterRan(dt){
 addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='KeyE')enterExit();
-  if(e.code==='KeyF'){P.fly=!P.fly;P.vel.set(0,0,0);showMode();}
   if(e.code==='KeyN'){night=!night;applyTime();}
   if(e.code==='KeyT'){renderer.shadowMap.enabled=!renderer.shadowMap.enabled;
     scene.traverse(o=>{if(o.material)o.material.needsUpdate=true});}
@@ -5628,7 +5630,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'ytelse-58',
+  ver:()=>BUILD,
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -7345,6 +7347,23 @@ function kanSpille(){
 $('pname').addEventListener('keydown',e=>{ e.stopPropagation(); });
 $('pname').addEventListener('click',e=>{ e.stopPropagation(); });
 
+/* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
+   Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
+   nyere enn den innebygde, lastes sida om én gang. */
+const BUILD='ytelse-59';
+function sjekkNyVersjon(){
+  fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
+    .then(r=>r.ok?r.text():null)
+    .then(t=>{
+      if(!t)return;
+      const ny=t.trim();
+      if(!ny||ny===BUILD)return;
+      if(sessionStorage.getItem('gtnLastet')===ny)return;   // bare én gang
+      sessionStorage.setItem('gtnLastet',ny);
+      location.reload();
+    }).catch(()=>{});
+}
+
 /* ---------------------------- LOOP -------------------------------------- */
 let last=performance.now(),fa=0,fn=0,ht=0,FRAMES=0;
 function loop(now){
@@ -7369,7 +7388,7 @@ function loop(now){
     else if(toastT<=0){
       const n=nearestCar();
       document.getElementById('mode').textContent= hint ? hint :
-        (n.p||n.tr)?'🚗 Trykk E for å '+(n.tr?'kapre bilen':'kjøre'):(P.fly?'✈ FLY-MODUS (F for å lande)':'');
+        (n.p||n.tr)?'🚗 Trykk E for å '+(n.tr?'kapre bilen':'kjøre'):'';
     }
     drawMinimap();plist();visJakt();
     {
@@ -7415,7 +7434,8 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build ytelse-58';
+  document.getElementById('verline').textContent='build '+BUILD;
+  sjekkNyVersjon();
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
