@@ -5818,6 +5818,37 @@ window.__dbg={
   },
   slot:(i)=>inv.felt[i],
   mobil:()=>MOBIL,
+  hoyreTest:()=>{
+    kino=false; drive.on=false; P.fly=false; P.dodT=0;
+    P.pos.set(0,groundAt(0,0)+P.h,0); P.vel.set(0,0,0); P.yaw=0; P.pitch=0;
+    // yaw=0 -> spilleren ser mot -Z. Da er +X til høyre.
+    keys['KeyD']=true;
+    for(let k=0;k<40;k++)update(1/60);
+    keys['KeyD']=false;
+    const d={dx:+P.pos.x.toFixed(2),dz:+P.pos.z.toFixed(2)};
+    P.pos.set(0,groundAt(0,0)+P.h,0); P.vel.set(0,0,0); P.yaw=0;
+    keys['KeyW']=true;
+    for(let k=0;k<40;k++)update(1/60);
+    keys['KeyW']=false;
+    const w={dx:+P.pos.x.toFixed(2),dz:+P.pos.z.toFixed(2)};
+    return {D_skalGiPlussX:d, W_skalGiMinusZ:w};
+  },
+  bilSvingTest:()=>{
+    kino=false;
+    if(!parked.length)return null;
+    settBilstil('sedan');
+    drive.on=true; drive.car=parked[0]; drive.nocol=true;
+    drive.x=0; drive.z=0; drive.y=groundAt(0,0); drive.head=0;
+    drive.vx=14; drive.vy=0; drive.yawrate=0; drive.steer=0; drive.luft=false;
+    // head=0 -> bilen kjører mot +Z. Da er -X til høyre, +X til venstre.
+    keys['KeyA']=true; keys['KeyW']=true;
+    for(let k=0;k<90;k++)updateDrive(1/60);
+    keys['KeyA']=false; keys['KeyW']=false;
+    const ut={A_skalGiPlussX:{x:+drive.x.toFixed(1),z:+drive.z.toFixed(1),
+              head:+drive.head.toFixed(2)}};
+    drive.nocol=false; drive.on=false; drive.car=null;
+    return ut;
+  },
   styr:()=>({x:+styrX.toFixed(2),y:+styrY.toFixed(2),aktiv:styrAktiv}),
   steg:(dt)=>update(dt),
   yaw:()=>P.yaw,
@@ -6769,7 +6800,11 @@ function update(dt){
     sun.target.position.set(drive.x,0,drive.z);sun.target.updateMatrixWorld();
     return;
   }
-  fw.set(-Math.sin(P.yaw),0,-Math.cos(P.yaw));rt.set(fw.z,0,-fw.x);
+  fw.set(-Math.sin(P.yaw),0,-Math.cos(P.yaw));
+  // Høyrevektoren sto med feil fortegn: den pekte mot VENSTRE, så D gikk til
+  // venstre og stikka på mobil ble speilvendt. Kjøringen bruker ikke denne
+  // vektoren og er urørt.
+  rt.set(-fw.z,0,fw.x);
   wish.set(0,0,0);
   if(keys['KeyW'])wish.add(fw); if(keys['KeyS'])wish.sub(fw);
   if(keys['KeyD'])wish.add(rt); if(keys['KeyA'])wish.sub(rt);
@@ -7574,7 +7609,7 @@ addEventListener('orientationchange',()=>setTimeout(sjekkRetning,250));
 /* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
    Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
    nyere enn den innebygde, lastes sida om én gang. */
-const BUILD='mobil-63';
+const BUILD='styring-64';
 function sjekkNyVersjon(){
   fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
     .then(r=>r.ok?r.text():null)
