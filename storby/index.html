@@ -2584,8 +2584,9 @@ function placeHero(t,n){
       lagt++;
     });
   }
+  // Hver McLaren er 123 mesher = 123 tegnekall. Tre er nok.
   let forsok=0;
-  while(lagt<n+2&&forsok++<200){
+  while(lagt<3&&forsok++<200){
     const b=blocks[rndi(0,blocks.length-1)];
     if(!b||b.d===D_PARK)continue;
     spawnRealCar(t,(b.x0+b.x1)/2,b.z0-3.2,0);
@@ -2599,7 +2600,7 @@ function buildTraffic(){
   const types=CAR_TYPES.filter(t=>carGeo[t]);
   if(!types.length)return;
   const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
-  const per=Math.ceil(230/types.length);
+  const per=Math.ceil(150/types.length);
   for(const t of types){
     const im=new THREE.InstancedMesh(carGeo[t],carMats[t]||carMat,per);
     im.castShadow=true;im.frustumCulled=false;
@@ -5627,7 +5628,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'kjoring-57',
+  ver:()=>'ytelse-58',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -5727,6 +5728,66 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  meshFordeling:()=>{
+    const ut=[];
+    for(const c of scene.children){
+      let n=0,t=0;
+      c.traverse(o=>{ if(o.isMesh||o.isInstancedMesh){ n++;
+        const g=o.geometry;
+        if(g){const tt=(g.index?g.index.count:(g.attributes.position?g.attributes.position.count:0))/3;
+              t+=tt*(o.isInstancedMesh?o.count:1);} }});
+      if(n)ut.push({navn:c.name||c.type,mesher:n,tri:Math.round(t)});
+    }
+    ut.sort((a,b)=>b.mesher-a.mesher);
+    return ut.slice(0,14);
+  },
+  triTopp:()=>{
+    const ut=[];
+    scene.traverse(o=>{
+      if(!o.isMesh&&!o.isInstancedMesh)return;
+      const g=o.geometry; if(!g)return;
+      const t=(g.index?g.index.count:(g.attributes.position?g.attributes.position.count:0))/3;
+      const n=o.isInstancedMesh?o.count:1;
+      const bs=g.boundingSphere?Math.round(g.boundingSphere.radius):-1;
+      ut.push({navn:(o.name||o.type)+(o.isInstancedMesh?'x'+n:''),
+               tri:Math.round(t*n),radius:bs,culled:o.frustumCulled});
+    });
+    ut.sort((a,b)=>b.tri-a.tri);
+    const sum=ut.reduce((s2,x)=>s2+x.tri,0);
+    return {sum:sum,topp:ut.slice(0,16),antall:ut.length};
+  },
+  profil:(n)=>{
+    kino=false; n=n||200;
+    const mal=(navn,f)=>{ const t0=performance.now();
+      for(let k=0;k<n;k++)f(1/60); return {navn:navn,ms:+((performance.now()-t0)/n).toFixed(3)}; };
+    const ut=[];
+    ut.push(mal('update',update));
+    ut.push(mal('updateCars',updateCars));
+    ut.push(mal('oppdaterFolk',oppdaterFolk));
+    ut.push(mal('oppdaterPoliti',oppdaterPoliti));
+    ut.push(mal('oppdaterBetjenter',oppdaterBetjenter));
+    ut.push(mal('oppdaterKlubb',oppdaterKlubb));
+    ut.push(mal('oppdaterInteriør',()=>oppdaterInteriør()));
+    ut.push(mal('oppdaterVaapen',oppdaterVaapen));
+    ut.push(mal('oppdaterPlukk',oppdaterPlukk));
+    ut.push(mal('oppdaterFengsel',oppdaterFengsel));
+    ut.push(mal('oppdaterRace',oppdaterRace));
+    ut.push(mal('oppdaterHelsestolper',oppdaterHelsestolper));
+    ut.push(mal('oppdaterPeker',()=>oppdaterPeker()));
+    ut.push(mal('oppdaterLose',oppdaterLose));
+    ut.push(mal('netInterp',netInterp));
+    ut.push(mal('render',()=>renderer.render(scene,camera)));
+    ut.push(mal('drawMinimap',()=>drawMinimap()));
+    ut.sort((a,b)=>b.ms-a.ms);
+    return {topp:ut.slice(0,10),
+            info:{kall:renderer.info.render.calls,
+                  tri:renderer.info.render.triangles,
+                  geo:renderer.info.memory.geometries,
+                  tex:renderer.info.memory.textures,
+                  barn:scene.children.length,
+                  folk:folkData.length, biler:carData.length,
+                  parkert:parked.length, kolliderer:colliders.length}};
+  },
   racerSjekk:()=>parked.filter(p=>p.racer).map(p=>{
     let n=0,arr=0,synl=0;
     p.obj.traverse(o=>{ if(o.isMesh){ n++;
@@ -6811,24 +6872,26 @@ function drawMinimap(){
    Fotoskannede modeller desimert til ~12% og teksturer ned til 512px webp.
    Instansert per romlig rute, ellers tegnes hele byens props hver frame.
    ========================================================================== */
+// Antallet er halvert mot før. 1750 gatepropper sto for 7 av 10 trekanter
+// i hele scenen; modellene er skannede og tunge selv etter forenkling.
 const PROP_DEF=[
   // navn,                     maks,  plassering,  y
-  ['metal_trash_can',           240, 'kerb',   0   ],
-  ['fire_hydrant',              150, 'kerb',   0   ],
-  ['street_lamp_01',            110, 'kerb',   0   ],
-  ['modular_street_seating',    100, 'kerb',   0   ],
-  ['concrete_road_barrier',      80, 'kerb',   0   ],
-  ['concrete_road_barrier_02',   70, 'kerb',   0   ],
-  ['old_tyre',                   80, 'kerb',   0   ],
-  ['utility_box_01',            110, 'wall',   0   ],
-  ['utility_box_02',            100, 'wall',   0   ],
-  ['rollershutter_door',         70, 'wall',   0   ],
-  ['barrel_stove',               50, 'wall',   0   ],
-  ['modular_chainlink_fence',    60, 'wall',   0   ],
-  ['exterior_aircon_unit',      190, 'wall',   3.4 ],
-  ['modular_fire_escape',        60, 'wall',   4.2 ],
-  ['security_camera_01',         80, 'wall',   4.6 ],
-  ['water_manhole_cover',       160, 'road',   0.02]
+  ['metal_trash_can',           120, 'kerb',   0   ],
+  ['fire_hydrant',               80, 'kerb',   0   ],
+  ['street_lamp_01',             70, 'kerb',   0   ],
+  ['modular_street_seating',     45, 'kerb',   0   ],
+  ['concrete_road_barrier',      45, 'kerb',   0   ],
+  ['concrete_road_barrier_02',   40, 'kerb',   0   ],
+  ['old_tyre',                   45, 'kerb',   0   ],
+  ['utility_box_01',             60, 'wall',   0   ],
+  ['utility_box_02',             55, 'wall',   0   ],
+  ['rollershutter_door',         40, 'wall',   0   ],
+  ['barrel_stove',               28, 'wall',   0   ],
+  ['modular_chainlink_fence',    30, 'wall',   0   ],
+  ['exterior_aircon_unit',       90, 'wall',   3.4 ],
+  ['modular_fire_escape',        32, 'wall',   4.2 ],
+  ['security_camera_01',         45, 'wall',   4.6 ],
+  ['water_manhole_cover',        80, 'road',   0.02]
 ];
 const PGX=5, PGZ=4;                       // grovere rutenett enn bygningene
 let propGroup=null;
@@ -7352,7 +7415,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build kjoring-57';
+  document.getElementById('verline').textContent='build ytelse-58';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
