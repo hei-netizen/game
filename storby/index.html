@@ -2106,11 +2106,13 @@ async function loadCars(){
 // Helte-biler: for tunge til trafikk (McLaren er 4,7 MB / 187k verteks), så de
 // lastes etter at byen står, og settes ut som noen få parkerte eksemplarer.
 const HERO_CARS=['mclaren'];
+const HERO_SNU={mclaren:Math.PI};   // modellens egen frontretning
 // Racerne har mer effekt, kvikkere ratt og lettere karosseri, men mykere
 // bakgrep — de går fortere og sladder villigere enn resten.
 const RACE_CARS=['sedan-sports','hatchback-sports','mclaren'];
 const TUNGE_CARS=['van','delivery','truck-flat','ambulance'];
 function bilKlasse(t){
+  if(t==='mclaren')return 'hyper';
   return RACE_CARS.indexOf(t)>=0?'race':TUNGE_CARS.indexOf(t)>=0?'tung':'vanlig';
 }
 async function loadHeroCars(){
@@ -2121,7 +2123,16 @@ async function loadHeroCars(){
       g.scene.updateMatrixWorld(true);
       const bb=new THREE.Box3().setFromObject(g.scene);
       carYoff[t]=-bb.min.y;
-      carSrc[t]=g.scene;
+      // McLaren-modellen peker motsatt vei av Kenney-bilene, så den kjørte
+      // baklengs. Retningen rettes i en egen wrapper, slik at spillet kan
+      // sette rotasjonen på ytterobjektet som før.
+      if(HERO_SNU[t]!==undefined){
+        const wrap=new THREE.Group();
+        g.scene.rotation.y=HERO_SNU[t];
+        wrap.add(g.scene);
+        wrap.updateMatrixWorld(true);
+        carSrc[t]=wrap;
+      } else carSrc[t]=g.scene;
       placeHero(t,3);
     }catch(e){ console.warn('helte-bil mangler:',t,e.message); }
   }
@@ -2752,7 +2763,8 @@ function enterExit(){
   drive.skade=0;drive.rist=0;drive.rull=0;drive.stamp=0;
   drive.luft=false;drive.vv=0;drive.luftT=0;drive.nese=0;
   settBilstil(best.type);
-  if(drive.klasse==='race')showToast('🏁 Racer — mer effekt, kvikkere ratt, løsere bak');
+  if(drive.klasse==='hyper')showToast('🏎 McLaren — byens raskeste bil');
+  else if(drive.klasse==='race')showToast('🏁 Racer — mer effekt, kvikkere ratt, løsere bak');
   P.fly=false;showMode();
 }
 
@@ -2788,6 +2800,11 @@ const BILSTIL={
   race:  {effekt:1.62,effektBoost:1.52,maksTrekk:1.34,mu:1.07,Cf:1.34,Cr:1.06,
           M:0.80,I:0.74,ratt:1.26,cLuft:0.84,brems:1.28,girTak:1.30,
           sladdDemp:0.80,muHand:0.86,cRull:0.82},
+  // McLaren-en skal være raskest i byen: mest effekt, minst luftmotstand,
+  // letteste karosseri.
+  hyper: {effekt:2.15,effektBoost:2.05,maksTrekk:1.55,mu:1.14,Cf:1.46,Cr:1.16,
+          M:0.72,I:0.66,ratt:1.32,cLuft:0.72,brems:1.42,girTak:1.36,
+          sladdDemp:0.86,muHand:0.90,cRull:0.72},
   tung:  {effekt:0.70,maksTrekk:0.94,mu:0.90,Cf:0.78,Cr:0.88,M:1.58,I:1.75,
           ratt:0.80,cLuft:1.38,brems:0.84,girTak:0.82},
   vanlig:{}
@@ -3128,9 +3145,10 @@ function build(){
    Ett av byggene nær sentrum gjøres om til våpenbutikk. Den bruker den samme
    interiørmotoren som alle andre bygg, får neonskilt på fasaden og en egen
    bokstav på kartet, slik at den faktisk er til å finne.               */
-let vaapenbutikk=null, vbSkilt=null;
+let vaapenbutikk=null, vbSkilt=null, vbSoyle=null;
 function velgVaapenbutikk(){
   if(vbSkilt){ scene.remove(vbSkilt); vbSkilt=null; }
+  if(vbSoyle){ scene.remove(vbSoyle); vbSoyle=null; }
   vaapenbutikk=null;
   let best=null,bd=1e9;
   for(const b of bygg){
@@ -3161,6 +3179,17 @@ function velgVaapenbutikk(){
   vbSkilt.position.set(sx,best.pad+4.3,sz);
   vbSkilt.rotation.y=ROT[best.side];
   scene.add(vbSkilt);
+
+  // Lyssøyle rett opp fra taket. Uten den var butikken umulig å finne uten
+  // å stirre på minikartet hele veien.
+  const cx=(best.x0+best.x1)/2, cz=(best.z0+best.z1)/2;
+  const sG=new THREE.CylinderGeometry(1.5,3.4,220,10,1,true);
+  const sM=new THREE.MeshBasicMaterial({color:0xffa63d,transparent:true,opacity:0.20,
+    side:THREE.DoubleSide,depthWrite:false});
+  vbSoyle=new THREE.Mesh(sG,sM);
+  vbSoyle.position.set(cx,best.top+112,cz);
+  vbSoyle.renderOrder=-1;
+  scene.add(vbSoyle);
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
@@ -3188,7 +3217,8 @@ function kinoKamera(dt){
 const keys={};
 function showMode(){
   document.getElementById('mode').textContent =
-    drive.on ? (drive.klasse==='race'?'🏁 ':drive.klasse==='tung'?'🚚 ':'🚗 ')+
+    drive.on ? (drive.klasse==='hyper'?'🏎 ':drive.klasse==='race'?'🏁 ':
+                drive.klasse==='tung'?'🚚 ':'🚗 ')+
                Math.round(Math.abs(drive.vx)*3.6)+' km/t'+
                (drive.spinn>0.05?'  ·  🔥 SPINN':'')+
                (drive.slip>0.22?'  ·  💨 SLADD':'')+
@@ -4125,7 +4155,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'arsenal-33',
+  ver:()=>'mclaren-35',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4151,6 +4181,68 @@ window.__dbg={
   bx:(i)=>bygg[i],
   kl:()=>klubb, fg:()=>fengsel,
   ramper:()=>ramper.length,
+  vbPos:()=>vaapenbutikk?{x:Math.round((vaapenbutikk.x0+vaapenbutikk.x1)/2),z:Math.round((vaapenbutikk.z0+vaapenbutikk.z1)/2),side:vaapenbutikk.side,soyle:!!vbSoyle}:null,
+  sideBilde:(type)=>{
+    kino=false;
+    const px=P.pos.x, pz=P.pos.z, gy=groundAt(px,pz);
+    const q=spawnRealCar(type,px,pz,0);           // yaw 0 = kjører mot +Z
+    camera.position.set(px+11,gy+1.9,pz);
+    camera.rotation.order='YXZ';
+    camera.rotation.set(-0.06,Math.PI/2,0);       // ser mot -X
+    camera.updateMatrixWorld(true);
+    renderer.render(scene,camera);
+    const png=renderer.domElement.toDataURL('image/jpeg',0.85);
+    scene.remove(q.obj);
+    const i2=parked.indexOf(q); if(i2>=0)parked.splice(i2,1);
+    return png;
+  },
+  retningsBilde:()=>{
+    kino=false;
+    const px=P.pos.x, pz=P.pos.z, gy=groundAt(px,pz);
+    const a=spawnRealCar('sedan',px-4.5,pz,0);
+    const b=carSrc['mclaren']?spawnRealCar('mclaren',px+4.5,pz,0):null;
+    camera.position.set(px,gy+17,pz);
+    camera.rotation.order='YXZ';
+    camera.rotation.set(-Math.PI/2,0,0);
+    camera.updateMatrixWorld(true);
+    renderer.render(scene,camera);
+    const png=renderer.domElement.toDataURL('image/jpeg',0.8);
+    for(const q of [a,b]) if(q){ scene.remove(q.obj);
+      const i=parked.indexOf(q); if(i>=0)parked.splice(i,1); }
+    return {mclarenFinnes:!!b,png:png};
+  },
+  // toppfart per klasse: full gass på flat vei
+  toppfart:(type)=>{
+    kino=false;
+    if(!parked.length)return null;
+    settBilstil(type);
+    drive.on=true; drive.car=parked[0]; drive.nocol=true;
+    drive.x=P.pos.x; drive.z=P.pos.z; drive.head=0; drive.y=groundAt(drive.x,drive.z);
+    drive.vx=0; drive.vy=0; drive.yawrate=0; drive.steer=0; drive.skade=0;
+    drive.luft=false; drive.vv=0;
+    keys['KeyW']=true;
+    for(let k=0;k<3600;k++) updateDrive(1/60);
+    keys['KeyW']=false;
+    const ut={klasse:drive.klasse,kmt:Math.round(Math.abs(drive.vx)*3.6)};
+    drive.nocol=false; drive.on=false; drive.car=null;
+    return ut;
+  },
+  // sammenlign hvilken vei to modeller peker: rendrer dem ovenfra
+  bilRetning:()=>{
+    kino=false;
+    const ut={};
+    for(const t of ['sedan','mclaren']){
+      const src=carSrc[t]; if(!src){ut[t]='mangler';continue;}
+      const o=src.clone(true);
+      o.rotation.set(0,0,0); o.updateMatrixWorld(true);
+      const bb=new THREE.Box3().setFromObject(o);
+      // hvor er fronten? se hvor massen ligger foran/bak midten i Z
+      ut[t]={lengdeZ:+(bb.max.z-bb.min.z).toFixed(2),
+             bredde:+(bb.max.x-bb.min.x).toFixed(2),
+             minZ:+bb.min.z.toFixed(2), maxZ:+bb.max.z.toFixed(2)};
+    }
+    return ut;
+  },
   tegnB:()=>tegnButikk(),
   vbInne:()=>{ kino=false;
     if(!vaapenbutikk)return null;
@@ -5216,7 +5308,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build arsenal-33';
+  document.getElementById('verline').textContent='build mclaren-35';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
