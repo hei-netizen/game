@@ -94,28 +94,47 @@
   #knott{width:58px;height:58px;border-radius:50%;
     background:rgba(200,215,245,.55);border:2px solid rgba(255,255,255,.6)}
   #tknapper{position:fixed;right:14px;bottom:14px;z-index:9;pointer-events:auto;
-    display:grid;grid-template-columns:repeat(3,auto);gap:9px;justify-items:end}
+    display:flex;align-items:flex-end;gap:10px}
+  #tknapper .tk.kontekst{display:none}
+  #tknapper .tk.kontekst.vis{display:block}
   #tknapper .tk{width:62px;height:62px;border-radius:50%;
     background:rgba(20,25,36,.72);border:2px solid #5b6a86;color:#dbe6ff;
     font:600 17px ui-monospace,Menlo,monospace;pointer-events:auto}
-  #tknapper .tk.stor{width:84px;height:84px;font-size:30px;
-    grid-column:3;grid-row:1/span 2;background:rgba(60,24,24,.75);border-color:#a04a4a}
+  #tknapper .tk.stor{width:86px;height:86px;font-size:31px;
+    background:rgba(60,24,24,.75);border-color:#a04a4a}
   #tknapper .tk.liten{width:48px;height:48px;font-size:14px}
   #tknapper .tk.nede{background:rgba(90,110,150,.8)}
-  body.mobil #keys{display:none}
-  body.mobil #minimap{width:168px;height:112px;right:8px;top:8px}
-  body.mobil #raceboard{top:132px;right:8px;min-width:150px;padding:8px 10px}
+  /* På telefon skal skjermen vise fem ting: kart, helse, ammo, det du bærer
+     og linja som sier hva knappen gjør. Resten er skrudd av. */
+  body.mobil #keys,
+  body.mobil #nyheter,
+  body.mobil #verline,
+  body.mobil #herocar,
+  body.mobil #landemerker,
+  body.mobil #helsetall,
+  body.mobil #pengerhud small{display:none!important}
+  body.mobil #hud{top:auto;bottom:92px;left:50%;right:auto;
+    transform:translateX(-50%);text-align:center;width:max-content;max-width:60vw}
+  body.mobil #hud>div{display:none}
+  body.mobil #hud>#mode{display:block;font-size:13px;color:#ffd875;
+    text-shadow:0 2px 8px #000;letter-spacing:.02em}
+  body.mobil #hotbar .s.tom{display:none}
+  body.mobil #minimap{width:132px;height:88px;right:8px;top:8px}
+  body.mobil #raceboard{top:118px;right:8px;min-width:138px;padding:7px 9px}
+  body.mobil #raceboard .li{font-size:9.5px}
+  body.mobil #raceboard .pl{font-size:9.5px}
   body.mobil #raceboard .tid{font-size:23px}
   body.mobil #hotbar{bottom:8px;left:12px;transform:none;gap:4px}
   body.mobil #hotbar .s{width:36px;height:36px;font-size:17px}
   body.mobil #hotbar .s .nr{font-size:8px}
   body.mobil #hotbar .s .nv{display:none}
-  body.mobil #helse,body.mobil #helsetall{width:168px;bottom:52px;left:12px;transform:none}
-  body.mobil #pengerhud{left:12px;bottom:74px;transform:none;text-align:left;font-size:13px}
+  body.mobil #helse{width:132px;height:10px;bottom:50px;left:12px;transform:none}
+  body.mobil #pengerhud{left:12px;bottom:70px;transform:none;text-align:left;font-size:13px}
   body.mobil #nyheter{top:126px;width:190px;font-size:10px}
   body.mobil #hud{font-size:10px}
   body.mobil #district{font-size:14px}
-  body.mobil #ammo{right:14px;bottom:200px;font-size:18px;text-align:right}
+  body.mobil #ammo{right:14px;bottom:200px;font-size:17px;text-align:right}
+  body.mobil #ammo small{font-size:11px}
   body.mobil #players{display:none}
   body.mobil #overlay h1{font-size:26px;letter-spacing:.10em}
   body.mobil #overlay .box{padding:20px 18px}
@@ -4331,7 +4350,8 @@ function tegnHotbar(){
   let h='';
   for(let i=0;i<SLOTS;i++){
     const f=inv.felt[i], t=f?TING[f.id]:null;
-    h+='<div class="s'+(i===inv.slot?' valgt':'')+'"><span class="nr">'+((i+1)%10)+'</span>'+
+    h+='<div class="s'+(i===inv.slot?' valgt':'')+(f?'':' tom')+
+       '"><span class="nr">'+((i+1)%10)+'</span>'+
        (t?t.ikon:'')+
        (f&&f.n>1?'<span class="ant">'+f.n+'</span>':'')+
        (i===inv.slot&&t?'<span class="nv">'+t.navn+'</span>':'')+'</div>';
@@ -7429,14 +7449,15 @@ function lagMobilUI(){
   d.id='touch';
   d.innerHTML=
     '<div id="stikke"><div id="knott"></div></div>'+
+    // Tre knapper som alltid trengs, én meny, og to som bare dukker opp
+    // der de gir mening. R er borte — magasinet lader seg selv.
     '<div id="tknapper">'+
-      '<button class="tk stor" data-t="skyt">🔫</button>'+
-      '<button class="tk" data-t="e">E</button>'+
+      '<button class="tk liten kontekst" data-t="g">💵</button>'+
+      '<button class="tk liten kontekst" data-t="b">🏁</button>'+
+      '<button class="tk liten" data-t="i">≡</button>'+
       '<button class="tk" data-t="hopp">⤒</button>'+
-      '<button class="tk liten" data-t="r">R</button>'+
-      '<button class="tk liten" data-t="i">i</button>'+
-      '<button class="tk liten" data-t="b">B</button>'+
-      '<button class="tk liten" data-t="g">G</button>'+
+      '<button class="tk" data-t="e">E</button>'+
+      '<button class="tk stor" data-t="skyt">🔫</button>'+
     '</div>';
   document.body.appendChild(d);
 
@@ -7508,9 +7529,6 @@ function lagMobilUI(){
     else if(navn==='hopp'){ keys['Space']=ned; }
     else if(ned){
       if(navn==='e')enterExit();
-      else if(navn==='r'){ const vf=aktivtVaapen();
-        if(vf){ const VV=VAAPENSETT[vf.id];
-          if(gun.lad<=0&&vf.i<VV.mag&&vf.res>0)gun.lad=VV.ladT; } }
       else if(navn==='i'){ infoAapen?lukkInfo():apneInfo(); }
       else if(navn==='b'){ if(bane&&!race.aktiv&&!lobby.aapen&&
           Math.hypot(spillerPos().x-bane.start.x,spillerPos().z-bane.start.z)<18)apneLobby(); }
@@ -7532,6 +7550,15 @@ function lagMobilUI(){
     velgSlot(i); e.preventDefault(); e.stopPropagation();
   },{passive:false});
 }
+function oppdaterMobilKnapper(){
+  if(!MOBIL)return;
+  const vis=(t,p)=>{ const b=document.querySelector('#tknapper [data-t="'+t+'"]');
+                     if(b)b.classList.toggle('vis',!!p); };
+  const sp=spillerPos();
+  vis('b', bane&&!race.aktiv&&!lobby.aapen&&
+           Math.hypot(sp.x-bane.start.x,sp.z-bane.start.z)<18);
+  vis('g', !!(klubb&&klubb.inne)&&!drive.on);
+}
 function startMobil(){
   if(!kanSpille())return;
   document.getElementById('overlay').style.display='none';
@@ -7547,7 +7574,7 @@ addEventListener('orientationchange',()=>setTimeout(sjekkRetning,250));
 /* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
    Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
    nyere enn den innebygde, lastes sida om én gang. */
-const BUILD='mobil-61';
+const BUILD='mobil-63';
 function sjekkNyVersjon(){
   fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
     .then(r=>r.ok?r.text():null)
@@ -7568,7 +7595,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterSelg(dt);oppdaterRace(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterSlipte(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterMobilKnapper();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterSelg(dt);oppdaterRace(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterSlipte(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
