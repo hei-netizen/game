@@ -54,8 +54,14 @@
     transition:opacity .18s linear;
     background:radial-gradient(ellipse at center,rgba(180,0,0,0) 35%,rgba(150,0,0,.85) 100%)}
   #overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(ellipse at 50% 40%,#151b28 0%,#080a0f 70%);cursor:pointer}
-  #overlay .box{text-align:center;max-width:600px;padding:0 30px}
+    background:radial-gradient(ellipse at 50% 45%,rgba(8,10,15,.42) 0%,rgba(6,8,12,.86) 78%);
+    cursor:pointer;backdrop-filter:blur(1.5px)}
+  #overlay .box{background:rgba(9,11,16,.55);border:1px solid rgba(120,140,180,.18);
+    border-radius:12px;padding:34px 40px 30px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  body.kino #hud,body.kino #keys,body.kino #minimap,body.kino #crosshair,
+  body.kino #hotbar,body.kino #ammo,body.kino #helse,body.kino #pengerhud,
+  body.kino #stjerner,body.kino #jakt,body.kino #players{display:none!important}
+  #overlay .box{text-align:center;max-width:600px}
   #overlay h1{font-size:64px;letter-spacing:.3em;font-weight:800;margin-bottom:6px;
     background:linear-gradient(180deg,#fff,#7d90b8);-webkit-background-clip:text;
     -webkit-text-fill-color:transparent;background-clip:text}
@@ -96,7 +102,7 @@
     background:#080a0f;color:#8fa0c0;font-size:13px;letter-spacing:.2em;text-transform:uppercase}
 </style>
 </head>
-<body>
+<body class="kino">
 <div id="load">Genererer by&hellip;</div>
 
 <div id="hud">
@@ -554,6 +560,47 @@ function parapet(b,x0,x1,y,z0,z1,h,e,col){
   slab(b,X0,X1,y+h,Z1-e*2,Z1,2,col); slab(b,X0,X1,y+h,Z0,Z0+e*2,2,col);
   slab(b,X0,X0+e*2,y+h,Z0+e*2,Z1-e*2,2,col); slab(b,X1-e*2,X1,y+h,Z0+e*2,Z1-e*2,2,col);
 }
+// Hoppramper. De legges IKKE inn som kollisjonsbokser — da hadde de vært en
+// vegg. I stedet slår rampeHoyde() opp flatehøyden, og bilen forlater toppen
+// med oppoverfart som svarer til stigningen.
+let ramper=[];
+function rampe(b,x,z,yaw,L,W,H,pad,col){
+  const sh=Math.sin(yaw), ch=Math.cos(yaw);
+  const P2=(lz,lx,y)=>[x+lz*sh+lx*ch, y, z+lz*ch-lx*sh];
+  const hw=W/2;
+  const a0=P2(0,-hw,pad),  b0=P2(0,hw,pad);
+  const a1=P2(L,-hw,pad+H),b1=P2(L,hw,pad+H);
+  const a2=P2(L,-hw,pad),  b2=P2(L,hw,pad);
+  // kjøreflate
+  quad(b,a0[0],a0[1],a0[2], b0[0],b0[1],b0[2], b1[0],b1[1],b1[2], a1[0],a1[1],a1[2],
+       0,1,0, 0,0,W/3,L/3,col);
+  // to sidetrekanter
+  tri(b,a0[0],a0[1],a0[2], a1[0],a1[1],a1[2], a2[0],a2[1],a2[2], -ch,0,sh, 0,0,1,0,1,1,col);
+  tri(b,b0[0],b0[1],b0[2], b2[0],b2[1],b2[2], b1[0],b1[1],b1[2],  ch,0,-sh,0,0,1,0,1,1,col);
+  // bakvegg under kanten
+  quad(b,a1[0],a1[1],a1[2], b1[0],b1[1],b1[2], b2[0],b2[1],b2[2], a2[0],a2[1],a2[2],
+       sh,0,ch, 0,0,W/3,H/2,[col[0]*.7,col[1]*.7,col[2]*.7]);
+  ramper.push({x:x,z:z,yaw:yaw,L:L,W:W,H:H,pad:pad});
+}
+// høyden på rampeflaten i et punkt, eller null
+function rampeHoyde(x,z){
+  for(let i=0;i<ramper.length;i++){
+    const r=ramper[i];
+    const dx=x-r.x, dz=z-r.z;
+    if(dx*dx+dz*dz > (r.L+r.W)*(r.L+r.W))continue;
+    const sh=Math.sin(r.yaw), ch=Math.cos(r.yaw);
+    const lz=dx*sh+dz*ch, lx=dx*ch-dz*sh;
+    if(lz<0||lz>r.L||Math.abs(lx)>r.W/2)continue;
+    return {y:r.pad+r.H*(lz/r.L), u:lz/r.L, r:r};
+  }
+  return null;
+}
+// bakkehøyde inkludert ramper — brukes av spilleren og bilen
+function bakkeH(x,z){
+  const g=groundAt(x,z), r=rampeHoyde(x,z);
+  return (r&&r.y>g)?r.y:g;
+}
+
 // saltak — gir boligstrøket en helt annen silhuett enn sentrum
 function gable(b,x0,x1,y,z0,z1,h,col){
   const mz=(z0+z1)/2, dz=(z1-z0)/2, L=Math.sqrt(dz*dz+h*h);
@@ -1057,6 +1104,46 @@ function generateCity(scene,mats,gm){
       slab(dash,x,x+4,y,s.p-0.28,s.p+0.28,1,W);
     }
   add(dash,gm.dashMat);
+
+  // Hoppramper langs hovedgatene. Én per gate på et sted der det er fritt,
+  // og alltid i kjøreretningen så du treffer dem rett på.
+  ramper=[];
+  const rmpBuf=Buf();
+  const leggRampe=(x,z,yaw)=>{
+    const L=rnd(9,12), Wd=rnd(5.2,6.6), H=L*0.24;   // fast stigning = forutsigbart hopp
+    const pd=terrainH(x,z);
+    // fritt langs hele lengden og et stykke etter kanten
+    for(let u=-2;u<=L+16;u+=2.5)
+      if(!friPlass(x+u*Math.sin(yaw), z+u*Math.cos(yaw)))return false;
+    rampe(rmpBuf,x,z,yaw,L,Wd,H,pd,[.92,.62,.22]);
+    // sperrestriper på kanten
+    quad(rmpBuf, x+L*Math.sin(yaw)+ (Wd/2)*Math.cos(yaw), pd+H+0.02, z+L*Math.cos(yaw)-(Wd/2)*Math.sin(yaw),
+                 x+L*Math.sin(yaw)- (Wd/2)*Math.cos(yaw), pd+H+0.02, z+L*Math.cos(yaw)+(Wd/2)*Math.sin(yaw),
+                 x+(L-1.2)*Math.sin(yaw)-(Wd/2)*Math.cos(yaw), pd+H*(L-1.2)/L+0.02, z+(L-1.2)*Math.cos(yaw)+(Wd/2)*Math.sin(yaw),
+                 x+(L-1.2)*Math.sin(yaw)+(Wd/2)*Math.cos(yaw), pd+H*(L-1.2)/L+0.02, z+(L-1.2)*Math.cos(yaw)-(Wd/2)*Math.sin(yaw),
+                 0,1,0, 0,0,3,1,[1,1,1]);
+    return true;
+  };
+  {
+    const artX=streetsX.filter(s2=>s2.art), artZ=streetsZ.filter(s2=>s2.art);
+    let satt=0, forsok=0;
+    while(satt<26&&forsok<700){
+      forsok++;
+      const langsZ=rand()<.5;
+      const g=langsZ?artX[rndi(0,artX.length-1)]:artZ[rndi(0,artZ.length-1)];
+      if(!g)break;
+      // kjørefeltet, ikke midt i veien
+      const off=(rand()<.5?4.8:-4.8);
+      // holdes innenfor bebyggelsen — ute i skogkanten vokser trærne i veien
+      const x=langsZ?g.p+off:rnd(-HW*0.62,HW*0.62);
+      const z=langsZ?rnd(-HD*0.62,HD*0.62):g.p+off;
+      if(Math.abs(langsZ?g.p:x)>HW*0.66||Math.abs(langsZ?z:g.p)>HD*0.66)continue;
+      const yaw=langsZ?(off>0?0:Math.PI):(off>0?Math.PI/2:-Math.PI/2);
+      if(iDiagonal(x,z,7))continue;
+      if(leggRampe(x,z,yaw))satt++;
+    }
+  }
+  add(rmpBuf,gm.rampe,true);
 
   tegnDiagonaler(diag,W);
 
@@ -1879,7 +1966,8 @@ const CAR_YAW=0;                 // korrigerer modellens egen frontretning
 let carGeo={},carMat=null,carSrc={},carMats={},carYoff={};
 let traffic=[],carData=[],parked=[];
 const drive={on:false,car:null,spd:0,vx:0,vy:0,yawrate:0,ax:0,slip:0,spinn:0,
-              steer:0,head:0,spin:0,x:0,y:0,z:0,skade:0,rist:0};
+              steer:0,head:0,spin:0,x:0,y:0,z:0,skade:0,rist:0,
+              luft:false,vv:0,luftT:0,nese:0};
 
 async function loadCars(){
   const loader=new GLTFLoader();
@@ -2157,6 +2245,7 @@ function smell(kraft){
   drive.skade=cl(drive.skade+kraft*1.7,0,100);
   drive.rist=Math.min(1.4,drive.rist+kraft*0.10);
   if(kraft>4)showToast('💥 Smell — '+Math.round(drive.skade)+' % skade');
+  if(drive.on&&drive.skade>=100)sjekkVrak();
 }
 function dyttBil(p,nx,nz,vn,overlapp){
   drive.x-=nx*overlapp*0.55; drive.z-=nz*overlapp*0.55;
@@ -2174,6 +2263,72 @@ function dyttBil(p,nx,nz,vn,overlapp){
   drive.yawrate+=(rand()-0.5)*vn*0.10;
   smell(vn);
 }
+// Landing. Under ~9 m/s nedover merker du bare et dunk; over det tar bilen
+// skade som vokser bratt, og fra ~22 m/s er den vrak med det samme.
+function landing(bakke){
+  const v=-drive.vv;
+  const luftT=drive.luftT||0;
+  drive.luft=false; drive.y=bakke; drive.vv=0;
+  if(v>9){
+    const kraft=(v-9)*0.95;
+    drive.vx*=Math.max(0.32,1-kraft*0.055);
+    smell(kraft);
+    drive.rist=Math.min(1.7,drive.rist+kraft*0.14);
+    if(v>26){ drive.skade=100; showToast('💥 Bilen knakk i landingen'); }
+    else if(v>15) showToast('💥 Hard landing — '+Math.round(drive.skade)+' % skade');
+  } else {
+    drive.rist=Math.min(1.2,drive.rist+v*0.05);
+    if(luftT>0.75&&v<8) showToast('🛹 Ren landing! '+luftT.toFixed(1)+' s i lufta');
+  }
+  sjekkVrak();
+}
+
+let vrak=null;                 // bilen som brenner og snart smeller
+function sjekkVrak(){
+  if(drive.skade<100||vrak)return;
+  const bil=drive.car;
+  vrak={bil:bil,x:drive.x,y:drive.y,z:drive.z,t:0,royk:0};
+  // kast sjåføren ut
+  const ex=drive.x+Math.cos(drive.head)*3.0, ez=drive.z-Math.sin(drive.head)*3.0;
+  P.pos.set(ex,groundAt(ex,ez)+P.h,ez); P.vel.set(0,0,0);
+  P.yaw=drive.head+Math.PI;
+  drive.on=false; drive.car=null; showMode();
+  showToast('🔥 Bilen er vrak — kom deg vekk!');
+}
+function oppdaterVrak(dt){
+  if(!vrak)return;
+  vrak.t+=dt; vrak.royk-=dt;
+  if(vrak.royk<=0){
+    vrak.royk=0.09;
+    const m=new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(0.5,1.1),0),
+      new THREE.MeshBasicMaterial({color:vrak.t>2.2?0xff7a2a:0x50535a,
+        transparent:true,opacity:0.75}));
+    m.position.set(vrak.x+rnd(-1,1),vrak.y+rnd(0.6,2.0),vrak.z+rnd(-1,1));
+    m.userData.krymp=false;
+    effekt(m,1.5);
+  }
+  if(vrak.t>3.6){
+    // smellet
+    const L=new THREE.PointLight(0xffa33a,90,45,1.8);
+    L.position.set(vrak.x,vrak.y+1.4,vrak.z); effekt(L,0.5);
+    for(let k=0;k<16;k++){
+      const m=new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(0.3,0.9),0),
+        new THREE.MeshBasicMaterial({color:k%2?0xffcc55:0xff5a1e,transparent:true,opacity:1}));
+      m.position.set(vrak.x+rnd(-3,3),vrak.y+rnd(0.3,4),vrak.z+rnd(-3,3));
+      m.userData.krymp=true; effekt(m,0.7);
+    }
+    const d=Math.hypot(P.pos.x-vrak.x,P.pos.z-vrak.z);
+    if(d<9) skadeSpiller(Math.round(52*(1-d/9)));
+    politiVarme(9);
+    if(vrak.bil){
+      scene.remove(vrak.bil.obj);
+      const i=parked.indexOf(vrak.bil); if(i>=0)parked.splice(i,1);
+      const j=politi.biler.indexOf(vrak.bil); if(j>=0)politi.biler.splice(j,1);
+    }
+    vrak=null;
+  }
+}
+
 function sjekkBilkrasj(){
   const sh=Math.sin(drive.head), ch=Math.cos(drive.head);
   const wx=drive.vx*sh+drive.vy*ch, wz=drive.vx*ch-drive.vy*sh;
@@ -2493,6 +2648,7 @@ function enterExit(){
   drive.head=best.yaw-CAR_YAW;drive.steer=0;drive.y=groundAt(best.x,best.z);
   drive.spd=drive.vx=drive.vy=drive.yawrate=drive.ax=drive.slip=0;
   drive.skade=0;drive.rist=0;drive.rull=0;drive.stamp=0;
+  drive.luft=false;drive.vv=0;drive.luftT=0;drive.nese=0;
   settBilstil(best.type);
   if(drive.klasse==='race')showToast('🏁 Racer — mer effekt, kvikkere ratt, løsere bak');
   P.fly=false;showMode();
@@ -2616,6 +2772,7 @@ function carStep(h,th,hand,boost){
 }
 
 function updateDrive(dt){
+  if(!drive.car){drive.on=false;return;}   // bilen ble vraket midt i steget
   const th=(keys['KeyW']?1:0)-(keys['KeyS']?1:0);
   const st=(keys['KeyA']?1:0)-(keys['KeyD']?1:0);
   const hand=!!keys['Space'];
@@ -2630,7 +2787,15 @@ function updateDrive(dt){
   // — den destruerte fart. Derfor deles steget i biter på ~5 ms.
   const N=Math.max(1,Math.ceil(D/0.005));
   const h=D/N;
-  for(let k=0;k<N;k++)carStep(h,th,hand,boost);
+  if(drive.luft){
+    // Dekkene tar ikke i bakken, så det finnes ingen sidekrefter å regne på.
+    // Du beholder farten, kan vri deg litt i lufta, og lander som du står.
+    drive.head+=drive.yawrate*D;
+    drive.yawrate+=(st*1.4-drive.yawrate)*Math.min(1,D*1.6);
+    drive.vx*=(1-0.16*D); drive.vy*=(1-0.5*D);
+  } else {
+    for(let k=0;k<N;k++)carStep(h,th,hand,boost);
+  }
 
   drive.spd=drive.vx;                          // fartsmåler + hjulrotasjon
   const vmag=Math.hypot(drive.vx,drive.vy);
@@ -2644,8 +2809,10 @@ function updateDrive(dt){
   let hit=false;
   if(!drive.nocol)for(const o of [-2.0,0,2.0]){
     const px=nx+fx*o,pz=nz+fz*o;
-    for(const b of nearby(px,pz))
+    for(const b of nearby(px,pz)){
+      if(drive.luft&&drive.y>b.top+0.4)continue;    // du flyr over det
       if(px>b.x0-0.9&&px<b.x1+0.9&&pz>b.z0-0.9&&pz<b.z1+0.9){hit=true;break;}
+    }
     if(hit)break;
   }
   if(hit){
@@ -2658,14 +2825,47 @@ function updateDrive(dt){
   const hjulFart=drive.vx+(drive.spinn||0)*26;   // spinnende bakhjul går fortere enn bilen
   drive.spin+=hjulFart*dt/CP.hjulR;
   const o=drive.car.obj;
-  drive.y=groundAt(drive.x,drive.z);
+
+  // --- bakke, ramper og luft ---
+  const rmp=rampeHoyde(drive.x,drive.z);
+  const gy=groundAt(drive.x,drive.z);
+  const bakke=(rmp&&rmp.y>gy)?rmp.y:gy;
+  if(drive.luft){
+    drive.vv-=23*dt;
+    drive.y+=drive.vv*dt;
+    drive.luftT+=dt;
+    if(drive.y<=bakke) landing(bakke);
+  } else {
+    if(rmp&&rmp.u>0.93&&Math.abs(drive.vx)>6){
+      // forlater rampekanten: stigningen omsettes til oppoverfart
+      drive.luft=true; drive.luftT=0;
+      drive.vv=Math.abs(drive.vx)*(rmp.r.H/rmp.r.L)*1.60;
+      drive.y=bakke;
+      if(Math.abs(drive.vx)>13)showToast('🛹 Hopp!');
+    } else if(bakke<drive.y-0.55&&Math.abs(drive.vx)>3){
+      drive.luft=true; drive.luftT=0; drive.vv=0;   // kjørte utfor en kant
+    } else {
+      drive.y=bakke; drive.vv=0;
+    }
+  }
+  if(!drive.on)return;                    // bilen ble vrak i landingen
   o.position.set(drive.x,drive.y+(drive.car.yoff||0),drive.z);
   // fjæring: karosseriet ruller ut i svingen og stamper under gass/brems
   const maalRull=cl(-(drive.ayL||0)/16,-0.15,0.15);
   const maalStamp=cl((drive.ax||0)/26,-0.09,0.09);
   drive.rull=(drive.rull||0)+(maalRull-(drive.rull||0))*Math.min(1,dt*7);
   drive.stamp=(drive.stamp||0)+(maalStamp-(drive.stamp||0))*Math.min(1,dt*7);
-  settBilRotasjon(o,drive.x,drive.z,drive.head,drive.rull,drive.stamp);
+  if(drive.luft){
+    const maalNese=cl(Math.atan2(drive.vv,Math.max(Math.abs(drive.vx),5)),-0.85,0.85);
+    drive.nese=(drive.nese||0)+(maalNese-(drive.nese||0))*Math.min(1,dt*5);
+    o.rotation.order='YXZ';
+    o.rotation.y=drive.head+CAR_YAW;
+    o.rotation.x=-drive.nese;
+    o.rotation.z=drive.rull*1.6;
+  } else {
+    drive.nese=(drive.nese||0)*Math.max(0,1-dt*6);
+    settBilRotasjon(o,drive.x,drive.z,drive.head,drive.rull,drive.stamp);
+  }
   sporEtterHjul();
   for(const w of drive.car.wheels){
     w.o.rotation.x=w.bx-drive.spin;
@@ -2760,6 +2960,7 @@ const gm={
           envMapIntensity:.5,side:THREE.DoubleSide}),
   klubbVegg:std(plainTex('#2b2330',.85,0,6000),{envMapIntensity:.2,side:THREE.DoubleSide}),
   fengsel:std(plainTex('#8d8b86',.9,0,7000),{envMapIntensity:.3,side:THREE.DoubleSide}),
+  rampe:std(plainTex('#c98a2e',.72,0,4200),{envMapIntensity:.45,side:THREE.DoubleSide}),
   klubbGulv:std(plainTex('#15121a',.55,.1,4000),{envMapIntensity:.35}),
   neon :new THREE.MeshBasicMaterial({color:0xff3d8b,vertexColors:true}),
   hage :std(plainTex('#4c7342',.95,0,12000),{envMapIntensity:.25}),
@@ -2815,6 +3016,24 @@ function build(){
 const P={pos:new THREE.Vector3(0,1.75,0),vel:new THREE.Vector3(),yaw:0,pitch:0,
          onGround:false,fly:false,h:1.75,r:.6,
          hp:100,dodT:0,skadeT:99,blod:0};
+// Startskjermen viser byen ovenfra i stedet for en svart flate. Kameraet går
+// sakte rundt sentrum til du klikker deg inn.
+let kino=true, kinoT=0;
+function kinoKamera(dt){
+  kinoT+=dt*0.055;
+  const R=430+Math.sin(kinoT*0.7)*90;
+  const h=190+Math.sin(kinoT*0.43)*55;
+  const cx=Math.cos(kinoT)*R, cz=Math.sin(kinoT)*R;
+  const gy=groundAt(cx,cz);
+  camera.position.set(cx,gy+h,cz);
+  camera.rotation.order='YXZ';
+  camera.rotation.y=Math.atan2(-cx,-cz);
+  camera.rotation.x=-Math.atan2(h,Math.hypot(cx,cz)*0.72);
+  camera.rotation.z=0;
+  sky.position.copy(camera.position);
+  sun.position.copy(camera.position).addScaledVector(SUN_DIR,320);
+  sun.target.position.set(0,0,0);sun.target.updateMatrixWorld();
+}
 const keys={};
 function showMode(){
   document.getElementById('mode').textContent =
@@ -3211,7 +3430,7 @@ function oppdaterVaapen(dt){
   }
   gun.rekyl=Math.max(0,gun.rekyl-dt*7);
   if(vm){
-    const vis=harPistol()&&!drive.on&&P.dodT<=0;
+    const vis=harPistol()&&!drive.on&&P.dodT<=0&&!kino;
     vm.visible=vis;
     if(vis){
       const gange=Math.hypot(P.vel.x,P.vel.z);
@@ -3380,8 +3599,10 @@ addEventListener('wheel',e=>{
 },{passive:true});
 document.getElementById('overlay').addEventListener('click',()=>renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange',()=>{
-  document.getElementById('overlay').style.display=
-    document.pointerLockElement===renderer.domElement?'none':'flex';});
+  const inne=document.pointerLockElement===renderer.domElement;
+  document.getElementById('overlay').style.display=inne?'none':'flex';
+  kino=!inne;
+  document.body.classList.toggle('kino',!inne);});
 document.addEventListener('mousemove',e=>{
   if(document.pointerLockElement!==renderer.domElement)return;
   P.yaw-=e.movementX*.0022;P.pitch-=e.movementY*.0022;
@@ -3395,7 +3616,7 @@ function spawn(){
 
 // utviklingskrok — lar meg flytte kamera fra testrigg/konsoll
 window.__dbg={
-  tp:(x,y,z,yaw,pitch)=>{P.pos.set(x,y,z);
+  tp:(x,y,z,yaw,pitch)=>{kino=false;P.pos.set(x,y,z);
     if(yaw!==undefined)P.yaw=yaw; if(pitch!==undefined)P.pitch=pitch; P.fly=true;},
   P:()=>({x:P.pos.x,y:P.pos.y,z:P.pos.z}),
   props:()=>propGroup?propGroup.children.length:0,
@@ -3420,13 +3641,14 @@ window.__dbg={
   frys:()=>{for(const c of carData)c.spd=0;return carData.length;},
   // Tvinger én frame og leser canvas med det samme. Uten dette er
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
-  snap:()=>{update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
+  snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'kamp-29',
+  ver:()=>'hopp-30',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
   innTest:(i)=>{
+    kino=false;
     const b=bygg[i]; if(!b)return null;
     const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
     let px,pz,yaw;
@@ -3446,6 +3668,67 @@ window.__dbg={
   bygg:()=>bygg.length,
   bx:(i)=>bygg[i],
   kl:()=>klubb, fg:()=>fengsel,
+  ramper:()=>ramper.length,
+  rampeInfo:()=>{const r=ramper[0];
+    return {r:{x:+r.x.toFixed(1),z:+r.z.toFixed(1),yaw:+r.yaw.toFixed(2),L:+r.L.toFixed(1),H:+r.H.toFixed(1),pad:+r.pad.toFixed(2)},
+      groundVedFot:+groundAt(r.x,r.z).toFixed(2),
+      terrainVedFot:+terrainH(r.x,r.z).toFixed(2),
+      hoydeMidt:rampeHoyde(r.x+Math.sin(r.yaw)*r.L*0.5,r.z+Math.cos(r.yaw)*r.L*0.5),
+      matFinnes:!!gm.rampe,
+      alle:ramper.slice(0,5).map(q=>[Math.round(q.x),Math.round(q.z)])};},
+  kinoSnap:()=>{kino=true;kinoT=17.0;kinoKamera(0);renderer.render(scene,camera);
+    return renderer.domElement.toDataURL('image/jpeg',0.72);},
+  rampe0:()=>{const r=ramper[0];
+    const bx=r.x-Math.sin(r.yaw)*22, bz=r.z-Math.cos(r.yaw)*22;
+    kino=false;P.fly=true;P.pos.set(bx,groundAt(bx,bz)+3.4,bz);
+    P.yaw=Math.atan2(bx-r.x,bz-r.z);P.pitch=-0.09;
+    return {L:+r.L.toFixed(1),H:+r.H.toFixed(1),W:+r.W.toFixed(1)};},
+  // kjør inn i en rampe i full fart og se om bilen letter og lander
+  hoppTest:()=>{
+    kino=false;
+    if(!ramper.length)return null;
+    const r=ramper[0];
+    const sx=r.x-Math.sin(r.yaw)*26, sz=r.z-Math.cos(r.yaw)*26;
+    if(!parked.length)return {feil:'ingen parkerte biler'};
+    drive.on=true; drive.car=parked[0]; drive.klasse='vanlig'; CP=Object.assign({},CARP);
+    drive.x=sx; drive.z=sz; drive.head=r.yaw; drive.y=groundAt(sx,sz);
+    drive.vx=26; drive.vy=0; drive.yawrate=0; drive.steer=0;
+    drive.luft=false; drive.vv=0; drive.skade=0;
+    let maks=0, luftFrames=0, landet=false;
+    const ut0={};
+    for(let k=0;k<260;k++){
+      keys['KeyW']=true; updateDrive(1/60); keys['KeyW']=false;
+      if(!drive.on)break;
+      const h=drive.y-groundAt(drive.x,drive.z);
+      if(drive.luft){ if(luftFrames===0){ut0.vv=+drive.vv.toFixed(1);ut0.vx=+drive.vx.toFixed(1);
+                        ut0.y0=+drive.y.toFixed(1);}
+                      luftFrames++; if(h>maks)maks=h;}
+      else if(luftFrames>3)landet=true;
+      if(landet)break;
+    }
+    const ut={start:ut0,slutt:{y:+drive.y.toFixed(1),bakke:+groundAt(drive.x,drive.z).toFixed(1)},
+              ramper:ramper.length,luftFrames:luftFrames,
+              luftSek:+(luftFrames/60).toFixed(2),
+              maksHoyde:+maks.toFixed(2),landet:landet,skade:Math.round(drive.skade)};
+    drive.on=false; drive.car=null;
+    return ut;
+  },
+  // slipp bilen fra 40 m og se at den blir vrak
+  vrakTest:()=>{
+    kino=false;
+    if(!parked.length)return {feil:'ingen parkerte biler'};
+    drive.on=true; drive.car=parked[0]; CP=Object.assign({},CARP);
+    drive.x=P.pos.x; drive.z=P.pos.z; drive.head=0; drive.vx=8; drive.vy=0;
+    drive.skade=0; drive.nocol=true;
+    drive.luft=true; drive.vv=0; drive.luftT=0;
+    drive.y=groundAt(drive.x,drive.z)+45;
+    for(let k=0;k<400&&drive.luft&&drive.on;k++) updateDrive(1/60);
+    const etter={skade:Math.round(drive.skade),vrak:!!vrak,ute:!drive.on};
+    if(vrak){ for(let k=0;k<300;k++) oppdaterVrak(1/60); }
+    etter.smaltEtterpa=!vrak;
+    drive.nocol=false; drive.on=false; drive.car=null;
+    return etter;
+  },
   dag:()=>{night=false;applyTime();return true;},
   // --- testkroker for kamp, penger og fengsel ---
   skyt:()=>skyt(),
@@ -3456,6 +3739,7 @@ window.__dbg={
   varme:(v)=>{politi.varme=v;politi.stjerner=stjernerAv(v);visStjerner();return politi.stjerner;},
   // sett deg foran nærmeste levende fotgjenger og skyt
   skytFolk:()=>{
+    kino=false;
     let best=null,bd=1e9;
     for(const f of folkData){
       if(f.dod||f.skjult||f.dans||f.betjent)continue;
@@ -3477,6 +3761,7 @@ window.__dbg={
   },
   // kjør ned nærmeste fotgjenger
   kjorNed:()=>{
+    kino=false;
     let best=null,bd=1e9;
     for(const f of folkData){
       if(f.dod||f.skjult||f.dans||f.betjent)continue;
@@ -3504,6 +3789,7 @@ window.__dbg={
   },
   // finn et bygg med kasse, gå inn, ran den
   ranTest:()=>{
+    kino=false;
     for(let i=0;i<bygg.length;i++){
       const b=bygg[i];
       if(['butikk','kafe','bar','bank'].indexOf(b.type)<0)continue;
@@ -3524,6 +3810,7 @@ window.__dbg={
   },
   // kast penger på danserne til hun følger etter
   klubbTest:()=>{
+    kino=false;
     if(!klubb)return null;
     const d=folkData.filter(f=>f.dans);
     if(!d.length)return null;
@@ -3540,6 +3827,7 @@ window.__dbg={
   bilstil:(t)=>{settBilstil(t);return {klasse:drive.klasse,effekt:CP.effekt,ratt:+CP.ratt.toFixed(3),M:CP.M};},
   // politibetjent ut av bilen, skyter på deg, og lar seg skyte tilbake
   betjentTest:()=>{
+    kino=false;
     politi.varme=50; politi.stjerner=stjernerAv(50);
     drive.on=false; P.fly=false; P.hp=100; P.dodT=0;
     const bx=P.pos.x+14, bz=P.pos.z;
@@ -3571,7 +3859,7 @@ window.__dbg={
   kart:()=>{drawMinimap();return {n:poi?poi.length:0,png:mm.toDataURL('image/png')};},
   aktivt:()=>aktivtBygg?{type:aktivtBygg.type,side:aktivtBygg.side,
     mesher:innMesh.length,kol:innKol.length}:null,
-  gaTil:(i)=>{const b=bygg[i]; if(!b)return null;
+  gaTil:(i)=>{kino=false;const b=bygg[i]; if(!b)return null;
     const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
     let px,pz,yaw;                                   // rett innenfor døra, vendt inn
     if(b.side==='z0'){px=mx;pz=b.z0+2.0;yaw=Math.PI;}
@@ -3708,6 +3996,7 @@ window.__dbg={
 const fw=new THREE.Vector3(),rt=new THREE.Vector3(),wish=new THREE.Vector3();
 const _cam=new THREE.Vector3();
 function update(dt){
+  if(kino){ kinoKamera(dt); return; }
   if(drive.on){
     updateDrive(dt);
     _cam.set(drive.x-Math.sin(drive.head)*8.6, drive.y+3.7, drive.z-Math.cos(drive.head)*8.6);
@@ -3766,11 +4055,20 @@ function update(dt){
         }
       }
     }
-    let g=groundAt(P.pos.x,P.pos.z);
+    let g=bakkeH(P.pos.x,P.pos.z);
     for(const b of list)
       if(P.pos.x>b.x0-.3&&P.pos.x<b.x1+.3&&P.pos.z>b.z0-.3&&P.pos.z<b.z1+.3)
         if(b.top>g&&P.pos.y-P.h>=b.top-.8)g=b.top;
-    if(P.pos.y-P.h<=g){P.pos.y=g+P.h;P.vel.y=0;P.onGround=true;}else P.onGround=false;
+    if(P.pos.y-P.h<=g){
+      // Fallskade. Under ~11 m/s ned er det bare et dunk; over det gjør det
+      // vondt, og et fall fra taket tar deg.
+      const ned=-P.vel.y;
+      if(ned>11&&P.dodT<=0){
+        const sk=Math.round((ned-11)*5.2);
+        if(sk>0){ skadeSpiller(sk); showToast(ned>20?'💀 Stygt fall':'🤕 Du landet hardt'); }
+      }
+      P.pos.y=g+P.h;P.vel.y=0;P.onGround=true;
+    } else P.onGround=false;
   }
   P.pos.x=Math.max(-HW+6,Math.min(HW-6,P.pos.x));
   P.pos.z=Math.max(-HD+6,Math.min(HD-6,P.pos.z));
@@ -4209,7 +4507,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPlukk(dt);oppdaterRan(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterVrak(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -4262,7 +4560,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build kamp-29';
+  document.getElementById('verline').textContent='build hopp-30';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
