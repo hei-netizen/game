@@ -22,6 +22,15 @@
     color:#cdd4e4;font:inherit;font-size:10px}
   #crosshair{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
     background:#fff;border-radius:50%;opacity:.45;z-index:5;pointer-events:none}
+  #racehud{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:6;
+    pointer-events:none;background:rgba(12,15,22,.78);border:1px solid #4a5468;
+    border-radius:8px;padding:12px 16px;min-width:170px;
+    box-shadow:0 8px 26px rgba(0,0,0,.6)}
+  #racehud b{display:block;font-size:13px;color:#ffe26a;letter-spacing:.12em;
+    margin-bottom:4px}
+  #racehud .tid{display:block;font:bold 30px ui-monospace,Menlo,monospace;color:#fff;
+    letter-spacing:.02em;margin-bottom:4px}
+  #racehud span{display:block;font-size:11px;color:#9fb0d0;line-height:1.9}
   #pekere{position:fixed;inset:0;z-index:6;pointer-events:none}
   .pk{position:fixed;transform:translate(-50%,-50%);
     background:rgba(12,15,22,.72);border:1px solid #6d7488;border-radius:6px;
@@ -99,6 +108,12 @@
   #dodskjerm{position:fixed;inset:0;z-index:25;display:none;align-items:center;
     justify-content:center;pointer-events:none;text-align:center;
     background:radial-gradient(ellipse at center,rgba(90,0,0,.55) 0%,rgba(20,0,0,.94) 80%)}
+  #fengselskjerm{position:fixed;inset:0;z-index:25;display:none;align-items:center;
+    justify-content:center;pointer-events:none;text-align:center;
+    background:radial-gradient(ellipse at center,rgba(0,30,90,.55) 0%,rgba(0,6,22,.94) 80%)}
+  #fengselskjerm h2{font-size:66px;letter-spacing:.22em;font-weight:800;color:#8fc7ff;
+    text-shadow:0 0 40px rgba(60,140,255,.5),0 6px 26px #000;margin-bottom:10px}
+  #fengselskjerm p{color:#b6c6e0;font-size:14px;letter-spacing:.14em;line-height:2}
   #dodskjerm h2{font-size:76px;letter-spacing:.22em;font-weight:800;color:#ff3b3b;
     text-shadow:0 0 40px rgba(255,40,40,.55),0 6px 26px #000;margin-bottom:10px}
   #dodskjerm p{color:#e0b8b8;font-size:14px;letter-spacing:.14em;line-height:2}
@@ -170,6 +185,7 @@
 <canvas id="minimap" width="300" height="200"></canvas>
 <div id="crosshair"></div>
 <div id="pekere"></div>
+<div id="racehud" style="display:none"></div>
 <div id="sikte"></div>
 <div id="butikk" style="display:none"></div>
 <div id="hotbar"></div>
@@ -178,6 +194,7 @@
 <div id="helse"></div>
 <div id="helsetall"></div>
 <div id="roddblink"></div>\n<div id="dodskjerm"><div><h2>DU DØDE</h2><p id="dodtekst"></p></div></div>
+<div id="fengselskjerm"><div><h2>ARRESTERT</h2><p id="fengseltekst"></p></div></div>
 <div id="stjerner"></div>
 <div id="jakt"><div class="ba"><div id="jaktfyll"></div></div><div id="jakttekst"></div></div>
 <div id="players"><div class="lbl">I byen</div><div id="plist"></div></div>
@@ -1317,6 +1334,11 @@ function generateCity(scene,mats,gm){
       if(leggRampe(x,z,yaw))satt++;
     }
   }
+  {
+    const veiB=Buf(), kantB=Buf(), malB=Buf();
+    lagBane(veiB,kantB,malB,rmpBuf);
+    add(veiB,gm.banevei); add(kantB,gm.banekant); add(malB,gm.banemal,true);
+  }
   add(rmpBuf,gm.rampe,true);
 
   tegnDiagonaler(diag,W);
@@ -1817,6 +1839,14 @@ function lagFengsel(chunkOf,x,z,pad,vegg,gulv){
 
 function arrester(){
   if(!fengsel)return;
+  // Politiet tar pengene. De blir liggende der du ble pågrepet, så rømmer
+  // du fort nok kan du hente dem igjen.
+  const beslag=kroner();
+  if(beslag>0){
+    const ax=drive.on?drive.x:P.pos.x, az=drive.on?drive.z:P.pos.z;
+    pengeSum=0;
+    slippPenger(ax,groundAt(ax,az),az,beslag);
+  }
   if(drive.on){ drive.on=false; drive.car=null; }
   const c=fengsel.celler[1];
   P.pos.set(c.x,groundAt(c.x,c.z)+1.75,c.z);
@@ -1831,11 +1861,27 @@ function arrester(){
   while(politi.biler.length)fjernPolitibil(politi.biler[0]);
   frigiBetjenter();
   visStjerner(); visJakt();
-  showToast('🚔 ARRESTERT — du sitter inne');
+  fengsel.popupT=3.4;
+  const fs=document.getElementById('fengselskjerm');
+  if(fs){
+    fs.style.display='flex';
+    document.getElementById('fengseltekst').innerHTML=
+      'politiet tok deg<br>'+
+      (beslag>0?'beslagla '+beslag.toLocaleString('nb-NO')+
+                ' kr — de ligger igjen der du ble tatt<br>':'')+
+      'kloakkhullet ligger i cella di<br>gå oppi det så kommer du ut';
+  }
 }
 
 function oppdaterFengsel(dt){
   if(!fengsel)return;
+  if(fengsel.popupT>0){
+    fengsel.popupT-=dt;
+    if(fengsel.popupT<=0){
+      const fs=document.getElementById('fengselskjerm');
+      if(fs)fs.style.display='none';
+    }
+  }
   const sp=spillerPos();
   const innenfor = sp.x>fengsel.x0&&sp.x<fengsel.x1&&sp.z>fengsel.z0&&sp.z<fengsel.z1;
   const varInne=fengsel.inne;
@@ -2256,6 +2302,7 @@ function plantSkog(scene,gm){
     const y=terrainH(jx,jz);
     if(Math.abs(terrainH(jx+6,jz)-y)+Math.abs(terrainH(jx,jz+6)-y)>7.5)continue;
     if(rand()>0.34+tetthet*0.5)continue;
+    if(naerBane(jx,jz))continue;                 // banen skal være ryddig
     plasser.push([jx,y,jz,rnd(.75,1.65),rand()*6.283]);
   }
   if(!plasser.length)return 0;
@@ -3336,6 +3383,11 @@ const gm={
   rampe:std(plainTex('#c98a2e',.72,0,4200),{envMapIntensity:.45,side:THREE.DoubleSide}),
   bilkjop:std(plainTex('#d8c23a',.80,0,3600),{envMapIntensity:.4,side:THREE.DoubleSide}),
   verksted:std(plainTex('#8f9298',.82,0,5200),{envMapIntensity:.35,side:THREE.DoubleSide}),
+  banevei:new THREE.MeshStandardMaterial({map:AS.map,normalMap:AS.normalMap,
+          roughnessMap:AS.rmMap,metalnessMap:AS.rmMap,roughness:1,metalness:1,
+          vertexColors:true,envMapIntensity:.5,side:THREE.DoubleSide}),
+  banekant:std(plainTex('#c9c6c0',.80,0,900),{envMapIntensity:.35,side:THREE.DoubleSide}),
+  banemal:std(plainTex('#cfcdc8',.78,0,1400),{envMapIntensity:.35,side:THREE.DoubleSide}),
   klubbGulv:std(plainTex('#15121a',.55,.1,4000),{envMapIntensity:.35}),
   neon :new THREE.MeshBasicMaterial({color:0xff3d8b,vertexColors:true}),
   hage :std(plainTex('#4c7342',.95,0,12000),{envMapIntensity:.25}),
@@ -3496,6 +3548,216 @@ function oppdaterPeker(){
     el.classList.toggle('ute',utenfor);
   }
   for(const k in pekerEl) if(!sett[k]) pekerEl[k].style.display='none';
+}
+
+
+/* ============================ RACERBANEN ================================
+   En lukket sløyfe utenfor byen, tegnet oppå terrenget slik at bilen bare
+   kjører på bakken som ellers. Fire portaler er tidtakerpunkter, og tre
+   av hoppene fra bysystemet ligger på langsidene. Tre runder, og den som
+   har dårligst tid betaler den beste alt han har.                       */
+const BANE={R:150, bredde:16, N:72, runder:3, cpN:6};
+function baneForm(a){ return 1 + 0.23*Math.sin(3*a+0.6) + 0.11*Math.cos(2*a-1.1); }
+
+function lagBane(veiBuf,kantBuf,malBuf,rmpBuf){
+  bane=null;
+  const kand=[[-HW+340,HD-330],[HW-340,HD-330],[-HW+340,-HD+330],[HW-340,-HD+330],
+              [-HW+340,0],[HW-340,0]];
+  for(const [cx,cz] of kand){
+    const pts=[]; let ok=true;
+    for(let i=0;i<BANE.N&&ok;i++){
+      const a=i/BANE.N*6.283, r=BANE.R*baneForm(a);
+      const x=cx+Math.cos(a)*r, z=cz+Math.sin(a)*r;
+      if(Math.abs(x)>HW-30||Math.abs(z)>HD-30){ok=false;break;}
+      if(!friPlass(x,z)){ok=false;break;}
+      pts.push({x:x,z:z,a:a});
+    }
+    if(!ok)continue;
+    for(let i=0;i<pts.length&&ok;i++){
+      const p=pts[i], q=pts[(i+1)%pts.length];
+      const dx=q.x-p.x, dz=q.z-p.z, L=Math.hypot(dx,dz)||1;
+      const nx=-dz/L, nz=dx/L;
+      for(const sgn of [-1,1])
+        if(!friPlass(p.x+nx*sgn*BANE.bredde*0.75, p.z+nz*sgn*BANE.bredde*0.75)){ok=false;break;}
+    }
+    if(!ok)continue;
+    bane={x:cx,z:cz,pts:pts,pad:terrainH(cx,cz),cps:[],lengde:0};
+    break;
+  }
+  if(!bane)return;
+  const P2=bane.pts, N=P2.length, hb=BANE.bredde/2, W=[1,1,1];
+  const norm=i=>{
+    const p=P2[i], q=P2[(i+1)%N];
+    const dx=q.x-p.x, dz=q.z-p.z, L=Math.hypot(dx,dz)||1;
+    return {nx:-dz/L, nz:dx/L, dx:dx/L, dz:dz/L, L:L};
+  };
+  // asfalt + kantstein
+  for(let i=0;i<N;i++){
+    const p=P2[i], q=P2[(i+1)%N], n0=norm(i), n1=norm((i+1)%N);
+    bane.lengde+=n0.L;
+    const y=(x,z)=>terrainH(x,z)+0.12;
+    const ax=p.x+n0.nx*hb, az=p.z+n0.nz*hb;
+    const bx=q.x+n1.nx*hb, bz=q.z+n1.nz*hb;
+    const cx2=q.x-n1.nx*hb, cz2=q.z-n1.nz*hb;
+    const dx2=p.x-n0.nx*hb, dz2=p.z-n0.nz*hb;
+    quad(veiBuf, ax,y(ax,az),az, bx,y(bx,bz),bz, cx2,y(cx2,cz2),cz2, dx2,y(dx2,dz2),dz2,
+         0,1,0, 0,0,1.6,n0.L/6,W);
+    // kantstein i rødt og hvitt
+    const kf=(i%2)?[1.35,.30,.28]:[1.5,1.5,1.5];
+    for(const sgn of [1,-1]){
+      const e0=hb*sgn, e1=(hb+1.5)*sgn;
+      const p0x=p.x+n0.nx*e0, p0z=p.z+n0.nz*e0;
+      const p1x=p.x+n0.nx*e1, p1z=p.z+n0.nz*e1;
+      const q0x=q.x+n1.nx*e0, q0z=q.z+n1.nz*e0;
+      const q1x=q.x+n1.nx*e1, q1z=q.z+n1.nz*e1;
+      quad(kantBuf, p0x,y(p0x,p0z)+0.02,p0z, q0x,y(q0x,q0z)+0.02,q0z,
+                    q1x,y(q1x,q1z)+0.02,q1z, p1x,y(p1x,p1z)+0.02,p1z,
+           0,1,0, 0,0,1,1,kf);
+    }
+  }
+  // tidtakerporter
+  for(let k=0;k<BANE.cpN;k++){
+    const i=Math.round(k*N/BANE.cpN)%N;
+    const p=P2[i], n=norm(i);
+    bane.cps.push({x:p.x,z:p.z,nx:n.nx,nz:n.nz,dx:n.dx,dz:n.dz,i:i});
+    if(k===0)continue;
+    for(const sgn of [1,-1]){                       // to stolper per port
+      const px=p.x+n.nx*(hb+1.0)*sgn, pz=p.z+n.nz*(hb+1.0)*sgn;
+      const py=terrainH(px,pz);
+      walls(malBuf,px-0.30,px+0.30,py,py+5.2,pz-0.30,pz+0.30,1,1,2,[.20,.36,.72]);
+    }
+  }
+  // start/mål: rutet felt over veien, portal og tribune
+  {
+    const p=P2[0], n=norm(0);
+    const py=terrainH(p.x,p.z);
+    for(let a2=0;a2<10;a2++)for(let b2=0;b2<4;b2++){
+      const u=(a2/10-0.5)*BANE.bredde, v=(b2/4-0.5)*5.5;
+      const x0=p.x+n.nx*u+n.dx*v, z0=p.z+n.nz*u+n.dz*v;
+      const s=BANE.bredde/10*0.5, t2=5.5/4*0.5;
+      const hj=[[-s,-t2],[s,-t2],[s,t2],[-s,t2]].map(([du,dv])=>
+        [x0+n.nx*du+n.dx*dv, terrainH(x0,z0)+0.16, z0+n.nz*du+n.dz*dv]);
+      const c=((a2+b2)%2)?[1.5,1.5,1.5]:[.10,.10,.12];
+      quad(malBuf, hj[0][0],hj[0][1],hj[0][2], hj[1][0],hj[1][1],hj[1][2],
+                   hj[2][0],hj[2][1],hj[2][2], hj[3][0],hj[3][1],hj[3][2],
+           0,1,0, 0,0,1,1,c);
+    }
+    for(const sgn of [1,-1]){
+      const px=p.x+n.nx*(hb+1.4)*sgn, pz=p.z+n.nz*(hb+1.4)*sgn;
+      walls(malBuf,px-0.45,px+0.45,py,py+8.5,pz-0.45,pz+0.45,1,1,3,[.85,.20,.24]);
+    }
+    const bx=p.x+n.nx*(hb+1.4), bz=p.z+n.nz*(hb+1.4);
+    const ex=p.x-n.nx*(hb+1.4), ez=p.z-n.nz*(hb+1.4);
+    quad(malBuf, bx,py+7.0,bz, ex,py+7.0,ez, ex,py+8.5,ez, bx,py+8.5,bz,
+         n.dx,0,n.dz, 0,0,4,1,[.92,.92,.95]);
+    quad(malBuf, ex,py+7.0,ez, bx,py+7.0,bz, bx,py+8.5,bz, ex,py+8.5,ez,
+         -n.dx,0,-n.dz, 0,0,4,1,[.92,.92,.95]);
+    bane.start={x:p.x,z:p.z,dx:n.dx,dz:n.dz,pad:py};
+  }
+  // tre hopp på de rettest mulige partiene
+  const hoppI=[Math.round(N*0.17),Math.round(N*0.47),Math.round(N*0.78)];
+  for(const i of hoppI){
+    const p=P2[i], n=norm(i);
+    const yaw=Math.atan2(n.dx,n.dz);
+    rampe(rmpBuf,p.x-n.dx*5,p.z-n.dz*5,yaw,11,BANE.bredde*0.62,11*0.24,
+          terrainH(p.x,p.z),[.92,.62,.22]);
+  }
+}
+function naerBane(x,z){
+  if(!bane)return false;
+  if(Math.hypot(x-bane.x,z-bane.z)>BANE.R*1.45+40)return false;
+  for(const p of bane.pts) if(Math.hypot(x-p.x,z-p.z)<BANE.bredde*1.3)return true;
+  return false;
+}
+
+/* ---- selve racet ---- */
+let race={aktiv:false,runde:0,cp:1,t0:0,tid:0,best:null,rundeT:0,sisteRunde:0};
+let raceTider=new Map();
+function raceStart(){
+  race.aktiv=true; race.runde=1; race.cp=1;
+  race.t0=performance.now(); race.rundeT=race.t0; race.sisteRunde=0; race.tid=0;
+  raceTider.clear();
+  nettKringkast({t:'race',fase:'start',navn:net.name});
+  showToast('🏁 GO! '+BANE.runder+' runder');
+}
+function raceFerdig(){
+  const t=(performance.now()-race.t0)/1000;
+  race.aktiv=false; race.tid=t;
+  if(!race.best||t<race.best)race.best=t;
+  nettKringkast({t:'race',fase:'ferdig',navn:net.name,tid:t});
+  let beste=null;
+  for(const [id,r] of raceTider) if(!beste||r.tid<beste.tid)beste={id:id,navn:r.navn,tid:r.tid};
+  if(beste&&beste.tid<t){
+    const sum=kroner();
+    if(sum>0){
+      pengeSum=0;
+      sendPenger(beste.id,sum,'tapte racet');
+      showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere. Du betalte '+
+                sum.toLocaleString('nb-NO')+' kr');
+    } else showToast('🏁 '+t.toFixed(2)+' s — '+beste.navn+' var raskere');
+  } else showToast('🏆 '+t.toFixed(2)+' s — beste tid så langt!');
+}
+function taImotRace(d){
+  if(d.fase==='start'){
+    if(race.aktiv)showToast('🏁 '+d.navn+' kjører også');
+    return;
+  }
+  raceTider.set(d.avId,{navn:d.navn,tid:d.tid});
+  showToast('🏁 '+d.navn+' fullførte på '+d.tid.toFixed(2)+' s');
+}
+function sendPenger(til,sum,grunn){
+  const pkt={t:'penger',til:til,sum:sum,fra:net.name,grunn:grunn||''};
+  if(net.isHost){ const c=net.conns.get(til); if(c&&c.open)c.send(pkt); }
+  else if(net.hostConn&&net.hostConn.open) net.hostConn.send(pkt);
+}
+function taImotPenger(d){
+  if(d.til!==net.id){
+    if(net.isHost){ const c=net.conns.get(d.til); if(c&&c.open)c.send(d); }
+    return;
+  }
+  girPenger(d.sum);
+  showToast('🏆 +'+d.sum.toLocaleString('nb-NO')+' kr fra '+d.fra+
+            (d.grunn?' — '+d.grunn:''));
+}
+function oppdaterRace(dt){
+  const el=document.getElementById('racehud');
+  if(!bane){ if(el)el.style.display='none'; return; }
+  const sp=spillerPos();
+  const dStart=Math.hypot(sp.x-bane.start.x,sp.z-bane.start.z);
+  if(!race.aktiv){
+    if(dStart<16&&drive.on) hint='🏁 Trykk B for å starte race — '+BANE.runder+' runder';
+    else if(dStart<16) hint='🏁 Sett deg i en bil og trykk B for race';
+  }
+  if(race.aktiv){
+    const cp=bane.cps[race.cp%bane.cps.length];
+    if(Math.hypot(sp.x-cp.x,sp.z-cp.z)<BANE.bredde*1.15){
+      race.cp++;
+      if(race.cp%bane.cps.length===0){          // passerte start/mål
+        const nå=performance.now();
+        race.sisteRunde=(nå-race.rundeT)/1000; race.rundeT=nå;
+        if(race.runde>=BANE.runder){ raceFerdig(); }
+        else { race.runde++; showToast('🏁 Runde '+race.runde+'/'+BANE.runder+
+               ' — forrige '+race.sisteRunde.toFixed(2)+' s'); }
+      }
+    }
+  }
+  if(el){
+    if(race.aktiv){
+      const t=(performance.now()-race.t0)/1000;
+      let h='<b>🏁 RUNDE '+race.runde+' / '+BANE.runder+'</b>'+
+            '<span class="tid">'+t.toFixed(2)+'</span>';
+      if(race.sisteRunde)h+='<span>forrige runde '+race.sisteRunde.toFixed(2)+' s</span>';
+      const nesteCp=bane.cps[race.cp%bane.cps.length];
+      h+='<span>neste port '+Math.round(Math.hypot(sp.x-nesteCp.x,sp.z-nesteCp.z))+' m</span>';
+      for(const [,r] of raceTider) h+='<span>'+r.navn+' '+r.tid.toFixed(2)+' s</span>';
+      el.innerHTML=h; el.style.display='block';
+    } else if(race.tid&&performance.now()-race.t0<race.tid*1000+9000){
+      let h='<b>🏁 '+race.tid.toFixed(2)+' s</b>';
+      if(race.best)h+='<span>beste: '+race.best.toFixed(2)+' s</span>';
+      for(const [,r] of raceTider) h+='<span>'+r.navn+' '+r.tid.toFixed(2)+' s</span>';
+      el.innerHTML=h; el.style.display='block';
+    } else el.style.display='none';
+  }
 }
 
 /* ---------------------------- SPILLER ----------------------------------- */
@@ -4085,14 +4347,27 @@ function doSpiller(){
   P.dodAv=(P.sisteSkytter&&P.sisteSkytterT>0)?(P.sisteSkytterNavn||'en annen spiller')
         :(politi.stjerner>0?'politiet':'');
   if(P.sisteSkytter&&P.sisteSkytterT>0) sendBytte(P.sisteSkytter);
+  const drept=!!P.sisteSkytter;
   P.sisteSkytter=null;
-  // Pengene blir liggende der du falt. Hvem som helst kan komme og ta dem.
+  // Du mister ALT. Ble du skutt av en spiller går det rett til ham; ellers
+  // blir det liggende der du falt, og hvem som helst kan komme og ta det.
   const tapt=kroner();
-  if(tapt>0){
-    pengeSum=0;
-    slippPenger(P.pos.x,groundAt(P.pos.x,P.pos.z),P.pos.z,tapt);
-  }
   P.dodKr=tapt;
+  pengeSum=0;
+  if(!drept){
+    if(tapt>0) slippPenger(P.pos.x,groundAt(P.pos.x,P.pos.z),P.pos.z,tapt);
+    let k=0;
+    for(let i=0;i<SLOTS;i++){
+      const f=inv.felt[i];
+      if(!f||!VAAPENSETT[f.id])continue;
+      const vx=P.pos.x+Math.cos(k*1.9)*1.4, vz=P.pos.z+Math.sin(k*1.9)*1.4;
+      const d2={t:'slipp',dropId:net.id+'-d'+(Math.random()*1e9|0),
+                id:f.id,i:f.i,res:f.res,x:vx,y:groundAt(vx,vz),z:vz};
+      lagSlipt(d2); nettKringkast(d2); k++;
+    }
+  }
+  for(let i=0;i<SLOTS;i++) if(inv.felt[i]&&inv.felt[i].id!=='hand') inv.felt[i]=null;
+  inv.slot=0; hbSkitten=true;
   if(folgerHer){
     folgerHer.folger=false; folgerHer.man=false; folgerHer.dans=true;
     folgerHer=null; kastet=0;
@@ -4107,7 +4382,7 @@ function gjenoppliv(){
   P.hp=100; P.dodT=0; P.blod=0; P.skadeT=99;
   if(drive.on){drive.on=false;drive.car=null;showMode();}
   spawn();
-  gun.i=VAAPEN.mag; gun.lad=0; hbSkitten=true;
+  gun.lad=0; gun.kd=0; hbSkitten=true;   // du våkner tomhendt
 }
 
 /* ---- betjenter til fots ----------------------------------------------
@@ -4313,9 +4588,9 @@ function oppdaterVaapen(dt){
       ds.style.display='flex';
       document.getElementById('dodtekst').innerHTML=
         (P.dodAv?'drept av '+P.dodAv+'<br>':'')+
-        (P.dodKr>0?'mistet '+P.dodKr.toLocaleString('nb-NO')+
-                   ' kr — de ligger igjen der du falt<br>':'')+
-        'våkner om litt …';
+        (P.dodKr>0?'mistet '+P.dodKr.toLocaleString('nb-NO')+' kr<br>':'')+
+        'du mistet alt du bar på<br>'+
+        (P.dodAv?'':'det ligger igjen der du falt')+'<br>våkner om litt …';
     }
     P.dodT-=dt; if(P.dodT<=0)gjenoppliv();
   } else if(ds&&ds.style.display==='flex') ds.style.display='none';
@@ -4454,6 +4729,7 @@ function taImotKringkast(d){
   if(d.avId===net.id)return;          // vårt eget slipp er alt lagt ut
   if(d.t==='slipp')lagSlipt(d);
   else if(d.t==='tatt')fjernSlipt(d.dropId);
+  else if(d.t==='race')taImotRace(d);
 }
 function lagSlipt(d){
   if(slipte.find(q=>q.dropId===d.dropId))return;
@@ -4686,6 +4962,8 @@ addEventListener('keydown',e=>{
       else showToast('Bare verten kan lage ny by');
     }
   }
+  if(e.code==='KeyB'&&bane&&drive.on&&!race.aktiv&&
+     Math.hypot(drive.x-bane.start.x,drive.z-bane.start.z)<16) raceStart();
   if(e.code==='KeyG'&&!drive.on)kastPenger();
   if(e.code==='KeyX'&&!drive.on){
     const f=inv.felt[inv.slot];
@@ -4775,7 +5053,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'autoshop-46',
+  ver:()=>'race-47',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4875,6 +5153,46 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  banePos:()=>bane?{x:Math.round(bane.x),z:Math.round(bane.z),
+    punkter:bane.pts.length,porter:bane.cps.length,
+    lengde:Math.round(bane.lengde),start:[Math.round(bane.start.x),Math.round(bane.start.z)]}:null,
+  raceTest:()=>{
+    kino=false;
+    if(!bane)return {feil:'ingen bane'};
+    if(!parked.length)return {feil:'ingen bil'};
+    drive.on=true; drive.car=parked[0]; settBilstil('sedan'); drive.nocol=true;
+    drive.x=bane.start.x; drive.z=bane.start.z; drive.y=groundAt(drive.x,drive.z);
+    drive.vx=0;drive.vy=0;drive.yawrate=0;drive.luft=false;drive.skade=0;
+    raceStart();
+    // kjør rundt løypa ved å teleportere langs punktene
+    const P2=bane.pts;
+    let porter=0;
+    for(let runde=0;runde<3;runde++){
+      for(let i=0;i<P2.length;i++){
+        drive.x=P2[i].x; drive.z=P2[i].z; drive.y=groundAt(drive.x,drive.z);
+        const f=race.cp; oppdaterRace(1/60); if(race.cp!==f)porter++;
+        if(!race.aktiv)break;
+      }
+      if(!race.aktiv)break;
+    }
+    const ut={runder:race.runde,porter:porter,ferdig:!race.aktiv,
+              tid:+race.tid.toFixed(2),lengde:Math.round(bane.lengde)};
+    drive.nocol=false; drive.on=false; drive.car=null;
+    return ut;
+  },
+  dodTest:()=>{
+    kino=false; drive.on=false; P.fly=false; P.dodT=0; P.hp=100;
+    girPenger(9000);
+    for(const id of ['hagle','smg']) kjopVaapen(id);
+    const for_={kr:kroner(),vapen:inv.felt.filter(f=>f&&VAAPENSETT[f.id]).length};
+    P.sisteSkytter=null; P.sisteSkytterT=0;
+    skadeSpiller(500);
+    const etter={kr:kroner(),vapen:inv.felt.filter(f=>f&&VAAPENSETT[f.id]).length,
+                 paaBakken:slipte.length,bunter:bunter.length,
+                 skjerm:getComputedStyle(document.getElementById('dodskjerm')).display};
+    P.dodT=0.001;
+    return {for:for_,etter:etter};
+  },
   slippTest:()=>{
     kino=false; drive.on=false; P.fly=false; P.dodT=0;
     girPenger(200000); kjopVaapen('hagle');
@@ -5676,6 +5994,14 @@ function drawMinimap(){
   for(const q of vaapenbutikker)
     merke((q.x0+q.x1)/2,(q.z0+q.z1)/2,'#ffb84d','W',6);
   if(bilkjop) merke(bilkjop.x,bilkjop.z,'#8ce0ff','B',6);
+  if(bane){
+    mc.strokeStyle='rgba(255,226,106,.85)'; mc.lineWidth=2;
+    mc.beginPath();
+    bane.pts.forEach((p,i)=>{ const px=(p.x+HW)*SX, pz=(p.z+HD)*SZ;
+      if(i)mc.lineTo(px,pz); else mc.moveTo(px,pz); });
+    mc.closePath(); mc.stroke();
+    merke(bane.start.x,bane.start.z,'#ffe26a','R',6);
+  }
   if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
   if(fengsel)merke(fengsel.x,fengsel.z,'#eef2f8','F');   // hvit, ikke blå som bilprikkene
 
@@ -5993,7 +6319,8 @@ function connectAsClient(){
     net.hostConn.on('data',d=>{
       if(d.t==='treff'){ taImotTreff(d); return; }
       if(d.t==='bytte'){ taImotBytte(d); return; }
-      if(d.t==='slipp'||d.t==='tatt'){ taImotKringkast(d); return; }
+      if(d.t==='slipp'||d.t==='tatt'||d.t==='race'){ taImotKringkast(d); return; }
+      if(d.t==='penger'){ taImotPenger(d); return; }
       if(d.t!=='w') return;
       // vertens by er fasit
       if(d.seed!==undefined&&d.seed!==SEED){ SEED=d.seed; build(); spawn(); }
@@ -6045,7 +6372,8 @@ function becomeHost(){
         takeState(o,d);
       } else if(d.t==='treff') taImotTreff(d);
         else if(d.t==='bytte') taImotBytte(d);
-        else if(d.t==='slipp'||d.t==='tatt') taImotKringkast(d);
+        else if(d.t==='slipp'||d.t==='tatt'||d.t==='race') taImotKringkast(d);
+        else if(d.t==='penger') taImotPenger(d);
     });
     const bye=()=>{ net.conns.delete(c.peer); dropOther(c.peer); };
     c.on('close',bye); c.on('error',bye);
@@ -6112,7 +6440,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterSelg(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterSlipte(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterSelg(dt);oppdaterRace(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterSlipte(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -6175,7 +6503,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build autoshop-46';
+  document.getElementById('verline').textContent='build race-47';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
