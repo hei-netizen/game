@@ -609,6 +609,7 @@ function parapet(b,x0,x1,y,z0,z1,h,e,col){
 // vegg. I stedet slår rampeHoyde() opp flatehøyden, og bilen forlater toppen
 // med oppoverfart som svarer til stigningen.
 let ramper=[];
+let bilkjop=null;      // plassen der stjålne biler selges
 function rampe(b,x,z,yaw,L,W,H,pad,col){
   const sh=Math.sin(yaw), ch=Math.cos(yaw);   // brukes òg til kollisjonsboksen
   const P2=(lz,lx,y)=>[x+lz*sh+lx*ch, y, z+lz*ch-lx*sh];
@@ -718,7 +719,7 @@ const BYGGTYPER={
   bank:  {navn:'Bank',      gulv:0x7d8088, vegg:0xc9ccd4},
   verk:  {navn:'Verksted',  gulv:0x63666a, vegg:0x9aa0a6},
   bibl:  {navn:'Bibliotek', gulv:0x6a5340, vegg:0xd6cbb6},
-  vaapen:{navn:'Våpenbutikk', gulv:0x4a4d55, vegg:0x8b9099}
+  vaapen:{navn:'Våpenbutikk', gulv:0x777c85, vegg:0xa8adb6}
 };
 const GRID=50; let hash=new Map();
 function addCol(c){
@@ -874,6 +875,7 @@ function generateCity(scene,mats,gm){
   const walk=Buf(),park=Buf(),curb=Buf(),cross=Buf();
   const diag=Buf(),hage=Buf(),gjerde=Buf(),sti=Buf(),bensin=Buf(),kanopi=Buf();
   const klubbBuf=Buf(),klubbGulvBuf=Buf(),neonBuf=Buf(),fengselBuf=Buf();
+  const kjop=Buf(); bilkjop=null;
   klubb=null; fengsel=null;
   const trees=[],lamps=[],roofProps=[];
   const W=[1,1,1];
@@ -920,6 +922,19 @@ function generateCity(scene,mats,gm){
       continue;
     }
     slab(walk,bx0,bx1,pad,bz0,bz1,4,W);
+
+    // Første industrikvartal blir bilkjøper: en oppmerket plass du kjører
+    // inn på for å selge det du har stjålet.
+    if(!bilkjop&&dist===D_IND&&(bx1-bx0)>36&&(bz1-bz0)>30){
+      const cx=(bx0+bx1)/2, cz=(bz0+bz1)/2, r=11;
+      slab(kjop,cx-r,cx+r,pad+0.05,cz-r,cz+r,6,[1,1,1]);
+      for(let k=0;k<4;k++){                       // gule striper som en lasterampe
+        const zz=cz-r+2.5+k*((r*2-5)/3);
+        slab(kjop,cx-r+1.5,cx+r-1.5,pad+0.07,zz-0.3,zz+0.3,1,[1,1,1]);
+      }
+      bilkjop={x:cx,z:cz,r:r,pad:pad};
+      continue;
+    }
 
     // Ett kvartal nær sentrum blir nattklubb. Sjekken må stå ETTER at pad er
     // regnet ut — første forsøk lå før, og hadde krasjet om den hadde truffet.
@@ -1167,6 +1182,7 @@ function generateCity(scene,mats,gm){
   add(sti,gm.sti);add(bensin,gm.walk);add(kanopi,gm.kanopi,true);
   add(klubbBuf,gm.klubbVegg,true);add(klubbGulvBuf,gm.klubbGulv);add(neonBuf,gm.neon);
   add(fengselBuf,gm.fengsel,true);
+  add(kjop,gm.bilkjop);
 
   // midtstriper som korte segmenter, hver lagt på terrenget
   const dash=Buf();
@@ -1368,6 +1384,61 @@ function mobler(b,g,t){                      // g = innvendig rektangel
   }
 }
 
+/* Våpen henger på veggen som ekte modeller, ikke som streker. Det er de
+   samme modellene du får i hånda, bare uten arm — så det du ser er det du
+   kjøper. Gå bort til et av dem og trykk E.                              */
+function lagPrisSkilt(navn,pris,eier){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=72;
+  const g=cv.getContext('2d');
+  g.fillStyle='rgba(10,13,19,.92)'; g.fillRect(0,0,256,72);
+  g.strokeStyle=eier?'#7ce09a':'#ffb84d'; g.lineWidth=4; g.strokeRect(2,2,252,68);
+  g.textAlign='center';
+  g.font='bold 25px ui-monospace,Menlo,monospace'; g.fillStyle='#e6ebf5';
+  g.fillText(navn.slice(0,15),128,32);
+  g.font='bold 23px ui-monospace,Menlo,monospace';
+  g.fillStyle=eier?'#7ce09a':'#ffd98a';
+  g.fillText(eier?'EIER':pris.toLocaleString('nb-NO')+' kr',128,60);
+  const spr=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:new THREE.CanvasTexture(cv),transparent:true,depthTest:true}));
+  spr.scale.set(1.30,0.37,1);
+  return spr;
+}
+function byggUtstilling(b,G,y){
+  b.utstilling=[];
+  const ider=Object.keys(VAAPENSETT);
+  const langsX=(G.x1-G.x0)>=(G.z1-G.z0);
+  const n=ider.length;
+  // hylle langs den lengste veggen
+  const hb=Buf(), V=[1,1,1];
+  const vz=G.z1-0.55, vx=G.x1-0.55;
+  for(let i=0;i<n;i++){
+    const t=(i+0.5)/n;
+    const px=langsX?(G.x0+0.9+t*(G.x1-G.x0-1.8)):vx;
+    const pz=langsX?vz:(G.z0+0.9+t*(G.z1-G.z0-1.8));
+    const py=y+1.45;
+    // veggplate bak våpenet
+    if(langsX) walls(hb,px-0.52,px+0.52,py-0.55,py+0.55,vz+0.10,vz+0.18,1,1,1,[.20,.21,.25]);
+    else       walls(hb,vx+0.10,vx+0.18,py-0.55,py+0.55,pz-0.52,pz+0.52,1,1,1,[.20,.21,.25]);
+    const m=lagVaapen(ider[i],true);
+    m.scale.setScalar(2.3);
+    m.position.set(px,py,pz);
+    m.rotation.y=langsX?Math.PI/2:0;              // ligger langs veggen
+    m.rotation.z=0.10;
+    scene.add(m); innMesh.push(m);
+    const eier=!!inv.felt.find(f=>f&&f.id===ider[i]);
+    const spr=lagPrisSkilt(VAAPENSETT[ider[i]].navn,VAAPENSETT[ider[i]].pris,eier);
+    spr.position.set(px,py+0.78,pz);
+    scene.add(spr); innMesh.push(spr);
+    b.utstilling.push({id:ider[i],x:px,z:pz,spr:spr});
+  }
+  if(hb.p.length){
+    const mm2=new THREE.Mesh(bufGeo(hb),
+      new THREE.MeshLambertMaterial({color:0x9aa0aa,vertexColors:false,
+        side:THREE.DoubleSide,emissive:0x1a1c20}));
+    scene.add(mm2); innMesh.push(mm2);
+  }
+}
+
 function byggInteriør(b){
   rivInteriør();
   const T=BYGGTYPER[b.type];
@@ -1396,8 +1467,9 @@ function byggInteriør(b){
   const G={x0:b.x0+t+0.3,x1:b.x1-t-0.3,z0:b.z0+t+0.3,z1:b.z1-t-0.3,y:y};
   mobler(mobB,G,b.type);
   // kassaapparat i butikk, kafé, bar og bank — kan ranes
-  if(b.type==='vaapen'){ b.disk={x:(G.x0+G.x1)/2,z:(G.z0+G.z1)/2}; b.kasse=null; }
-  else b.disk=null;
+  if(b.type==='vaapen'){ b.disk={x:(G.x0+G.x1)/2,z:(G.z0+G.z1)/2}; b.kasse=null;
+                         byggUtstilling(b,G,y); }
+  else { b.disk=null; b.utstilling=null; }
   const KP=b.type==='vaapen'?null:{butikk:{x:G.x0+1.05,z:(G.z0+G.z1)/2},
             kafe:  {x:G.x0+1.30,z:G.z0+1.6},
             bar:   {x:G.x0+1.35,z:(G.z0+G.z1)/2},
@@ -1419,7 +1491,8 @@ function byggInteriør(b){
   };
   // Egenlys bare på gulv og vegger. På møblene vasket det ut fargene, så
   // treverk og mørke flater ble like lyse som resten.
-  lag(gulvB,T.gulv,0.22); lag(veggB,T.vegg,0.15); lag(mobB,0xffffff,0);
+  lag(gulvB,T.gulv,b.type==='vaapen'?0.34:0.22);
+  lag(veggB,T.vegg,b.type==='vaapen'?0.26:0.15); lag(mobB,0xffffff,0);
 
   // Takarmatur i rutenett. Ett lys midt i rommet rakk ikke ut i hjørnene på
   // store kontorer, og da ble alt svart.
@@ -1428,7 +1501,7 @@ function byggInteriør(b){
   const rekkevidde=Math.max(bw,bd)*0.85+12;
   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){
     const lx=b.x0+(i+0.5)*bw/nx, lz=b.z0+(j+0.5)*bd/nz;
-    const L=new THREE.PointLight(0xffeccb,3.1,rekkevidde,1.4);
+    const L=new THREE.PointLight(0xffeccb,b.type==='vaapen'?7.5:3.1,rekkevidde,1.4);
     L.position.set(lx,b.pad+INN_H-0.42,lz);
     scene.add(L); innMesh.push(L);
     const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.3),
@@ -1877,7 +1950,7 @@ function oppdaterKlubb(dt){
 // koster 8 tegnekall. Lemmene har pivot i hofte/skulder, ikke i midten, så
 // rotasjonen ser ut som gange.
 const FOLK_N=320;
-let folkData=[], folkM={};
+let folkData=[], folkM={}, folkDeler=[];
 const HUD_SKIN=[0xf2c9a0,0xe0a97b,0xc78d5e,0x9b6640,0xf7d9bb,0x7a4b2a];
 const HUD_HAAR=[0x2a2018,0x4a3020,0x1a1a1e,0x6b4a2a,0xa8752e,0x8a8a92,0xc23a2a];
 const HUD_SKJORTE=[0xd8443a,0x2f6fb5,0x3f9a56,0xe0a52c,0x8a4fb0,0xe07a34,
@@ -1916,7 +1989,7 @@ function lagFolk(scene){
         haar:HUD_HAAR[rndi(0,HUD_HAAR.length-1)],
         skjorte:HUD_SKJORTE[rndi(0,HUD_SKJORTE.length-1)],
         bukse:HUD_BUKSE[rndi(0,HUD_BUKSE.length-1)],
-        h:rnd(.88,1.08), langtHaar:rand()<.5});
+        h:rnd(.88,1.08), langtHaar:rand()<.7, dame:true});
     };
     if(klubb.stenger)for(const st of klubb.stenger)leggDanser(st.x,st.z+0.75,true);
     for(let i=0;i<22;i++)
@@ -1942,8 +2015,11 @@ function lagFolk(scene){
     kropp: new THREE.CapsuleGeometry(.175,.30,4,10),
     arm  : new THREE.CapsuleGeometry(.058,.22,3,7),
     ben  : new THREE.CapsuleGeometry(.072,.26,3,7),
-    oye  : new THREE.SphereGeometry(.036,7,6)
+    oye  : new THREE.SphereGeometry(.036,7,6),
+    bryst: new THREE.SphereGeometry(.098,9,7),
+    haarL: new THREE.BoxGeometry(.30,.54,.15)
   };
+  G.haarL.translate(0,-.27,0);        // pivot i nakken, håret henger ned
   G.arm.translate(0,-.14,0);          // pivot i skulderen
   G.ben.translate(0,-.17,0);          // pivot i hoften
   G.haar.scale(1,.72,1); G.haar.translate(0,.075,0);
@@ -1951,9 +2027,11 @@ function lagFolk(scene){
   // instanceColor gir fargen. vertexColors ville krevd et color-attributt på
   // geometrien, og uten det blir alt svart.
   const flat=()=>new THREE.MeshLambertMaterial({color:0xffffff});
-  const deler=['hode','haar','kropp','armV','armH','benV','benH','oyeV','oyeH'];
+  const deler=['hode','haar','kropp','armV','armH','benV','benH','oyeV','oyeH',
+               'brystV','brystH','haarLang'];
   const geoFor={hode:G.hode,haar:G.haar,kropp:G.kropp,armV:G.arm,armH:G.arm,
-                benV:G.ben,benH:G.ben,oyeV:G.oye,oyeH:G.oye};
+                benV:G.ben,benH:G.ben,oyeV:G.oye,oyeH:G.oye,
+                brystV:G.bryst,brystH:G.bryst,haarLang:G.haarL};
   for(const navn of deler){
     const m=new THREE.InstancedMesh(geoFor[navn],flat(),ANT);
     m.castShadow=(navn!=='oyeV'&&navn!=='oyeH');
@@ -1965,11 +2043,13 @@ function lagFolk(scene){
   folkData.forEach((f,i)=>{
     const sett=(navn,hex)=>{c.setHex(hex);folkM[navn].setColorAt(i,c);};
     sett('hode',f.skin); sett('haar',f.haar); sett('kropp',f.skjorte);
+    sett('brystV',f.skjorte); sett('brystH',f.skjorte); sett('haarLang',f.haar);
     sett('armV',f.skin); sett('armH',f.skin);
     sett('benV',f.bukse);sett('benH',f.bukse);
     sett('oyeV',0x241c16);sett('oyeH',0x241c16);
   });
   for(const navn of deler) folkM[navn].instanceColor.needsUpdate=true;
+  folkDeler=deler;
   return folkData.length;
 }
 
@@ -1983,6 +2063,20 @@ function folkPos(f){
   if(t<f.w)              return {x:f.x1-t,        z:f.z1, yaw:-Math.PI/2};
   t-=f.w;
   return {x:f.x0, z:f.z1-t, yaw:Math.PI};
+}
+
+// oppdater fargene på én person etter at instansene er bygget
+const _ff=new THREE.Color();
+function settFolkFarge(i){
+  if(i<0||!folkM.hode)return;
+  const f=folkData[i];
+  const sett=(navn,hex)=>{ if(!folkM[navn])return;
+    _ff.setHex(hex); folkM[navn].setColorAt(i,_ff);
+    folkM[navn].instanceColor.needsUpdate=true; };
+  sett('hode',f.skin); sett('haar',f.haar); sett('haarLang',f.haar);
+  sett('kropp',f.skjorte); sett('brystV',f.skjorte); sett('brystH',f.skjorte);
+  sett('armV',f.skin); sett('armH',f.skin);
+  sett('benV',f.bukse); sett('benH',f.bukse);
 }
 
 const _fd=new THREE.Object3D();
@@ -2055,6 +2149,12 @@ function oppdaterFolk(dt){
     sett('haar',  0,   1.30, -.01, 0, f.langtHaar?S*1.16:S);   // noen med lengre hår
     sett('oyeV', -.085,1.32, .215, 0);
     sett('oyeH',  .085,1.32, .215, 0);
+    // Kvinnefigurene har byste og langt hår. Alle andre får skala 0 på de to
+    // delene, så de koster ingenting utover to tegnekall.
+    const dS=f.dame?S:0.0001, lS=f.langtHaar?S:0.0001;
+    sett('brystV',-.088,.95,.135, 0, dS);
+    sett('brystH', .088,.95,.135, 0, dS);
+    sett('haarLang',0,1.34,-.07, 0, lS);
   }
   for(const k in folkM) folkM[k].instanceMatrix.needsUpdate=true;
 }
@@ -2794,7 +2894,13 @@ function enterExit(){
   // var altfor pirkete.
   if(!drive.on&&aktivtBygg&&aktivtBygg.type==='vaapen'&&
      P.pos.x>aktivtBygg.x0&&P.pos.x<aktivtBygg.x1&&
-     P.pos.z>aktivtBygg.z0&&P.pos.z<aktivtBygg.z1){ apneButikk(); return; }
+     P.pos.z>aktivtBygg.z0&&P.pos.z<aktivtBygg.z1){
+    const u=naerUtstilt();
+    if(u){
+      if(inv.felt.find(f=>f&&f.id===u.id))kjopAmmo(u.id); else kjopVaapen(u.id);
+      const bb=aktivtBygg; bb.utstilling=null; rivInteriør(); oppdaterInteriør();
+    } else apneButikk();
+    return; }
   if(drive.on){
     const ex=drive.x+Math.cos(drive.head)*2.6, ez=drive.z-Math.sin(drive.head)*2.6;
   P.pos.set(ex,groundAt(ex,ez)+1.75,ez);
@@ -3145,6 +3251,7 @@ const gm={
   klubbVegg:std(plainTex('#2b2330',.85,0,6000),{envMapIntensity:.2,side:THREE.DoubleSide}),
   fengsel:std(plainTex('#8d8b86',.9,0,7000),{envMapIntensity:.3,side:THREE.DoubleSide}),
   rampe:std(plainTex('#c98a2e',.72,0,4200),{envMapIntensity:.45,side:THREE.DoubleSide}),
+  bilkjop:std(plainTex('#d8c23a',.80,0,3600),{envMapIntensity:.4,side:THREE.DoubleSide}),
   klubbGulv:std(plainTex('#15121a',.55,.1,4000),{envMapIntensity:.35}),
   neon :new THREE.MeshBasicMaterial({color:0xff3d8b,vertexColors:true}),
   hage :std(plainTex('#4c7342',.95,0,12000),{envMapIntensity:.25}),
@@ -3449,7 +3556,7 @@ function slaa(){
   }
   if(traff)politiVarme(3);
 }
-function lagVaapen(id){
+function lagVaapen(id,utenHand){
   const V=VAAPENSETT[id], F=V.form, t=F.tykk;
   const g=new THREE.Group();
   const mM=new THREE.MeshLambertMaterial({color:0x4a5058,emissive:0x272b31});
@@ -3475,11 +3582,12 @@ function lagVaapen(id){
     b(.026,.016,.028, 0,.052*t,-F.sleide+.06, mM);
     b(.026,.020,.026, 0,.052*t, .045, mM);
   }
-  // hånd og underarm
-  const mH=new THREE.MeshLambertMaterial({color:0xc08a63,emissive:0x4a3324});
-  b(.105,.125,.125, .014,-.115, .050, mH, 0.32);
-  b(.115,.115,.300, .024,-.215, .235, mH, 0.32);
-  if(F.lop>0.35) b(.100,.100,.130, -.010,-.115,-F.sleide-.10, mH, 0.10);  // støttehånd
+  if(!utenHand){
+    const mH=new THREE.MeshLambertMaterial({color:0xc08a63,emissive:0x4a3324});
+    b(.105,.125,.125, .014,-.115, .050, mH, 0.32);
+    b(.115,.115,.300, .024,-.215, .235, mH, 0.32);
+    if(F.lop>0.35) b(.100,.100,.130, -.010,-.115,-F.sleide-.10, mH, 0.10);
+  }
   return g;
 }
 function lagPistol(){
@@ -3862,6 +3970,11 @@ function skadeSpiller(n){
 }
 function doSpiller(){
   P.dodT=2.2;
+  if(folgerHer){
+    folgerHer.folger=false; folgerHer.man=false; folgerHer.dans=true;
+    folgerHer=null; kastet=0;
+    showToast('💔 Du døde — dama gikk tilbake til klubben');
+  }
   const tapt=kroner();
   if(tapt>0){ pengeSum=0;
     showToast('💀 Du døde — mistet '+tapt.toLocaleString('nb-NO')+' kr'); }
@@ -4146,6 +4259,10 @@ function kastPenger(){
       folgerHer=truffet;
       truffet.dans=false; truffet.man=true; truffet.folger=true;
       truffet.yaw=0; truffet.fase=0;
+      truffet.dame=true; truffet.langtHaar=true;
+      truffet.haar=0xE8D07A;                 // langt blondt hår
+      truffet.h=Math.max(truffet.h,1.02);
+      settFolkFarge(folkData.indexOf(truffet));
       showToast('💃 Hun blir med deg');
     } else if(kastet<FOLGE_KRAV)
       showToast('💵 '+kastet+' / '+FOLGE_KRAV+' kr kastet');
@@ -4177,6 +4294,45 @@ function oppdaterFolger(dt){
     f.fase+=dt*5.4;
   }
   if(d>55){ f.x=sp.x-dx/d*3; f.z=sp.z-dz/d*3; f.pad=groundAt(f.x,f.z); }
+}
+
+/* ---- bilkjøperen: kjør inn på plassen og selg ------------------------
+   Prisen følger klasse og skade. Politibiler betales godt, men det koster
+   stjerner å levere en.                                                 */
+const BILPRIS={hyper:52000, race:24000, tung:14000, vanlig:9000};
+function selgBil(){
+  const bil=drive.car; if(!bil)return;
+  const kl=bilKlasse(bil.type);
+  let sum=Math.round((BILPRIS[kl]||9000)*(1-drive.skade/100*0.55));
+  if(bil.erPoliti){ sum=Math.round(sum*1.8); politiVarme(20); }
+  if(HERO_CARS.indexOf(bil.type)>=0) sum=Math.round(sum*1.25);
+  girPenger(sum);
+  showToast('🚗💰 Solgt for '+sum.toLocaleString('nb-NO')+' kr');
+  // ut av bilen og bort med den
+  const ex=drive.x+Math.cos(drive.head)*3.4, ez=drive.z-Math.sin(drive.head)*3.4;
+  P.pos.set(ex,groundAt(ex,ez)+P.h,ez); P.vel.set(0,0,0);
+  P.yaw=drive.head+Math.PI;
+  drive.on=false; drive.car=null; showMode();
+  scene.remove(bil.obj);
+  const i=parked.indexOf(bil); if(i>=0)parked.splice(i,1);
+  const j=politi.biler.indexOf(bil); if(j>=0)politi.biler.splice(j,1);
+}
+let selgT=0;
+function oppdaterSelg(dt){
+  if(!bilkjop){ selgT=0; return; }
+  if(!drive.on||!drive.car){ selgT=0; return; }
+  const d=Math.hypot(drive.x-bilkjop.x,drive.z-bilkjop.z);
+  if(d>bilkjop.r){ selgT=0; return; }
+  const fart=Math.abs(drive.vx);
+  if(fart>2.5){ hint='🚗💰 Stopp bilen for å selge den'; selgT=0; return; }
+  selgT+=dt;
+  const kl=bilKlasse(drive.car.type);
+  let sum=Math.round((BILPRIS[kl]||9000)*(1-drive.skade/100*0.55));
+  if(drive.car.erPoliti)sum=Math.round(sum*1.8);
+  if(HERO_CARS.indexOf(drive.car.type)>=0)sum=Math.round(sum*1.25);
+  if(selgT>=1.4){ selgBil(); selgT=0; return; }
+  hint='🚗💰 Selger for '+sum.toLocaleString('nb-NO')+' kr … '+
+       Math.round(selgT/1.4*100)+' %';
 }
 
 /* ---- våpenbutikken: handle over disken ---- */
@@ -4244,12 +4400,28 @@ function kjopAmmo(id){
   showToast('📦 Ammo til '+V.navn+' ('+f.res+' i reserve)');
   tegnButikk();
 }
+function naerUtstilt(){
+  const b=aktivtBygg;
+  if(!b||!b.utstilling)return null;
+  let best=null,bd=2.6;
+  for(const u of b.utstilling){
+    const d=Math.hypot(P.pos.x-u.x,P.pos.z-u.z);
+    if(d<bd){bd=d;best=u;}
+  }
+  return best;
+}
 function oppdaterButikk(){
   const b=aktivtBygg;
   if(butikkAapen)return;
   if(!b||b.type!=='vaapen'||drive.on||P.dodT>0)return;
-  if(P.pos.x>b.x0&&P.pos.x<b.x1&&P.pos.z>b.z0&&P.pos.z<b.z1)
-    hint='🔫 Trykk E for å handle våpen';
+  if(!(P.pos.x>b.x0&&P.pos.x<b.x1&&P.pos.z>b.z0&&P.pos.z<b.z1))return;
+  const u=naerUtstilt();
+  if(u){
+    const V=VAAPENSETT[u.id], eier=!!inv.felt.find(f=>f&&f.id===u.id);
+    hint=eier?('📦 '+V.navn+' — E for ammo ('+
+               Math.max(300,Math.round(V.mag*V.skade*1.1)).toLocaleString('nb-NO')+' kr)')
+             :('🔫 E for å kjøpe '+V.navn+' — '+V.pris.toLocaleString('nb-NO')+' kr');
+  } else hint='🔫 Trykk E for hele våpenlista';
 }
 
 /* ---- rane kassa i et interiør ---- */
@@ -4378,7 +4550,7 @@ window.__dbg={
   // skjermbilder umulige i headless, der rAF strupes til ~1 fps.
   snap:()=>{kino=false;update(0.016);oppdaterFolk(0.016);oppdaterKlubb(0.016);renderer.render(scene,camera);
             return renderer.domElement.toDataURL('image/jpeg',0.72);},
-  ver:()=>'butikk-39',
+  ver:()=>'dama-42',
   typer:()=>{const t={};for(const b of bygg)t[b.type]=(t[b.type]||0)+1;return t;},
   // Går faktisk inn: settes 4 m utenfor døra, holder W, og sjekker om
   // spilleren havner innenfor fotavtrykket.
@@ -4452,6 +4624,71 @@ window.__dbg={
   },
   vbPos:()=>vaapenbutikker.map(q=>({x:Math.round((q.x0+q.x1)/2),
                                     z:Math.round((q.z0+q.z1)/2),side:q.side})),
+  damaTest:()=>{
+    kino=false;
+    const r=window.__dbg.klubbTest();
+    if(!r||!r.folger)return {feil:'ingen følger',r:r};
+    const f=folkData.find(q=>q.folger);
+    const ut={folger:true,dame:!!f.dame,langtHaar:!!f.langtHaar,
+              haar:'#'+f.haar.toString(16),hoyde:+f.h.toFixed(2)};
+    // dø og se at hun forsvinner
+    P.hp=1; skadeSpiller(50);
+    ut.etterDod={folger:!!folgerHer,hunDanserIgjen:!!f.dans};
+    P.dodT=0; P.hp=100;
+    return ut;
+  },
+  damaBilde:()=>{
+    kino=false;
+    const f=folkData.find(q=>q.dans);
+    if(!f)return null;
+    f.dame=true; f.langtHaar=true; f.haar=0xE8D07A;
+    settFolkFarge(folkData.indexOf(f));
+    oppdaterFolk(0.016);
+    P.fly=true; drive.on=false;
+    P.pos.set(f.x,f.pad+1.15,f.z-2.4);
+    P.yaw=Math.PI; P.pitch=-0.02;
+    return {x:Math.round(f.x),z:Math.round(f.z)};
+  },
+  bilkjopPos:()=>bilkjop?{x:Math.round(bilkjop.x),z:Math.round(bilkjop.z),r:bilkjop.r}:null,
+  selgTest:(type)=>{
+    kino=false;
+    if(!bilkjop)return {feil:'ingen bilkjøper'};
+    const bil=parked.find(p=>p.type===(type||'sedan'))||parked[0];
+    if(!bil)return {feil:'ingen bil'};
+    drive.on=true; drive.car=bil; settBilstil(bil.type);
+    drive.x=bilkjop.x; drive.z=bilkjop.z; drive.head=0;
+    drive.y=groundAt(drive.x,drive.z);
+    drive.vx=0; drive.vy=0; drive.yawrate=0; drive.skade=0; drive.luft=false;
+    const kr0=kroner();
+    let h='';
+    for(let k=0;k<200;k++){ oppdaterSelg(1/60); if(hint)h=hint; if(!drive.on)break; }
+    return {bil:bil.type,klasse:bilKlasse(bil.type),hint:h,
+            krFor:kr0,krEtter:kroner(),ute:!drive.on};
+  },
+  // still deg foran et utstilt våpen og kjøp det med E
+  utstiltTest:()=>{
+    kino=false; butikkAapen=false; drive.on=false; P.fly=false;
+    const b=vaapenbutikker[0]; if(!b)return null;
+    const mx=(b.x0+b.x1)/2, mz=(b.z0+b.z1)/2;
+    P.pos.set(mx,groundAt(mx,mz)+P.h,mz);
+    oppdaterInteriør();
+    if(!aktivtBygg||!aktivtBygg.utstilling)return {feil:'ingen utstilling'};
+    girPenger(300000);
+    const ut={antall:aktivtBygg.utstilling.length,kjopt:[]};
+    for(let runde=0;runde<9;runde++){
+      const liste=aktivtBygg.utstilling; if(!liste||!liste.length)break;
+      const u=liste.find(q=>!inv.felt.find(f=>f&&f.id===q.id));
+      if(!u)break;
+      P.pos.set(u.x,groundAt(u.x,u.z)+P.h,u.z+0.9);
+      oppdaterButikk();
+      const h=hint;
+      enterExit();
+      if(inv.felt.find(f=>f&&f.id===u.id))ut.kjopt.push(u.id+' ← "'+h+'"');
+      oppdaterInteriør();
+    }
+    ut.kr=kroner();
+    return ut;
+  },
   // gå inn i butikken slik en spiller gjør det
   gaTilButikk:()=>{
     kino=false; butikkAapen=false; drive.on=false; P.fly=false;
@@ -5178,6 +5415,7 @@ function drawMinimap(){
   if(poi)for(const q of poi) merke(q.x,q.z,q.farge,q.bok,4);
   for(const q of vaapenbutikker)
     merke((q.x0+q.x1)/2,(q.z0+q.z1)/2,'#ffb84d','W',6);
+  if(bilkjop) merke(bilkjop.x,bilkjop.z,'#8ce0ff','B',6);
   if(klubb)  merke(klubb.x,  klubb.z,  '#ff5fa2','K');
   if(fengsel)merke(fengsel.x,fengsel.z,'#eef2f8','F');   // hvit, ikke blå som bilprikkene
 
@@ -5563,7 +5801,7 @@ function loop(now){
   let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
   FRAMES++;
   hint='';
-  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
+  update(dt);updateCars(dt);oppdaterLose(dt);oppdaterPoliti(dt);oppdaterBetjenter(dt);paakjorsel();oppdaterFolk(dt);oppdaterKlubb(dt);oppdaterFengsel(dt);oppdaterInteriør();oppdaterVaapen(dt);oppdaterPeker();oppdaterPlukk(dt);oppdaterRan(dt);oppdaterButikk();oppdaterSelg(dt);oppdaterFolger(dt);oppdaterSedler(dt);oppdaterBunter(dt);oppdaterKastede(dt);oppdaterBranner(dt);oppdaterVrak(dt);oppdaterHelsestolper(dt);oppdaterFx(dt);netInterp(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)showMode();}
   renderer.render(scene,camera);
   fa+=1/Math.max(dt,1e-4);fn++;ht+=dt;
@@ -5597,6 +5835,10 @@ function loop(now){
                     Math.round(Math.hypot(klubb.x-sp.x,klubb.z-sp.z))+' m '+pil(klubb.x,klubb.z)+'<br>';
       if(fengsel)h+='<span style="color:#eef2f8">F</span> fengsel '+
                     Math.round(Math.hypot(fengsel.x-sp.x,fengsel.z-sp.z))+' m '+pil(fengsel.x,fengsel.z);
+      if(bilkjop)
+        h+=(h?'<br>':'')+'<span style="color:#8ce0ff">B</span> selg bil '+
+           Math.round(Math.hypot(bilkjop.x-sp.x,bilkjop.z-sp.z))+' m '+
+           pil(bilkjop.x,bilkjop.z);
       {
         const n=naermesteVb();
         if(n) h+=(h?'<br>':'')+'<span style="color:#ffb84d">W</span> våpenbutikk '+
@@ -5622,7 +5864,7 @@ setTimeout(async ()=>{
   build();spawn();settOppVaapen();applyTime();
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
-  document.getElementById('verline').textContent='build butikk-39';
+  document.getElementById('verline').textContent='build dama-42';
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
   connectAsClient();          // kobler opp mens spilleren leser overlayet
