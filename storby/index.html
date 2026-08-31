@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GRAND THEFT NORGE</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -80,6 +83,48 @@
     box-shadow:0 3px 12px rgba(0,0,0,.5)}
   #nyheter .ny.vekk{opacity:0}
   body.kino #nyheter{display:none!important}
+  /* ---- mobil ---- */
+  body.mobil{touch-action:none;-webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  #touch{position:fixed;inset:0;z-index:8;pointer-events:none}
+  #stikke{position:fixed;left:60px;bottom:110px;width:140px;height:140px;
+    border-radius:50%;border:2px solid rgba(190,205,235,.45);
+    background:rgba(12,15,22,.30);opacity:.35;pointer-events:none;
+    display:flex;align-items:center;justify-content:center}
+  #knott{width:58px;height:58px;border-radius:50%;
+    background:rgba(200,215,245,.55);border:2px solid rgba(255,255,255,.6)}
+  #tknapper{position:fixed;right:14px;bottom:14px;z-index:9;pointer-events:auto;
+    display:grid;grid-template-columns:repeat(3,auto);gap:9px;justify-items:end}
+  #tknapper .tk{width:62px;height:62px;border-radius:50%;
+    background:rgba(20,25,36,.72);border:2px solid #5b6a86;color:#dbe6ff;
+    font:600 17px ui-monospace,Menlo,monospace;pointer-events:auto}
+  #tknapper .tk.stor{width:84px;height:84px;font-size:30px;
+    grid-column:3;grid-row:1/span 2;background:rgba(60,24,24,.75);border-color:#a04a4a}
+  #tknapper .tk.liten{width:48px;height:48px;font-size:14px}
+  #tknapper .tk.nede{background:rgba(90,110,150,.8)}
+  body.mobil #keys{display:none}
+  body.mobil #minimap{width:168px;height:112px;right:8px;top:8px}
+  body.mobil #raceboard{top:132px;right:8px;min-width:150px;padding:8px 10px}
+  body.mobil #raceboard .tid{font-size:23px}
+  body.mobil #hotbar{bottom:8px;left:12px;transform:none;gap:4px}
+  body.mobil #hotbar .s{width:36px;height:36px;font-size:17px}
+  body.mobil #hotbar .s .nr{font-size:8px}
+  body.mobil #hotbar .s .nv{display:none}
+  body.mobil #helse,body.mobil #helsetall{width:168px;bottom:52px;left:12px;transform:none}
+  body.mobil #pengerhud{left:12px;bottom:74px;transform:none;text-align:left;font-size:13px}
+  body.mobil #nyheter{top:126px;width:190px;font-size:10px}
+  body.mobil #hud{font-size:10px}
+  body.mobil #district{font-size:14px}
+  body.mobil #ammo{right:14px;bottom:200px;font-size:18px;text-align:right}
+  body.mobil #players{display:none}
+  body.mobil #overlay h1{font-size:26px;letter-spacing:.10em}
+  body.mobil #overlay .box{padding:20px 18px}
+  body.mobil #info .kol{gap:14px}
+  body.mobil #info p{font-size:11.5px}
+  #dreisida{position:fixed;inset:0;z-index:40;display:none;align-items:center;
+    justify-content:center;background:#080a0f;color:#cdd4e4;text-align:center;
+    font-size:15px;letter-spacing:.1em;line-height:2.2}
+  body.mobil.portrett #dreisida{display:flex}
   #pekere{position:fixed;inset:0;z-index:6;pointer-events:none}
   .pk{position:fixed;transform:translate(-50%,-50%);
     background:rgba(12,15,22,.72);border:1px solid #6d7488;border-radius:6px;
@@ -265,6 +310,7 @@
 <div id="crosshair"></div>
 <div id="nyheter"></div>
 <div id="pekere"></div>
+<div id="dreisida"><div>📱 ➜ 🔄<br>Snu telefonen til liggende</div></div>
 <div id="raceboard" style="display:none"></div>
 <div id="racelobby" style="display:none"></div>
 <div id="raceseier"><div><h2></h2><p></p></div></div>
@@ -303,6 +349,10 @@
     <div id="nameRow"><input id="pname" maxlength="12" placeholder="Navnet ditt" autocomplete="off"></div>
     <div class="stats" id="ostats"></div>
     <div class="cta mangler">Skriv inn navnet ditt først</div>
+    <div id="mobiltips" style="display:none;color:#7f8aa3;font-size:11px;
+      letter-spacing:.08em;margin-top:10px;line-height:1.9">
+      venstre side = stikke &middot; høyre side = se deg rundt<br>
+      knappene nede til høyre: skyt, E, hopp, R, i, B, G</div>
     <div id="netStatus">kobler til &hellip;</div>
   </div>
 </div>
@@ -337,6 +387,12 @@ const D_NAME=['Sentrum','Midtbyen','Boligstrøk','Industriområdet','Parken'];
 const D_COL=['#3f5f8f','#5b7ba4','#9c7857','#7a6349','#3d6b4c'];
 
 /* ---------------------------- RNG + STØY -------------------------------- */
+// Må stå aller først: pikselforhold, skygger, trafikkmengde og bilstyring
+// leser den lenge før mobilkoden lenger nede.
+const MOBIL = (matchMedia('(pointer:coarse)').matches ||
+               ('ontouchstart' in window)) && !matchMedia('(pointer:fine)').matches;
+let styrX=0, styrY=0, styrAktiv=false;      // analog stikke på mobil, -1..1
+
 let SEED=20260829, NOFF=0, PKX=540, PKZ=260;
 let rand=mulberry32(SEED);
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
@@ -2179,7 +2235,7 @@ function oppdaterKlubb(dt){
 // flate farger. Hver kroppsdel er en egen InstancedMesh, så 320 personer
 // koster 8 tegnekall. Lemmene har pivot i hofte/skulder, ikke i midten, så
 // rotasjonen ser ut som gange.
-const FOLK_N=320;
+const FOLK_N=MOBIL?150:320;
 let folkData=[], folkM={}, folkDeler=[];
 const HUD_SKIN=[0xf2c9a0,0xe0a97b,0xc78d5e,0x9b6640,0xf7d9bb,0x7a4b2a];
 const HUD_HAAR=[0x2a2018,0x4a3020,0x1a1a1e,0x6b4a2a,0xa8752e,0x8a8a92,0xc23a2a];
@@ -2603,7 +2659,7 @@ function buildTraffic(){
   const types=CAR_TYPES.filter(t=>carGeo[t]);
   if(!types.length)return;
   const ax=streetsX.filter(s=>s.art),az=streetsZ.filter(s=>s.art);
-  const per=Math.ceil(150/types.length);
+  const per=Math.ceil((MOBIL?70:150)/types.length);
   for(const t of types){
     const im=new THREE.InstancedMesh(carGeo[t],carMats[t]||carMat,per);
     im.castShadow=true;im.frustumCulled=false;
@@ -3364,8 +3420,10 @@ function carStep(h,th,hand,boost){
 
 function updateDrive(dt){
   if(!drive.car){drive.on=false;return;}   // bilen ble vraket midt i steget
-  const th=(keys['KeyW']?1:0)-(keys['KeyS']?1:0);
-  const st=(keys['KeyA']?1:0)-(keys['KeyD']?1:0);
+  // På mobil brukes stikkas analoge utslag direkte — binær styring med
+  // finger blir hakkete.
+  const th=styrAktiv?cl(-styrY*1.35,-1,1):((keys['KeyW']?1:0)-(keys['KeyS']?1:0));
+  const st=styrAktiv?cl(-styrX*1.25,-1,1):((keys['KeyA']?1:0)-(keys['KeyD']?1:0));
   const hand=!!keys['Space'];
   const boost=!!(keys['ShiftLeft']||keys['ShiftRight']);
   const D=Math.min(dt,0.05);
@@ -3488,7 +3546,7 @@ const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-per
 renderer.setSize(innerWidth,innerHeight);
 // 1,7 ganger pikselforholdet er over fire ganger så mange piksler som 1,0
 // på en retina-skjerm. 1,35 ser praktisk talt likt ut og koster mye mindre.
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.35));
+renderer.setPixelRatio(Math.min(devicePixelRatio,MOBIL?1.0:1.35));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;   // filmisk kurve i stedet for flat clipping
 renderer.toneMappingExposure=1.22;
@@ -3517,7 +3575,7 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(2600,40,20),skyM);scene.add(sk
 
 const hemi=new THREE.HemisphereLight(0x6d6a92,0x33261d,0.55);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffb066,3.4);
-sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+sun.castShadow=!MOBIL;sun.shadow.mapSize.set(MOBIL?512:1024,MOBIL?512:1024);
 sun.shadow.camera.left=-210;sun.shadow.camera.right=210;
 sun.shadow.camera.top=210;sun.shadow.camera.bottom=-210;
 sun.shadow.camera.near=1;sun.shadow.camera.far=1200;
@@ -5546,6 +5604,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 renderer.domElement.addEventListener('click',()=>{
+  if(MOBIL){ startMobil(); return; }
   if(kanSpille())renderer.domElement.requestPointerLock(); });
 let musHoyre=false;
 renderer.domElement.addEventListener('mousedown',e=>{
@@ -5581,7 +5640,15 @@ addEventListener('wheel',e=>{
   velgSlot(inv.slot+(e.deltaY>0?1:-1));
 },{passive:true});
 document.getElementById('overlay').addEventListener('click',()=>{
+  if(MOBIL){ startMobil(); return; }
   if(kanSpille())renderer.domElement.requestPointerLock(); });
+// På telefon starter vi på touchend. Å vente på den syntetiske klikken gir
+// 300 ms forsinkelse, og den uteblir helt hvis noe kaller preventDefault.
+document.getElementById('overlay').addEventListener('touchend',e=>{
+  if(!MOBIL)return;
+  if(e.target.closest('#nameRow'))return;      // navnefeltet skal ha fokus
+  e.preventDefault(); startMobil();
+},{passive:false});
 document.addEventListener('pointerlockchange',()=>{
   const inne=document.pointerLockElement===renderer.domElement;
   // Butikken slipper musa med vilje. Uten dette unntaket sprang startskjermen
@@ -5730,6 +5797,12 @@ window.__dbg={
     return {x:Math.round(f.x),z:Math.round(f.z)};
   },
   slot:(i)=>inv.felt[i],
+  mobil:()=>MOBIL,
+  styr:()=>({x:+styrX.toFixed(2),y:+styrY.toFixed(2),aktiv:styrAktiv}),
+  steg:(dt)=>update(dt),
+  yaw:()=>P.yaw,
+  navnOk:()=>({navn:net.name,ok:!!net.navnOk}),
+  keys:()=>({W:!!keys.KeyW,A:!!keys.KeyA,S:!!keys.KeyS,D:!!keys.KeyD}),
   meshFordeling:()=>{
     const ut=[];
     for(const c of scene.children){
@@ -6683,11 +6756,9 @@ function update(dt){
   if(wish.lengthSq()>0)wish.normalize();
   const sprint=keys['ShiftLeft']||keys['ShiftRight'];
 
+  // Flymodus er fjernet. P.fly finnes bare for testriggen, som setter
+  // kameraet fritt i lufta — den kan ikke slås på fra spillet.
   if(P.fly){
-    const spd=sprint?200:62;
-    const up=(keys['Space']?1:0)-(keys['ControlLeft']?1:0);
-    P.pos.addScaledVector(wish,spd*dt);
-    P.pos.y+=(up*spd+(keys['KeyW']?Math.sin(P.pitch)*spd:0)-(keys['KeyS']?Math.sin(P.pitch)*spd:0))*dt;
     P.pos.y=Math.max(groundAt(P.pos.x,P.pos.z)+2,P.pos.y);
   } else {
     const spd=sprint?11.5:5.2, acc=P.onGround?52:12;
@@ -6943,7 +7014,7 @@ async function loadProps(){
     try{ gltf=await loader.loadAsync('assets/'+name+'.glb'); }
     catch(e){ failed++; continue; }
     const pool=pools[where]||pools.kerb;
-    const picks=pool.splice(0,Math.min(maxN,pool.length));
+    const picks=pool.splice(0,Math.min(MOBIL?Math.ceil(maxN*0.45):maxN,pool.length));
     if(!picks.length)continue;
     // grupper etter rute slik at frustum culling faktisk virker
     const cells=new Map();
@@ -7347,10 +7418,136 @@ function kanSpille(){
 $('pname').addEventListener('keydown',e=>{ e.stopPropagation(); });
 $('pname').addEventListener('click',e=>{ e.stopPropagation(); });
 
+
+/* ============================== MOBIL ==================================
+   Touch-styring som mater de samme keys[]-flaggene som tastaturet, slik at
+   ingen annen kode trenger å vite om det er finger eller tast. Venstre side
+   er stikke, høyre side er kamera, og knappene ligger nede til høyre.    */
+function lagMobilUI(){
+  document.body.classList.add('mobil');
+  const d=document.createElement('div');
+  d.id='touch';
+  d.innerHTML=
+    '<div id="stikke"><div id="knott"></div></div>'+
+    '<div id="tknapper">'+
+      '<button class="tk stor" data-t="skyt">🔫</button>'+
+      '<button class="tk" data-t="e">E</button>'+
+      '<button class="tk" data-t="hopp">⤒</button>'+
+      '<button class="tk liten" data-t="r">R</button>'+
+      '<button class="tk liten" data-t="i">i</button>'+
+      '<button class="tk liten" data-t="b">B</button>'+
+      '<button class="tk liten" data-t="g">G</button>'+
+    '</div>';
+  document.body.appendChild(d);
+
+  const stikke=document.getElementById('stikke'), knott=document.getElementById('knott');
+  let stikkeId=null, kikkId=null, sx0=0, sy0=0, kx0=0, ky0=0;
+  const R=52;
+
+  const settStikke=(dx,dy)=>{
+    const L=Math.hypot(dx,dy), k=L>R?R/L:1;
+    dx*=k; dy*=k;
+    knott.style.transform='translate('+dx+'px,'+dy+'px)';
+    styrX=dx/R; styrY=dy/R;
+    // samme flagg som tastaturet setter
+    keys['KeyW']=styrY<-0.25; keys['KeyS']=styrY>0.25;
+    keys['KeyA']=styrX<-0.22; keys['KeyD']=styrX>0.22;
+  };
+  const slippStikke=()=>{
+    stikkeId=null; styrAktiv=false; styrX=styrY=0;
+    knott.style.transform='translate(0,0)';
+    stikke.style.opacity='0.35';
+    keys['KeyW']=keys['KeyS']=keys['KeyA']=keys['KeyD']=false;
+  };
+
+  addEventListener('touchstart',e=>{
+    if(kino||butikkAapen||lobby.aapen||infoAapen)return;
+    for(const t of e.changedTouches){
+      if(t.target.closest('#tknapper')||t.target.closest('#hotbar'))continue;
+      if(t.clientX<innerWidth*0.45&&stikkeId===null){
+        stikkeId=t.identifier; styrAktiv=true;
+        sx0=t.clientX; sy0=t.clientY;
+        stikke.style.left=(sx0-70)+'px'; stikke.style.top=(sy0-70)+'px';
+        stikke.style.opacity='0.85';
+        settStikke(0,0);
+      } else if(kikkId===null){
+        kikkId=t.identifier; kx0=t.clientX; ky0=t.clientY;
+      }
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  addEventListener('touchmove',e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===stikkeId) settStikke(t.clientX-sx0,t.clientY-sy0);
+      else if(t.identifier===kikkId){
+        P.yaw-=(t.clientX-kx0)*0.0055;
+        P.pitch-=(t.clientY-ky0)*0.0055;
+        P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch));
+        kx0=t.clientX; ky0=t.clientY;
+      }
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  const slutt=e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===stikkeId)slippStikke();
+      else if(t.identifier===kikkId)kikkId=null;
+    }
+  };
+  addEventListener('touchend',slutt); addEventListener('touchcancel',slutt);
+
+  // knappene
+  const trykk=(navn,ned)=>{
+    if(navn==='skyt'){
+      musNede=ned;
+      if(ned){ const v=inv.felt[inv.slot];
+               if(v&&v.id==='hand')slaa(); else skyt(); }
+    }
+    else if(navn==='hopp'){ keys['Space']=ned; }
+    else if(ned){
+      if(navn==='e')enterExit();
+      else if(navn==='r'){ const vf=aktivtVaapen();
+        if(vf){ const VV=VAAPENSETT[vf.id];
+          if(gun.lad<=0&&vf.i<VV.mag&&vf.res>0)gun.lad=VV.ladT; } }
+      else if(navn==='i'){ infoAapen?lukkInfo():apneInfo(); }
+      else if(navn==='b'){ if(bane&&!race.aktiv&&!lobby.aapen&&
+          Math.hypot(spillerPos().x-bane.start.x,spillerPos().z-bane.start.z)<18)apneLobby(); }
+      else if(navn==='g'){ if(!drive.on)kastPenger(); }
+    }
+  };
+  for(const b of document.querySelectorAll('#tknapper .tk')){
+    const n=b.dataset.t;
+    b.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();
+      b.classList.add('nede');trykk(n,true);},{passive:false});
+    const opp=e=>{e.preventDefault();e.stopPropagation();
+      b.classList.remove('nede');trykk(n,false);};
+    b.addEventListener('touchend',opp); b.addEventListener('touchcancel',opp);
+  }
+  // bytt våpen ved å trykke på ruta
+  document.getElementById('hotbar').addEventListener('touchstart',e=>{
+    const s2=e.target.closest('.s'); if(!s2)return;
+    const i=[...s2.parentNode.children].indexOf(s2);
+    velgSlot(i); e.preventDefault(); e.stopPropagation();
+  },{passive:false});
+}
+function startMobil(){
+  if(!kanSpille())return;
+  document.getElementById('overlay').style.display='none';
+  kino=false; document.body.classList.remove('kino');
+}
+
+function sjekkRetning(){
+  document.body.classList.toggle('portrett',innerHeight>innerWidth);
+}
+addEventListener('resize',sjekkRetning);
+addEventListener('orientationchange',()=>setTimeout(sjekkRetning,250));
+
 /* Selve URL-en peker alltid på siste versjon, men nettleseren og GitHub
    Pages kan sitte på en gammel kopi. versjon.txt hentes uten cache; er den
    nyere enn den innebygde, lastes sida om én gang. */
-const BUILD='ytelse-59';
+const BUILD='mobil-61';
 function sjekkNyVersjon(){
   fetch('versjon.txt?t='+Date.now(),{cache:'no-store'})
     .then(r=>r.ok?r.text():null)
@@ -7435,6 +7632,8 @@ setTimeout(async ()=>{
   document.getElementById('load').style.display='none';
   document.getElementById('overlay').style.display='flex';
   document.getElementById('verline').textContent='build '+BUILD;
+  if(MOBIL){ lagMobilUI(); sjekkRetning();
+             document.getElementById('mobiltips').style.display='block'; }
   sjekkNyVersjon();
   requestAnimationFrame(loop);
   loadProps().then(loadHeroCars);      // tyngste last helt til slutt
